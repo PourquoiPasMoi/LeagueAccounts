@@ -5,11 +5,13 @@ import "./league.css";
 import "./client-controls.css";
 import "./glow.css";
 import "./profile.css";
+import "./gamesettings.css";
 
 import { ApiError, accountLabel, api, events, keyId, keyOf, parseAccountLine, type AccountView, type Ban, type Key, type LocaleOption, type Schedule, type Settings, type UpdateAccount } from "./api";
 import { openLoginOverlay, type LoginOverlay } from "./login";
 import { loginButton, openProfile, openSkinFinder, profileUpdated, refreshProfileHead } from "./profile";
 import { skinsValue } from "./prices";
+import { openGameSettings } from "./gamesettings";
 import type { SessionStatus, SkinOwner } from "./api";
 import { LANGUAGES, applyStatic, asLang, en, errorText, fromBrowser, lang, localeTag, localizeRank, needsLanguageChoice, setLang, t, tierName, useLang, type Lang, type MessageKey } from "./i18n";
 import { $, closeMenu, contextMenu, esc, fragment, leave, modal, reducedMotion, toast } from "./dom";
@@ -1414,6 +1416,7 @@ function wire(): void {
       if (action === "logs") void guard(() => api.openLogsFolder(), "toast.logsFailed");
       if (action === "shortcuts") showShortcuts();
       if (action === "settings") void openSettings();
+      if (action === "game-settings") void openGameSettings();
     });
   });
 

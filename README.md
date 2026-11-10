@@ -67,6 +67,19 @@ Want to play a specific skin? Open Skins in the toolbar, type part of the name, 
 
 <img src="docs/screenshots/skin-finder.png" alt="Skin finder showing which accounts own Star Guardian skins" width="960" />
 
+### The same game settings on every account
+
+League replaces your settings and keybinds with each account's cloud copy when you sign in. A common fix is to make `Config\PersistedSettings.json` read-only so every account keeps the same setup, but then changing anything means unlocking the file, editing it, and locking it again.
+
+Game settings in the sidebar does that for you. It shows your hotkeys as keycaps (click one and press the new key; duplicate keys turn red), sound sliders with mute buttons, interface, game and accessibility options, plus a searchable list of every value in the file. Apply backs up the file, writes your changes, mirrors them into `game.cfg` and `input.ini`, and locks the file again. Undo last apply puts the previous version back.
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/game-settings.png" alt="Game settings page with hotkeys" /></td>
+    <td width="50%"><img src="docs/screenshots/game-settings-sound.png" alt="Game settings page with sound sliders" /></td>
+  </tr>
+</table>
+
 ### Smaller changes
 
 - The account that is signed in right now gets a teal frame and a Connected or Playing badge, and its Log in button is disabled.
@@ -138,7 +151,8 @@ To fill an account's profile, log in to it once through the app with "Launch the
 - Passwords are stored in Windows Credential Manager (service `LeagueAccounts`), never in the app's files. Copied passwords are cleared from the clipboard after 30 seconds and kept out of clipboard history.
 - Exports contain passwords in plain text. Keep them private.
 - The app contacts OP.GG for ranks and recent games, the Riot and League clients on `127.0.0.1`, CommunityDragon for champion and skin pictures, and GitHub for updates. There is no telemetry and no account server.
-- Accounts, settings, profiles, game history, cached pictures and logs live in `%APPDATA%\LeagueAccounts\`. Logs hold fixed event codes only, never account data.
+- Accounts, settings, profiles, game history, cached pictures, game settings backups and logs live in `%APPDATA%\LeagueAccounts\`. Logs hold fixed event codes only, never account data.
+- Game settings only touches `PersistedSettings.json`, `game.cfg` and `input.ini` in League's Config folder, and backs the settings file up before every change.
 
 ## Troubleshooting
 

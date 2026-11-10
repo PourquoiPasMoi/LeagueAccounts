@@ -872,6 +872,89 @@ async fn skin_index(state: AppState<'_>) -> CommandResult<Vec<SkinOwner>> {
     }).await
 }
 
+/// League's shared settings file, as the Game settings page shows it.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct GameSettingsView {
+    /// `None` when no League install with a settings file was found.
+    path: Option<String>,
+    /// Read-only: the client cannot replace it with an account's cloud copy.
+    locked: bool,
+    /// The League client or a game is running (changes apply on its next start).
+    league_open: bool,
+    files: Vec<leagueaccounts::game_settings::SettingsFile>,
+    last_backup: Option<u64>,
+    backups: usize,
+}
+
+fn game_settings_view() -> CommandResult<GameSettingsView> {
+    use leagueaccounts::game_settings as settings;
+    let (last_backup, backups) = settings::backup_summary();
+    let league_open = riot_client::game_client_running() || riot_client::in_game();
+    let Some(path) = settings::settings_path() else {
+        return Ok(GameSettingsView { path: None, locked: false, league_open, files: Vec::new(), last_backup, backups });
+    };
+    let files = settings::read(&path).map_err(|error| fail_with("game_settings_unreadable", error))?;
+    Ok(GameSettingsView {
+        locked: settings::is_locked(&path),
+        path: Some(path.display().to_string()),
+        league_open,
+        files,
+        last_backup,
+        backups,
+    })
+}
+
+fn game_settings_path() -> CommandResult<std::path::PathBuf> {
+    leagueaccounts::game_settings::settings_path().ok_or_else(|| fail("game_settings_missing"))
+}
+
+#[tauri::command]
+async fn game_settings() -> CommandResult<GameSettingsView> {
+    blocking(game_settings_view).await
+}
+
+/// Write the edited values, then lock the file again when `lock` is set.
+#[tauri::command]
+async fn apply_game_settings(changes: Vec<leagueaccounts::game_settings::Change>, lock: bool) -> CommandResult<GameSettingsView> {
+    blocking(move || {
+        let path = game_settings_path()?;
+        leagueaccounts::game_settings::apply(&path, &changes, lock).map_err(|error| fail_with("game_settings_save", error))?;
+        game_settings_view()
+    }).await
+}
+
+#[tauri::command]
+async fn lock_game_settings(locked: bool) -> CommandResult<GameSettingsView> {
+    blocking(move || {
+        let path = game_settings_path()?;
+        leagueaccounts::game_settings::set_locked(&path, locked).map_err(|error| fail_with("game_settings_lock", error))?;
+        game_settings_view()
+    }).await
+}
+
+/// Undo the last apply by putting the newest backup back.
+#[tauri::command]
+async fn restore_game_settings() -> CommandResult<GameSettingsView> {
+    blocking(move || {
+        let path = game_settings_path()?;
+        leagueaccounts::game_settings::restore_latest(&path).map_err(|error| fail_with("game_settings_restore", error))?;
+        game_settings_view()
+    }).await
+}
+
+#[tauri::command]
+async fn open_game_settings_folder() -> CommandResult<()> {
+    blocking(move || {
+        let folder = leagueaccounts::game_settings::config_dir().ok_or_else(|| fail("game_settings_missing"))?;
+        std::process::Command::new("explorer.exe")
+            .arg(folder)
+            .spawn()
+            .map(|_| ())
+            .map_err(|_| fail("browser"))
+    }).await
+}
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct GameStatusView {
@@ -1153,6 +1236,11 @@ fn main() {
             sync_profile,
             skin_index,
             session_status,
+            game_settings,
+            apply_game_settings,
+            lock_game_settings,
+            restore_game_settings,
+            open_game_settings_folder,
         ])
         // Champion and skin pictures: http://lacache.localhost/<game-data path>,
         // downloaded once from CommunityDragon and then served from disk.
