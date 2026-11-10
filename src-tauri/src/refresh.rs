@@ -22,6 +22,10 @@ use tauri::{AppHandle, Emitter};
 
 pub const MIN_INTERVAL_MINUTES: u32 = 5;
 pub const MAX_INTERVAL_MINUTES: u32 = 24 * 60;
+/// Typical RP per euro of Riot's mid-sized EU bundles (e.g. 1380 RP for 10.99).
+pub const DEFAULT_RP_PER_EURO: u32 = 125;
+pub const MIN_RP_PER_EURO: u32 = 50;
+pub const MAX_RP_PER_EURO: u32 = 500;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
@@ -54,6 +58,8 @@ pub struct Settings {
     pub mislabeled_release: Option<String>,
     /// Unix ms of the last completed full refresh (manual or automatic).
     pub last_full_refresh: u64,
+    /// Riot Points per euro, for the account value estimate.
+    pub rp_per_euro: u32,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -77,6 +83,7 @@ impl Default for Settings {
             ui_language: String::new(),
             mislabeled_release: None,
             last_full_refresh: 0,
+            rp_per_euro: DEFAULT_RP_PER_EURO,
         }
     }
 }
@@ -91,6 +98,7 @@ impl Settings {
             .interval_minutes
             .clamp(MIN_INTERVAL_MINUTES, MAX_INTERVAL_MINUTES);
         settings.ui_scale = settings.ui_scale.clamp(MIN_UI_SCALE, MAX_UI_SCALE);
+        settings.rp_per_euro = settings.rp_per_euro.clamp(MIN_RP_PER_EURO, MAX_RP_PER_EURO);
         settings
     }
 
@@ -252,12 +260,18 @@ pub fn start_refresh(app: AppHandle, shared: Arc<Shared>, accounts: Vec<Account>
                         RankInfo::error()
                     });
                     let key = job.account.key();
+                    // OP.GG's recent games feed the account's match archive.
+                    if !info.recent_games.is_empty() {
+                        leagueaccounts::profiles::record_opgg_games(&key, &info.recent_games);
+                    }
                     let Ok(mut manager) = shared.manager.lock() else { break };
                     if !manager.apply_rank_info(&job, &info) {
                         continue;
                     }
                     if let Some(updated) = manager.account(&key) {
                         let _ = app.emit("rank-update", account_view(updated));
+                        // Feeds the LP chart on the account page.
+                        leagueaccounts::profiles::record_ranks(updated);
                     }
                 })
             })

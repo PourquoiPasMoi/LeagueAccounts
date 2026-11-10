@@ -4,94 +4,166 @@
 
 # League Accounts
 
-**All your League of Legends & Teamfight Tactics accounts in one place.**
-One-click login, live ranks and ban countdowns, with passwords kept in Windows Credential Manager.
+All your League of Legends and Teamfight Tactics accounts in one window: one-click login, live ranks, and now a full profile for every account with stats, owned champions and skins, and what the collection is worth.
 
-[![Latest release](https://img.shields.io/github/v/release/Tariolle/LeagueAccounts?label=download&color=c8aa6e)](https://github.com/Tariolle/LeagueAccounts/releases/latest)
+[![Latest release](https://img.shields.io/github/v/release/PourquoiPasMoi/LeagueAccounts?label=download&color=c8aa6e)](https://github.com/PourquoiPasMoi/LeagueAccounts/releases/latest)
 ![Windows](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-0ac8b9)
 [![License: MIT](https://img.shields.io/badge/license-MIT-b47dff)](LICENSE)
 
-<img src="docs/screenshots/demo.gif" alt="Filtering accounts by a friend's rank, logging in with one click, then switching to TFT ranks" width="960" />
+<img src="docs/screenshots/main.png" alt="Main screen with ranked accounts, the signed-in account highlighted and the total value of all accounts" width="960" />
 
 </div>
 
-## Features
+## Where this comes from
 
-- **One-click login.** League Accounts opens the Riot Client, signs in and launches LoL or TFT.
-- **LoL and TFT ranks** from OP.GG, refreshed in the background (every 30 minutes by default).
-- **Duo finder.** The *Friend elo* filter shows which accounts can play ranked with a friend.
-- **Ban check.** Each login reads the account's League ban from Riot; a banned account shows the time left instead of launching a game that would disconnect you.
-- **Safe by design.** Passwords stay in Windows Credential Manager and never reach the interface.
-- **Made for daily use.** Launch with Windows, keyboard shortcuts, import/export, automatic updates, 6 languages, interface size from 80 to 200%.
+This project is a fork of [League Accounts by Tariolle](https://github.com/Tariolle/LeagueAccounts). The account manager itself is their work: the Riot Client login, OP.GG rank tracking, ban detection, Credential Manager storage, the League client look and the six translations. If you only need a fast account switcher, their version is excellent and you should go star it.
+
+This fork adds a profile page for each account and a few things I wanted on top: knowing which account is signed in, finding which account owns a skin, and adding up what all those skins cost.
+
+## What's new in this fork
+
+### A profile for every account
+
+Double-click a card (or press Enter, or use Profile in the card menu) and the account opens full screen, styled like the League client. The page also opens by itself after you log in.
+
+<img src="docs/screenshots/profile-overview.png" alt="Account overview with ranked cards, rank history and recent games" width="960" />
+
+The overview shows Solo/Duo, Flex and TFT ranks with wins, losses and win rate, a rank history chart, and your recent games. Hover any point on the chart to read the exact rank, LP and the change since the previous point.
+
+<img src="docs/screenshots/rank-history.png" alt="Rank history chart with the hover readout" width="960" />
+
+### Stats that grow over time
+
+The Stats tab works from a game archive that fills up on its own. Every rank refresh saves the last games listed on the account's OP.GG page, so accounts you never open still get data. Each login through the app adds up to 50 games with full detail from the League client: damage, gold, vision, wards, kill participation, share of team damage, role and multikills. Up to 3,000 games are kept per account.
+
+<img src="docs/screenshots/profile-stats.png" alt="Stats tab with averages and the performance trend chart" width="960" />
+
+You can filter by queue (Solo/Duo, Flex, Normal, ARAM, Arena) and by the last 20, last 50 or all games. The page shows win rate, KDA, kill participation, CS, gold, damage and vision per minute, average game length and OP Score. The trend chart plots one bar per game with a five-game average; switch it between KDA, CS, damage, gold and vision, and hover a bar to see that game.
+
+<img src="docs/screenshots/profile-stats-more.png" alt="Champion performance, recent form, personal records, roles, streaks and days of the week" width="960" />
+
+Below that: performance per champion, your recent form, personal records (most kills, best KDA, most damage, best CS per minute and more), roles, streaks and multikills, and how you do on each day of the week.
+
+### Champions and skins you own
+
+The Champions tab lists every champion the account owns, with mastery and skin count. Search by champion or skin name, sort by mastery, skins or name, and click a champion to see only the skins that account owns, with their RP price and chromas.
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/profile-champions.png" alt="Owned champions" /></td>
+    <td width="50%"><img src="docs/screenshots/profile-skins.png" alt="Owned skins of one champion with prices" /></td>
+  </tr>
+</table>
+
+### What each account is worth
+
+The Value tab adds up the RP price of every owned skin and converts it to euros. You set the rate in Settings (125 RP per euro by default). Prestige, reward and event skins were never sold for RP, so they are counted separately and left out of the total. Each card on the main screen shows its account's value, and the sidebar shows the total for all accounts.
+
+<img src="docs/screenshots/profile-value.png" alt="Value tab with the skin total and the breakdown by champion" width="960" />
+
+### Skin finder
+
+Want to play a specific skin? Open Skins in the toolbar, type part of the name, and you get every account that owns it, with a Log in button next to each.
+
+<img src="docs/screenshots/skin-finder.png" alt="Skin finder showing which accounts own Star Guardian skins" width="960" />
+
+### Smaller changes
+
+- The account that is signed in right now gets a teal frame and a Connected or Playing badge, and its Log in button is disabled.
+- The selected card has an animated gold frame, and rank crests glow in their tier color.
+- Champion and skin pictures are downloaded the first time you see them and then load from disk.
+
+## Everything from the original
+
+- One-click login: League Accounts opens the Riot Client, signs in and launches LoL or TFT.
+- LoL and TFT ranks from OP.GG, refreshed in the background (every 30 minutes by default).
+- The Friend elo filter shows which accounts can play ranked with a friend.
+- Each login reads the account's League ban, and a banned account shows the time left.
+- Passwords stay in Windows Credential Manager and never reach the interface.
+- Launch with Windows, keyboard shortcuts, import and export, automatic updates, six languages and interface sizes from 80 to 200%.
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/list.png" alt="Compact list view" /><br /><sub>List view for many accounts.</sub></td>
+    <td width="50%"><img src="docs/screenshots/banned.png" alt="Warning before logging in to a banned account" /><br /><sub>See how long a ban lasts before you log in.</sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/add.png" alt="Add account panel" /><br /><sub>Add one account or paste many.</sub></td>
+    <td><img src="docs/screenshots/settings.png" alt="Settings" /><br /><sub>Settings, including the RP to euro rate.</sub></td>
+  </tr>
+</table>
 
 ## Installation
 
-1. Download **`LeagueAccounts.exe`** from the [latest release](https://github.com/Tariolle/LeagueAccounts/releases/latest).
-2. Put it in a folder of your own (e.g. `Documents\LeagueAccounts`, not `Program Files`, so it can update itself) and run it.
-3. If SmartScreen says *"Windows protected your PC"* (the app is not code-signed), click **More info → Run anyway**.
+1. Download `LeagueAccounts.exe` from the [latest release](https://github.com/PourquoiPasMoi/LeagueAccounts/releases/latest).
+2. Put it in a folder of your own, such as `Documents\LeagueAccounts` (not `Program Files`, so it can update itself), and run it.
+3. The exe is not code-signed. If SmartScreen says "Windows protected your PC", click More info, then Run anyway.
 
-Requires Windows 10 or 11 with [WebView2](https://developer.microsoft.com/microsoft-edge/webview2/) (preinstalled on current Windows). The app updates itself from this repository's releases; turn it off in **Settings → Updates**.
+You need Windows 10 or 11 with [WebView2](https://developer.microsoft.com/microsoft-edge/webview2/), which current Windows already has. Updates come from this repository's releases; you can turn them off in Settings.
+
+Already using the original app? Close it and run this exe instead. It reads the same saved accounts from `%APPDATA%\LeagueAccounts`, so there is nothing to set up again.
 
 ## Usage
 
-**Add accounts** with **Add account** (`Ctrl+N`): the Riot Client username, password, region and, optionally, the Riot ID (`Name#TAG`) used to look up ranks. To add many, paste one per line in **Bulk add**:
+Add accounts with Add account (`Ctrl+N`): the Riot Client username, password, region and, optionally, the Riot ID (`Name#TAG`) used to look up ranks. To add many at once, paste one per line in Bulk add:
 
 ```text
 username1--Player One#EUW--password1
 username2--password2
 ```
 
-**Log in** with the card's **Log in** button. If another account is signed in, it is signed out first, and you're warned before an open League client is closed (or a match left). For 2FA or a captcha, finish in the Riot window; the game launches once the sign-in is confirmed. If Riot reports a ban, the game isn't started: the card shows the time left, and logging in again before it ends asks whether to launch the game anyway. With game launch off, a banned account still signs in to the Riot Client.
+Log in with the card's Log in button. If another account is signed in, it is signed out first, and you're warned before an open League client is closed or a match is left. For 2FA or a captcha, finish in the Riot window and the game launches once the sign-in is confirmed.
 
-<table>
-  <tr>
-    <td width="50%"><img src="docs/screenshots/banned.png" alt="Warning before logging in to a banned account" /><br /><sub><b>Ban check:</b> see how long a ban lasts before you log in.</sub></td>
-    <td width="50%"><img src="docs/screenshots/list.png" alt="Compact list view" /><br /><sub><b>List view</b> for many accounts.</sub></td>
-  </tr>
-  <tr>
-    <td><img src="docs/screenshots/add.png" alt="Add account panel" /><br /><sub><b>Add one account or paste many.</b></sub></td>
-    <td><img src="docs/screenshots/settings.png" alt="Settings" /><br /><sub><b>Settings:</b> language, interface size, startup, refresh interval, login method, updates.</sub></td>
-  </tr>
-</table>
+To fill an account's profile, log in to it once through the app with "Launch the game after signing in" turned on. Owned champions and skins only exist in the League client, so the app reads them while that account is signed in. If League is already open on an account, press Sync now on its page.
 
 <details>
-<summary><b>Keyboard shortcuts</b></summary>
+<summary>Keyboard shortcuts</summary>
 
 | Shortcut | Action |
 |---|---|
 | `Ctrl+Shift+V` | Log in with the selected account |
+| `Enter` / double-click | Open the selected account's profile |
 | `Ctrl+C` | Copy the account ID (press again for the password) |
 | `↑ ↓ ← →` | Move between accounts |
 | `Delete` | Delete the selected account (asks first) |
 | `Ctrl+F` / `Ctrl+N` / `Ctrl+,` | Search / Add account / Settings |
 | `Ctrl+R` / `F5` | Refresh ranks |
 | `Ctrl+1` / `Ctrl+2` | League of Legends / TFT mode |
-| Double-click / Right-click | Edit / All actions |
+| Right-click | All actions |
 
 </details>
 
 ## Privacy and security
 
-- Passwords are stored in **Windows Credential Manager** (service `LeagueAccounts`), never in the app's files. Copied passwords are cleared from the clipboard after 30 seconds and kept out of clipboard history.
-- **Exports contain passwords in plain text.** Keep them private.
-- The app only contacts OP.GG (ranks), the Riot Client on `127.0.0.1` and GitHub (updates). No telemetry, no account server.
-- Accounts, settings and logs (fixed event codes, no account data) live in `%APPDATA%\LeagueAccounts\`.
+- Passwords are stored in Windows Credential Manager (service `LeagueAccounts`), never in the app's files. Copied passwords are cleared from the clipboard after 30 seconds and kept out of clipboard history.
+- Exports contain passwords in plain text. Keep them private.
+- The app contacts OP.GG for ranks and recent games, the Riot and League clients on `127.0.0.1`, CommunityDragon for champion and skin pictures, and GitHub for updates. There is no telemetry and no account server.
+- Accounts, settings, profiles, game history, cached pictures and logs live in `%APPDATA%\LeagueAccounts\`. Logs hold fixed event codes only, never account data.
 
 ## Troubleshooting
 
 | Problem | What to do |
 |---|---|
-| *Riot Client was not found* | Install the Riot Client, or use **Settings → Login → Type into the previous window**. |
-| *The Riot Client login screen or sign-in status wasn't ready in time* | Open the Riot Client once manually (it may be updating), then retry. |
-| Shown online while using [Deceive](https://github.com/molenzwiebel/Deceive) | Start Deceive first, then log in with League Accounts. A Riot Client that League Accounts opens itself doesn't go through Deceive. |
-| Ranks show **Unavailable** or *Riot ID not found* | Check the Riot ID and region; OP.GG may also be rate-limiting. |
-| The client's **home page is blank or broken** while the game language is `zh_CN` | Riot never published every home-page (activity-center) asset for `zh_CN`, so pages such as `jade-home` return 404 and the home page fails to render. Switch the account's game language to `zh_MY` or `zh_TW`, or install ABC's [zh-cn-home-locale](https://github.com/pengu-lol/pengu-loader) Pengu Loader plugin, which retries a failed page with `locale=zh_TW` inside the game client. |
-| Anything else | Attach the newest file from **Log folder** (sidebar) to an [issue](https://github.com/Tariolle/LeagueAccounts/issues). |
+| The profile says it was never synced | Log in to that account through the app with game launch on, or open League on it and press Sync now. |
+| Stats only show a few games | Games build up over time: 10 or so from OP.GG per refresh, and up to 50 per login. |
+| *Riot Client was not found* | Install the Riot Client, or use Settings, Login, Type into the previous window. |
+| Ranks show Unavailable or *Riot ID not found* | Check the Riot ID and region; OP.GG may also be rate limiting. |
+| Shown online while using [Deceive](https://github.com/molenzwiebel/Deceive) | Start Deceive first, then log in with League Accounts. |
+| Anything else | Attach the newest file from Log folder (sidebar) to an [issue](https://github.com/PourquoiPasMoi/LeagueAccounts/issues). |
 
-Want to build or contribute? See [CONTRIBUTING.md](CONTRIBUTING.md).
+## Building from source
+
+You need [Rust](https://rustup.rs) (MSVC toolchain), [Node.js](https://nodejs.org) 20 or newer, and the Visual Studio C++ Build Tools.
+
+```bash
+npm install
+npx tauri build --no-bundle
+```
+
+The exe ends up in `target/release/LeagueAccounts.exe`. Skin prices come from Meraki Analytics' community data; `node scripts/skin-prices.mjs` refreshes them after new skins come out.
 
 ## License and disclaimer
 
-Code under the [MIT License](LICENSE). Bundled Riot Games artwork, fonts and animations keep their original rights; see [THIRD_PARTY_ASSETS.md](THIRD_PARTY_ASSETS.md).
+Code under the [MIT License](LICENSE), which also covers the original work by [Tariolle](https://github.com/Tariolle/LeagueAccounts). Bundled Riot Games artwork, fonts and animations keep their original rights; see [THIRD_PARTY_ASSETS.md](THIRD_PARTY_ASSETS.md).
 
-League Accounts isn't endorsed by Riot Games and doesn't reflect the views or opinions of Riot Games or anyone officially involved in producing or managing Riot Games properties. Riot Games, League of Legends and Teamfight Tactics are trademarks or registered trademarks of Riot Games, Inc. Rank data comes from OP.GG; this project is not affiliated with OP.GG. Sharing accounts may be against Riot Games' Terms of Service; you are responsible for how you use this tool.
+League Accounts isn't endorsed by Riot Games and doesn't reflect the views or opinions of Riot Games or anyone officially involved in producing or managing Riot Games properties. Riot Games, League of Legends and Teamfight Tactics are trademarks or registered trademarks of Riot Games, Inc. Rank data and recent games come from OP.GG, skin prices from Meraki Analytics and pictures from CommunityDragon; this project is not affiliated with any of them. Sharing accounts may be against Riot Games' Terms of Service; you are responsible for how you use this tool.

@@ -57,6 +57,10 @@ pub enum Event {
     Panic,
     HostsPatched,
     HostsRestored,
+    ProfileSynced,
+    ProfileSyncFailed,
+    ProfileSaveFailed,
+    ImageCacheFailed,
 }
 
 impl Event {
@@ -100,6 +104,10 @@ impl Event {
             Self::Panic => "panic",
             Self::HostsPatched => "hosts_patched",
             Self::HostsRestored => "hosts_restored",
+            Self::ProfileSynced => "profile_synced",
+            Self::ProfileSyncFailed => "profile_sync_failed",
+            Self::ProfileSaveFailed => "profile_save_failed",
+            Self::ImageCacheFailed => "image_cache_failed",
         }
     }
 
@@ -117,7 +125,8 @@ impl Event {
             | Self::AutoRefreshStarted
             | Self::UpdateDownloaded
             | Self::UpdateInstalled
-            | Self::UpdateRestarted => "INFO",
+            | Self::UpdateRestarted
+            | Self::ProfileSynced => "INFO",
             _ => "ERROR",
         }
     }

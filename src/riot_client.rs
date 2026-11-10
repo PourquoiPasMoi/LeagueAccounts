@@ -770,6 +770,10 @@ impl LocalApi {
     }
 
     fn from_lockfile(contents: &str) -> Option<Self> {
+        Self::from_lockfile_with_timeout(contents, Duration::from_secs(3))
+    }
+
+    fn from_lockfile_with_timeout(contents: &str, timeout: Duration) -> Option<Self> {
         // name:pid:port:password:protocol
         let parts: Vec<&str> = contents.trim().split(':').collect();
         let [_, _, port, password, _] = parts[..] else {
@@ -779,7 +783,7 @@ impl LocalApi {
             // The API is bound to loopback with a self-signed certificate.
             .danger_accept_invalid_certs(true)
             .no_proxy()
-            .timeout(Duration::from_secs(3))
+            .timeout(timeout)
             .build()
             .ok()?;
         Some(Self {
@@ -1256,6 +1260,37 @@ fn riot_id_from_processes(processes: &[Process]) -> Option<String> {
         riot_id = Some(found);
     }
     riot_id
+}
+
+/// Read-only access to the League client's local API (champions, skins,
+/// ranked stats, match history), handed out only while that client is signed
+/// in as one specific account.
+pub struct LeagueApi(LocalApi);
+
+impl LeagueApi {
+    /// The JSON body of a successful GET; `None` for any other answer.
+    pub fn get_json(&self, path: &str) -> Option<serde_json::Value> {
+        let (status, body) = self.0.get(path)?;
+        (status == 200).then_some(body)
+    }
+}
+
+/// The League client's API, only when every running game client confirms it
+/// is signed in as `account_id`. Same lockfile checks as [`game_username`].
+pub fn league_api_for(account_id: &str) -> Option<LeagueApi> {
+    let processes = running_processes();
+    let username = game_username(&processes)?;
+    if !username.eq_ignore_ascii_case(account_id) {
+        return None;
+    }
+    let process = processes.iter().find(|process| process.name == "leagueclient.exe")?;
+    let executable = windows::process_path(process.pid)?;
+    let contents = std::fs::read_to_string(executable.parent()?.join("lockfile")).ok()?;
+    if contents.split(':').nth(1)?.parse::<u32>().ok()? != process.pid {
+        return None;
+    }
+    // The champion inventory is several megabytes and match history is slow.
+    LocalApi::from_lockfile_with_timeout(&contents, Duration::from_secs(30)).map(LeagueApi)
 }
 
 pub fn status() -> GameStatus {

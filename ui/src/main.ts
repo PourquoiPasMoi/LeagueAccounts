@@ -3,9 +3,14 @@ import "./features.css";
 import "./login.css";
 import "./league.css";
 import "./client-controls.css";
+import "./glow.css";
+import "./profile.css";
 
 import { ApiError, accountLabel, api, events, keyId, keyOf, parseAccountLine, type AccountView, type Ban, type Key, type LocaleOption, type Schedule, type Settings, type UpdateAccount } from "./api";
 import { openLoginOverlay, type LoginOverlay } from "./login";
+import { loginButton, openProfile, openSkinFinder, profileUpdated, refreshProfileHead } from "./profile";
+import { skinsValue } from "./prices";
+import type { SessionStatus, SkinOwner } from "./api";
 import { LANGUAGES, applyStatic, asLang, en, errorText, fromBrowser, lang, localeTag, localizeRank, needsLanguageChoice, setLang, t, tierName, useLang, type Lang, type MessageKey } from "./i18n";
 import { $, closeMenu, contextMenu, esc, fragment, leave, modal, reducedMotion, toast } from "./dom";
 import { hydrateIcons, icon } from "./icons";
@@ -53,7 +58,37 @@ const state = {
   copyStage: { id: "", count: 0 },
   settings: null as Settings | null,
   schedule: null as Schedule | null,
+  /** Skin value in RP per synced account (keyId); absent until synced once. */
+  values: new Map<string, number>(),
+  /** Who is signed in to the Riot Client, polled every few seconds. */
+  session: null as SessionStatus | null,
 };
+
+/** Whether this account is the one signed in right now (and playing). */
+function connection(account: AccountView): "none" | "signedIn" | "playing" {
+  const session = state.session;
+  if (!session?.accountId || session.accountId.toLowerCase() !== account.accountId.toLowerCase()) return "none";
+  return session.clientOpen || session.inGame ? "playing" : "signedIn";
+}
+
+let sessionTimer: number | undefined;
+/** Poll the Riot Client's session; cards and the open account page follow it. */
+async function pollSession(): Promise<void> {
+  window.clearTimeout(sessionTimer);
+  if (document.visibilityState === "visible") {
+    try {
+      const next = await api.sessionStatus();
+      if (JSON.stringify(next) !== JSON.stringify(state.session)) {
+        state.session = next;
+        renderAccounts();
+        refreshProfileHead();
+      }
+    } catch {
+      // Keep the last known state.
+    }
+  }
+  sessionTimer = window.setTimeout(() => void pollSession(), 5000);
+}
 
 // ---------------------------------------------------------------- preferences
 
@@ -122,7 +157,56 @@ function historyLine(account: AccountView): string {
 }
 
 function cardSignature(account: AccountView, pending: boolean): string {
-  return JSON.stringify([account, state.mode, pending, lang(), banChip(account)]);
+  return JSON.stringify([account, state.mode, pending, lang(), banChip(account), state.values.get(keyId(keyOf(account))), state.settings?.rpPerEuro, connection(account)]);
+}
+
+const rpPerEuro = (): number => state.settings?.rpPerEuro || 125;
+const formatEuro = (rp: number): string =>
+  new Intl.NumberFormat(localeTag(), { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(rp / rpPerEuro());
+const formatNumber = (value: number): string => new Intl.NumberFormat(localeTag()).format(value);
+
+/** "Connected" / "In game" badge for the signed-in account. */
+function connectionChip(account: AccountView): string {
+  const state = connection(account);
+  if (state === "none") return "";
+  return `<span class="chip chip-connected"><span class="live-dot"></span>${esc(t(state === "playing" ? "connected.playing" : "connected.chip"))}</span>`;
+}
+
+/** Skin value of a synced account, shown beside its level. */
+function valueChip(account: AccountView): string {
+  const rp = state.values.get(keyId(keyOf(account)));
+  if (rp === undefined) return "";
+  const detail = t("value.cardTitle", { rp: formatNumber(rp), amount: formatEuro(rp) });
+  return `<span class="chip chip-value" data-tooltip="${esc(detail)}">${icon("gem", 11)}${esc(formatEuro(rp))}</span>`;
+}
+
+/** Sidebar total of every synced account's skins. */
+function renderTotalValue(): void {
+  const box = $<HTMLButtonElement>("#total-value");
+  const present = state.accounts.filter((account) => state.values.has(keyId(keyOf(account))));
+  box.hidden = present.length === 0;
+  if (box.hidden) return;
+  const rp = present.reduce((sum, account) => sum + (state.values.get(keyId(keyOf(account))) ?? 0), 0);
+  $(".side-value-amount", box).textContent = formatEuro(rp);
+  $(".side-value-detail", box).textContent = t("value.detail", { rp: formatNumber(rp), count: present.length });
+}
+
+/** Recompute every account's skin value from the stored snapshots. */
+async function loadValues(): Promise<void> {
+  let owners: SkinOwner[];
+  try {
+    owners = await api.skinIndex();
+  } catch {
+    return;
+  }
+  const grouped = new Map<string, SkinOwner[]>();
+  owners.forEach((owner) => {
+    const id = keyId(owner.key);
+    grouped.set(id, [...(grouped.get(id) ?? []), owner]);
+  });
+  state.values = new Map([...grouped].map(([id, skins]) => [id, skinsValue(skins.map((skin) => ({ id: skin.skinId, rarity: skin.rarity })))]));
+  renderAccounts();
+  renderTotalValue();
 }
 
 /** The suspension still in force; a timed one disappears once it ends. */
@@ -166,6 +250,8 @@ function cardInner(account: AccountView, pending: boolean): string {
         <div class="meta">
           <span class="chip chip-region">${esc(account.regionDisplay)}</span>
           ${account.level ? `<span class="chip chip-level">${esc(t("card.level"))} <b>${esc(account.level)}</b></span>` : ""}
+          ${connectionChip(account)}
+          ${valueChip(account)}
           ${banChip(account)}
           <span class="acc-id" data-tooltip="${esc(t("card.accountId"))}">${icon("users", 12)}${esc(account.accountId)}</span>
         </div>
@@ -187,7 +273,7 @@ function cardInner(account: AccountView, pending: boolean): string {
     ${account.name && !account.riotIdNotFound ? `<div class="history">${historyLine(account)}</div>` : ""}
     ${account.description ? `<p class="desc" data-tooltip="${esc(account.description)}">${esc(account.description)}</p>` : `<p class="desc desc-empty"></p>`}
     <div class="card-actions">
-      <button class="btn btn-play" data-act="login" data-tooltip="${esc(t("card.loginTitle"))}">${icon("login", 15)}${esc(t("card.login"))}</button>
+      ${loginButton(connection(account), `data-act="login" data-tooltip="${esc(t(connection(account) === "none" ? "card.loginTitle" : "connected.title"))}"`)}
     </div>`;
 }
 
@@ -199,8 +285,11 @@ function updateCard(element: HTMLElement, account: AccountView): void {
   element.style.setProperty("--tier", colors.base);
   element.style.setProperty("--tier-light", colors.light);
   element.style.setProperty("--tier-dark", colors.dark);
+  // glow.css keys the crest animation off the tier (none for Unranked/Error).
+  element.dataset.tier = normalizeTier(rankOf(account, state.mode).tier);
   element.classList.toggle("selected", state.selected === id);
   element.classList.toggle("banned", activeBan(account) !== null);
+  element.classList.toggle("connected", connection(account) !== "none");
   element.classList.toggle("apex", APEX.has(normalizeTier(rankOf(account, state.mode).tier)));
   if (element.dataset.signature === signature) return;
   const wasPending = element.dataset.pending === "1";
@@ -322,6 +411,7 @@ function render(): void {
   renderControls();
   renderAccounts();
   renderDistribution();
+  renderTotalValue();
 }
 
 // ---------------------------------------------------------------- actions
@@ -458,10 +548,14 @@ async function runLogin(account: AccountView, closeRunning = false, launchBanned
   activeLogin = overlay;
   try {
     const result = await api.login(key, state.mode === "tft", closeRunning, launchBanned);
-    if (result === "signedIn") {
-      overlay.succeed(t("login.success"), launching ? t("toast.gameLaunched") : accountLabel(account));
-    } else if (result === "alreadySignedIn") {
-      overlay.succeed(t("toast.alreadySignedIn"), launching ? t("toast.gameLaunched") : accountLabel(account));
+    if (result === "signedIn" || result === "alreadySignedIn") {
+      overlay.succeed(t(result === "signedIn" ? "login.success" : "toast.alreadySignedIn"), launching ? t("toast.gameLaunched") : accountLabel(account));
+      void pollSession();
+      // Show the account's page once the success screen has been seen.
+      window.setTimeout(() => {
+        overlay.close();
+        if (!document.querySelector(".login-overlay:not(.login-out), #modal-root > .overlay")) showProfile(account);
+      }, 1600);
     } else if (result === "typed") {
       if (viaRiot) overlay.finishInClient();
       else overlay.succeed(t("toast.loggedIn"), accountLabel(account));
@@ -687,9 +781,32 @@ async function deleteAccount(account: AccountView): Promise<void> {
   toast("success", t("toast.deleted"), accountLabel(account));
 }
 
+/** The account page: ranked stats, rank history, games, champions, skins and value. */
+function showProfile(account: AccountView): void {
+  const id = keyId(keyOf(account));
+  select(id);
+  openProfile({
+    account: () => byId(id),
+    mode: state.mode,
+    rpPerEuro: state.settings?.rpPerEuro || 125,
+    login: (current) => void login(current),
+    edit: (current) => void editAccount(current),
+    connection,
+  });
+}
+
+function showSkinFinder(): void {
+  openSkinFinder({
+    accounts: () => state.accounts,
+    open: showProfile,
+    login: (account) => void login(account),
+  });
+}
+
 function openMenu(account: AccountView, x: number, y: number): void {
   select(keyId(keyOf(account)));
   contextMenu(x, y, [
+    { label: t("menu.profile"), icon: "chart-line", run: () => showProfile(account) },
     ...(account.name ? [{
       label: t(state.mode === "lol" ? "menu.opgg" : "menu.opggTft"),
       icon: "external-link",
@@ -821,6 +938,11 @@ async function openSettings(): Promise<void> {
           <span class="toggle-text"><strong>${esc(t("settings.methodPrevious"))}</strong><span>${esc(t("settings.methodPreviousHint"))}</span></span></label>
         ${toggle("launchGame", current.launchGame, t("settings.launchGame"), t("settings.launchGameHint"))}
       </section>
+      <section class="settings-section">
+        <h3>${esc(t("settings.value"))}</h3>
+        <label class="field inline"><span class="toggle-text"><strong>${esc(t("settings.rpRate"))}</strong><span>${esc(t("settings.rpRateHint"))}</span></span>
+          <span class="interval-input"><input name="rpPerEuro" type="number" min="50" max="500" step="1" value="${current.rpPerEuro}"/><span>RP</span></span></label>
+      </section>
       </div>
       </div>`,
     actions: [
@@ -866,11 +988,13 @@ async function openSettings(): Promise<void> {
             launchGame: checked("launchGame"),
             autoUpdate: checked("autoUpdate"),
             uiScale: Number($<HTMLSelectElement>('[name="uiScale"]', root).value),
+            rpPerEuro: Math.min(500, Math.max(50, Math.round(Number($<HTMLInputElement>('[name="rpPerEuro"]', root).value) || 125))),
           }),
         "toast.settingsFailed",
       );
       if (!saved.ok) return false;
       state.settings = saved.value;
+      render();
       const language = $<HTMLSelectElement>('[name="language"]', root).value as Lang;
       if (language !== lang() && !(await changeLanguage(language))) return false;
       toast("success", t("settings.saved"));
@@ -1280,6 +1404,8 @@ function wire(): void {
 
   $("#schedule").addEventListener("click", () => void refreshAll());
   $("#open-add").addEventListener("click", () => openAddDrawer());
+  $("#open-finder").addEventListener("click", showSkinFinder);
+  $("#total-value").addEventListener("click", showSkinFinder);
   document.querySelectorAll<HTMLButtonElement>("[data-action]").forEach((button) => {
     button.addEventListener("click", () => {
       const action = button.dataset.action;
@@ -1324,7 +1450,7 @@ function wire(): void {
     if ((event.target as HTMLElement).closest("button")) return;
     const card = (event.target as HTMLElement).closest<HTMLElement>(".card");
     const account = card && byId(card.dataset.key ?? "");
-    if (account) void editAccount(account);
+    if (account) showProfile(account);
   });
   accounts.addEventListener("contextmenu", (event) => {
     const card = (event.target as HTMLElement).closest<HTMLElement>(".card");
@@ -1391,7 +1517,7 @@ function moveSelection(step: number, columns: boolean): void {
 function onKeyDown(event: KeyboardEvent): void {
   const target = event.target as HTMLElement;
   const typing = target.matches("input, textarea, select");
-  const overlayOpen = Boolean(document.querySelector(".overlay, .drawer-overlay, .login-overlay"));
+  const overlayOpen = Boolean(document.querySelector(".overlay, .drawer-overlay, .login-overlay, .profile-overlay"));
   const ctrl = event.ctrlKey || event.metaKey;
   const key = event.key.toLowerCase();
 
@@ -1448,6 +1574,11 @@ function onKeyDown(event: KeyboardEvent): void {
   }
   if (event.key === "Escape") {
     select(null);
+    return;
+  }
+  if (event.key === "Enter" && selected && target.matches(".card")) {
+    event.preventDefault();
+    showProfile(selected);
     return;
   }
   const arrows: Record<string, [number, boolean]> = {
@@ -1515,6 +1646,10 @@ async function wireEvents(): Promise<void> {
     upsert(account);
     renderAccounts();
   });
+  await events.onProfileUpdate((key) => {
+    profileUpdated(keyId(key));
+    void loadValues();
+  });
   await events.onRefreshDone(({ error, exclusive }) => {
     if (error) toast("error", t("toast.ranksSaveFailed"), describe(new ApiError(error.code, error.detail)), 5000);
     // Only a full refresh ends the progress state; single-account refreshes
@@ -1532,7 +1667,7 @@ const IN_TAURI = "__TAURI_INTERNALS__" in window;
 
 /** An update restart waits while the user is doing something. */
 const uiBusy = (): boolean =>
-  Boolean(activeLogin || state.refreshing || document.querySelector(".overlay, .drawer-overlay, .login-overlay, .menu, .is-open"));
+  Boolean(activeLogin || state.refreshing || document.querySelector(".overlay, .drawer-overlay, .login-overlay, .profile-overlay, .menu, .is-open"));
 
 /** Dev-only: `?scene=` opens a screen with demo data (used for README screenshots). */
 function runDemoScene(): void {
@@ -1552,6 +1687,8 @@ function runDemoScene(): void {
     if (scene === "login") void login(byName("Hextech"));
     // The mock bans Kebab Enjoyer: logging in asks first, with the time left.
     if (scene === "banned") void login(byName("Kebab"));
+    if (scene === "profile") showProfile(byName("Hextech"));
+    if (scene === "finder") showSkinFinder();
     if (scene === "update") showUpdateBanner({ version: "3.1.0", name: "v3.1.0", url: "", notes: "", publishedAt: "" }, true);
     if (scene === "menu") {
       const card = document.querySelector<HTMLElement>("#accounts > .card:nth-child(2)")!;
@@ -1603,6 +1740,9 @@ async function start(): Promise<void> {
   await Promise.all([wireEvents(), wireUpdates({ busy: uiBusy }), IN_TAURI ? wireWindow() : Promise.resolve()]);
   renderSchedule();
   setInterval(renderSchedule, 1000);
+  void loadValues();
+  void pollSession();
+  document.addEventListener("visibilitychange", () => void pollSession());
   // Cards only rebuild when their signature changes, e.g. "Updated" turning stale.
   setInterval(renderAccounts, 30_000);
   // An update found at launch shows the update screen instead of the app.

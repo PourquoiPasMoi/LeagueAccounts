@@ -25,8 +25,9 @@ use leagueaccounts::updates;
 use login_control::LoginControl;
 use refresh::{
     schedule, spawn_scheduler, start_refresh, LoginMethod, RefreshKind, Schedule, Settings, Shared, MAX_INTERVAL_MINUTES,
-    MIN_INTERVAL_MINUTES,
+    MAX_RP_PER_EURO, MIN_INTERVAL_MINUTES, MIN_RP_PER_EURO,
 };
+use leagueaccounts::profiles::{self, MatchRecord, Profile, RankPoint};
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
@@ -57,6 +58,7 @@ struct SettingsView {
     ui_scale: u32,
     /// Empty until the welcome dialog has been answered once.
     ui_language: String,
+    rp_per_euro: u32,
     riot_client_found: bool,
     tft_installed: bool,
 }
@@ -72,6 +74,9 @@ struct SettingsInput {
     launch_game: bool,
     auto_update: bool,
     ui_scale: u32,
+    /// Older interfaces do not send it; keep the saved value then.
+    #[serde(default)]
+    rp_per_euro: Option<u32>,
 }
 
 /// Fields the edit dialog can change. `password: None` keeps the stored
@@ -203,6 +208,7 @@ fn settings_view(app: &AppHandle, state: &Shared) -> SettingsView {
         auto_update: settings.auto_update,
         ui_scale: settings.ui_scale,
         ui_language: settings.ui_language.clone(),
+        rp_per_euro: settings.rp_per_euro,
         riot_client_found: riot_client::client_path().is_some(),
         tft_installed: riot_client::game_installed(Game::Tft),
     }
@@ -374,7 +380,9 @@ async fn delete_account(state: AppState<'_>, key: Key) -> CommandResult<()> {
     blocking(move || {
     manager(&state)?
         .delete_account(&key.account_id, &key.region)
-        .map_err(|error| fail_with("delete_failed", error))
+        .map_err(|error| fail_with("delete_failed", error))?;
+    profiles::remove(&AccountKey::from(key));
+    Ok(())
     }).await
 }
 
@@ -442,6 +450,9 @@ async fn update_settings(app: AppHandle, state: AppState<'_>, input: SettingsInp
     candidate.launch_game = input.launch_game;
     candidate.auto_update = input.auto_update;
     candidate.ui_scale = ui_scale;
+    if let Some(rate) = input.rp_per_euro {
+        candidate.rp_per_euro = rate.clamp(MIN_RP_PER_EURO, MAX_RP_PER_EURO);
+    }
     if previous_autostart != input.launch_at_startup {
         let result = if input.launch_at_startup { autolaunch.enable() } else { autolaunch.disable() };
         result.map_err(|error| fail_with("autostart_failed", error))?;
@@ -604,6 +615,12 @@ async fn login(
         // it, so record it instead of making the user look it up. Done on its
         // own thread: the lookup can wait up to a minute, and the login (its
         // guard, the overlay) has already succeeded and must not wait on it.
+        // Snapshot champions, skins, ranked stats and games once the League
+        // client is up for this account (only it knows what the account owns).
+        if outcome.is_ok() && game.is_some() {
+            let (app, shared, key, id) = (app.clone(), Arc::clone(&shared), account_key.clone(), account.account_id.clone());
+            thread::spawn(move || sync_after_login(&app, &shared, &key, &id));
+        }
         if outcome.is_ok() && needs_riot_id(&shared, &account_key) {
             let (app, shared, key) = (app.clone(), Arc::clone(&shared), account_key.clone());
             let wait_for_client = game.is_some();
@@ -722,6 +739,137 @@ fn needs_riot_id(state: &Shared, key: &AccountKey) -> bool {
                 .map(|account| account.name.trim().is_empty())
         })
         .unwrap_or(false)
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ProfileView {
+    /// `None` until the account has been synced once.
+    profile: Option<Profile>,
+    /// LoL and TFT standings over time, oldest first.
+    history: Vec<RankPoint>,
+    /// Every archived game (client and OP.GG), newest first.
+    games: Vec<MatchRecord>,
+}
+
+fn profile_view(key: &AccountKey) -> ProfileView {
+    let profile = profiles::load(key).map(|mut profile| {
+        // Snapshots taken before the filter may still hold game-mode copies.
+        profile.champions.retain(|champion| profiles::is_real_champion(champion.id));
+        profile
+    });
+    ProfileView { profile, history: profiles::history(key), games: profiles::archive(key) }
+}
+
+/// Who is signed in right now, so the UI can mark that account.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SessionView {
+    /// Riot Client username of the signed-in account.
+    account_id: Option<String>,
+    client_open: bool,
+    in_game: bool,
+}
+
+#[tauri::command]
+async fn session_status() -> CommandResult<SessionView> {
+    let status = tauri::async_runtime::spawn_blocking(riot_client::status).await.unwrap_or_default();
+    Ok(SessionView { account_id: status.signed_in_user, client_open: status.client_open, in_game: status.in_game })
+}
+
+fn view_key(key: &AccountKey) -> Key {
+    Key { account_id: key.account_id.clone(), region: key.region.clone() }
+}
+
+/// How long to wait after a login for the League client to load the account.
+const PROFILE_SYNC_WAIT: Duration = Duration::from_secs(240);
+
+fn sync_after_login(app: &AppHandle, shared: &Arc<Shared>, key: &AccountKey, account_id: &str) {
+    let deadline = std::time::Instant::now() + PROFILE_SYNC_WAIT;
+    // The League client needs a few seconds after launch before it answers.
+    thread::sleep(Duration::from_secs(8));
+    while std::time::Instant::now() < deadline {
+        // Exiting, or another login is replacing this account.
+        if shared.login.is_exiting() || shared.login.is_running() {
+            return;
+        }
+        if let Some(api) = riot_client::league_api_for(account_id) {
+            let previous = profiles::load(key);
+            if let Some((profile, games)) = profiles::collect(&api, previous.as_ref(), key) {
+                if profiles::store_snapshot(key, &profile, games).is_ok() {
+                    let _ = app.emit("profile-update", view_key(key));
+                }
+                return;
+            }
+        }
+        thread::sleep(Duration::from_secs(4));
+    }
+    logging::record(Event::ProfileSyncFailed, Reason::Other);
+}
+
+/// The stored snapshot and rank history for the account page.
+#[tauri::command]
+async fn get_profile(state: AppState<'_>, key: Key) -> CommandResult<ProfileView> {
+    let account = find_account(&state, key)?;
+    blocking(move || Ok(profile_view(&account.key()))).await
+}
+
+/// Take a snapshot now. Needs the League client open and signed in as this account.
+#[tauri::command]
+async fn sync_profile(app: AppHandle, state: AppState<'_>, key: Key) -> CommandResult<ProfileView> {
+    let account = find_account(&state, key)?;
+    blocking(move || {
+        let api = riot_client::league_api_for(&account.account_id).ok_or_else(|| fail("profile_not_signed_in"))?;
+        let key = account.key();
+        let previous = profiles::load(&key);
+        let (profile, games) = profiles::collect(&api, previous.as_ref(), &key).ok_or_else(|| {
+            logging::record(Event::ProfileSyncFailed, Reason::Other);
+            fail("profile_not_ready")
+        })?;
+        profiles::store_snapshot(&key, &profile, games).map_err(|error| fail_with("save_failed", error))?;
+        let _ = app.emit("profile-update", view_key(&key));
+        Ok(profile_view(&key))
+    }).await
+}
+
+/// One owned skin for the cross-account skin finder.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SkinOwner {
+    key: Key,
+    champion_id: i64,
+    champion_name: String,
+    skin_id: i64,
+    skin_name: String,
+    tile: String,
+    rarity: String,
+}
+
+/// Every owned skin of every synced account.
+#[tauri::command]
+async fn skin_index(state: AppState<'_>) -> CommandResult<Vec<SkinOwner>> {
+    let state = Arc::clone(&state);
+    blocking(move || {
+        let accounts = manager(&state)?.accounts.clone();
+        let mut owners = Vec::new();
+        for (key, profile) in profiles::load_all(&accounts) {
+            // Snapshots taken before the filter may still hold game-mode copies.
+            for champion in profile.champions.into_iter().filter(|champion| profiles::is_real_champion(champion.id)) {
+                for skin in champion.skins {
+                    owners.push(SkinOwner {
+                        key: view_key(&key),
+                        champion_id: champion.id,
+                        champion_name: champion.name.clone(),
+                        skin_id: skin.id,
+                        skin_name: skin.name,
+                        tile: skin.tile,
+                        rarity: skin.rarity,
+                    });
+                }
+            }
+        }
+        Ok(owners)
+    }).await
 }
 
 #[derive(Serialize)]
@@ -1001,7 +1149,28 @@ fn main() {
             open_logs_folder,
             open_home_fix_author,
             open_pengu_loader,
+            get_profile,
+            sync_profile,
+            skin_index,
+            session_status,
         ])
+        // Champion and skin pictures: http://lacache.localhost/<game-data path>,
+        // downloaded once from CommunityDragon and then served from disk.
+        .register_asynchronous_uri_scheme_protocol("lacache", |_context, request, responder| {
+            let path = request.uri().path().to_owned();
+            thread::spawn(move || {
+                let response = match leagueaccounts::image_cache::load(&path) {
+                    Some((bytes, mime)) => tauri::http::Response::builder()
+                        .header("Content-Type", mime)
+                        .header("Cache-Control", "max-age=604800")
+                        .body(bytes),
+                    None => tauri::http::Response::builder().status(404).body(Vec::new()),
+                };
+                if let Ok(response) = response {
+                    responder.respond(response);
+                }
+            });
+        })
         .setup(move |app| {
     logging::install_panic_hook();
     // A logging failure must not prevent users from opening their accounts.
