@@ -266,6 +266,25 @@ export interface ProfileView {
   games: MatchRecord[];
 }
 
+/** One value in League's shared settings file. */
+export interface GameSettingsChange {
+  file: string;
+  section: string;
+  name: string;
+  value: string;
+}
+
+/** League's PersistedSettings.json: `Game.cfg` and `Input.ini` sections. */
+export interface GameSettingsView {
+  /** null when no League install with a settings file was found. */
+  path: string | null;
+  locked: boolean;
+  leagueOpen: boolean;
+  files: { name: string; sections: { name: string; settings: { name: string; value: string }[] }[] }[];
+  lastBackup: number | null;
+  backups: number;
+}
+
 /** Who is signed in to the Riot Client right now. */
 export interface SessionStatus {
   accountId: string | null;
@@ -452,6 +471,12 @@ export const api = {
   syncProfile: (key: Key) => call<ProfileView>("sync_profile", { key }),
   skinIndex: () => call<SkinOwner[]>("skin_index"),
   sessionStatus: () => call<SessionStatus>("session_status"),
+  gameSettings: () => call<GameSettingsView>("game_settings"),
+  /** Writes the values, then locks the file again when `lock` is set. */
+  applyGameSettings: (changes: GameSettingsChange[], lock: boolean) => call<GameSettingsView>("apply_game_settings", { changes, lock }),
+  lockGameSettings: (locked: boolean) => call<GameSettingsView>("lock_game_settings", { locked }),
+  restoreGameSettings: () => call<GameSettingsView>("restore_game_settings"),
+  openGameSettingsFolder: () => call<void>("open_game_settings_folder"),
 };
 
 export const events = {

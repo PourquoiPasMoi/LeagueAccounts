@@ -165,7 +165,7 @@ fn write_through_read_only(path: &Path, text: &str) -> bool {
 /// here would turn a file's mode into something the user did not choose. Riot
 /// only runs on Windows, so the attribute is set directly.
 #[cfg(windows)]
-fn set_read_only(path: &Path, read_only: bool) {
+pub(crate) fn set_read_only(path: &Path, read_only: bool) {
     use std::os::windows::ffi::OsStrExt;
     use std::os::windows::fs::MetadataExt;
     const FILE_ATTRIBUTE_READONLY: u32 = 0x1;
@@ -187,7 +187,7 @@ fn set_read_only(path: &Path, read_only: bool) {
 }
 
 #[cfg(not(windows))]
-fn set_read_only(path: &Path, read_only: bool) {
+pub(crate) fn set_read_only(path: &Path, read_only: bool) {
     if let Ok(metadata) = std::fs::metadata(path) {
         let mut permissions = metadata.permissions();
         permissions.set_readonly(read_only);
