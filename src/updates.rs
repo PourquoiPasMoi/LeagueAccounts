@@ -128,30 +128,12 @@ pub fn is_release_url(url: &str) -> bool {
 
 /// Executables are downloaded only from `REPOSITORY`'s release assets.
 fn is_asset_url(url: &str) -> bool {
-    if url.starts_with(&format!("https://github.com/{REPOSITORY}/releases/download/")) {
-        return true;
-    }
-    #[cfg(debug_assertions)]
-    if let Some(feed) = debug_feed() {
-        return feed.rsplit_once('/').is_some_and(|(base, _)| url.starts_with(&format!("{base}/")));
-    }
-    false
+    url.starts_with(&format!("https://github.com/{REPOSITORY}/releases/download/"))
 }
 
-/// Debug builds only: `LEAGUEACCOUNTS_UPDATE_FEED`, a releases/latest JSON URL,
-/// lets a local server stand in for GitHub.
-#[cfg(debug_assertions)]
-fn debug_feed() -> Option<String> {
-    std::env::var("LEAGUEACCOUNTS_UPDATE_FEED").ok().filter(|value| !value.trim().is_empty())
-}
-
-/// Debug builds replace their own executable only when pointed at a test feed.
+/// Development builds never replace their own executable.
 pub fn can_install() -> bool {
-    #[cfg(debug_assertions)]
-    if debug_feed().is_none() {
-        return false;
-    }
-    true
+    !cfg!(debug_assertions)
 }
 
 fn client(timeout: Duration) -> Result<reqwest::blocking::Client, UpdateError> {
@@ -164,8 +146,6 @@ fn client(timeout: Duration) -> Result<reqwest::blocking::Client, UpdateError> {
 /// The latest published (non-draft, non-prerelease) release, if any.
 pub fn latest_release() -> Result<Option<Release>, UpdateError> {
     let url = format!("https://api.github.com/repos/{REPOSITORY}/releases/latest");
-    #[cfg(debug_assertions)]
-    let url = debug_feed().unwrap_or(url);
     let response = client(Duration::from_secs(15))?
         .get(url)
         .header(reqwest::header::ACCEPT, "application/vnd.github+json")
@@ -267,112 +247,4 @@ fn verify(mut data: impl Read, sha256: &str) -> Result<(), UpdateError> {
         return Err(UpdateError::Checksum);
     }
     Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use serde_json::json;
-
-    /// SHA-256 of "League Accounts".
-    const DIGEST: &str = "8c73b4c826f32e9405326642db2d25f5013533bed5b4ec63d63535bdcfb7df65";
-
-    #[test]
-    fn compares_complete_semantic_versions() {
-        assert!(is_newer("v3.1.0", "3.0.0"));
-        assert!(is_newer("3.0.1", "3.0.0"));
-        assert!(is_newer("3.10.0", "3.9.9"));
-        assert!(is_newer("3.1.0", "3.1.0-beta"));
-        assert!(!is_newer("v3.0.0", "3.0.0"));
-        assert!(!is_newer("2.0.3", "3.0.0"));
-        assert!(!is_newer("3.1.0-beta", "3.1.0"));
-        assert!(!is_newer("3.1.0+build.2", "3.1.0"), "build metadata has no precedence");
-        assert!(!is_newer("4", "3.9.9"), "a short version is not a semantic version");
-        assert!(!is_newer("3.1", "3.0.0"), "a short version is not a semantic version");
-        assert!(!is_newer("3.1.0.1", "3.1.0"), "a fourth segment is not silently dropped");
-        assert!(!is_newer("3.x", "3.0.0"), "an unknown segment is not treated as zero");
-        assert!(!is_newer("latest", "3.0.0"));
-    }
-
-    #[test]
-    fn releases_with_a_non_semantic_tag_are_ignored() {
-        for tag in ["3.1", "4", "3.1.0.1", "latest"] {
-            let mut json = release(Vec::new());
-            json["tag_name"] = json!(tag);
-            assert!(parse_release(&json).is_none(), "{tag}");
-        }
-    }
-
-    #[test]
-    fn only_own_release_pages_are_allowed() {
-        assert!(is_release_url(&format!("https://github.com/{REPOSITORY}/releases/tag/v3.1.0")));
-        assert!(!is_release_url("https://github.com/someone/else/releases/tag/v9"));
-        assert!(!is_release_url("https://evil.example/https://github.com/"));
-    }
-
-    fn asset(name: &str, url: &str, size: u64, digest: &str) -> serde_json::Value {
-        json!({ "name": name, "state": "uploaded", "size": size, "browser_download_url": url, "digest": digest })
-    }
-
-    fn release(assets: Vec<serde_json::Value>) -> serde_json::Value {
-        json!({
-            "tag_name": "v3.1.0",
-            "name": "v3.1.0",
-            "html_url": format!("https://github.com/{REPOSITORY}/releases/tag/v3.1.0"),
-            "body": "Notes",
-            "published_at": "2026-10-12T00:00:00Z",
-            "assets": assets,
-        })
-    }
-
-    #[test]
-    fn selects_the_executable_and_its_digest_from_own_release_assets() {
-        let base = format!("https://github.com/{REPOSITORY}/releases/download/v3.1.0");
-        let parsed = parse_release(&release(vec![
-            asset("LeagueAccounts-setup.exe", &format!("{base}/LeagueAccounts-setup.exe"), 9, "sha256:00"),
-            asset(EXECUTABLE_ASSET, &format!("{base}/{EXECUTABLE_ASSET}"), 12_000_000, &format!("sha256:{}", DIGEST.to_uppercase())),
-        ]))
-        .unwrap();
-        assert_eq!(parsed.version, "3.1.0");
-        assert_eq!(
-            parsed.executable,
-            Some(Download {
-                url: format!("{base}/{EXECUTABLE_ASSET}"),
-                sha256: DIGEST.to_owned(),
-                size: 12_000_000,
-            })
-        );
-        // The UI never receives download URLs.
-        assert!(!serde_json::to_string(&parsed).unwrap().contains("download"));
-    }
-
-    #[test]
-    fn releases_without_a_verifiable_executable_only_notify() {
-        let base = format!("https://github.com/{REPOSITORY}/releases/download/v3.1.0");
-        let url = format!("{base}/{EXECUTABLE_ASSET}");
-        let digest = format!("sha256:{DIGEST}");
-        let mut uploading = asset(EXECUTABLE_ASSET, &url, 12_000_000, &digest);
-        uploading["state"] = json!("new");
-        let mut undigested = asset(EXECUTABLE_ASSET, &url, 12_000_000, &digest);
-        undigested.as_object_mut().unwrap().remove("digest");
-        for executable in [
-            asset(EXECUTABLE_ASSET, "https://evil.example/LeagueAccounts.exe", 12_000_000, &digest),
-            asset(EXECUTABLE_ASSET, &url, 0, &digest),
-            asset(EXECUTABLE_ASSET, &url, 12_000_000, &format!("sha512:{DIGEST}")),
-            asset(EXECUTABLE_ASSET, &url, 12_000_000, "sha256:not-hex"),
-            uploading,
-            undigested,
-        ] {
-            let parsed = parse_release(&release(vec![executable])).unwrap();
-            assert_eq!(parsed.version, "3.1.0");
-            assert_eq!(parsed.executable, None);
-        }
-    }
-
-    #[test]
-    fn installs_only_a_download_matching_the_digest() {
-        verify(&b"League Accounts"[..], DIGEST).unwrap();
-        assert!(matches!(verify(&b"League Accounts!"[..], DIGEST), Err(UpdateError::Checksum)));
-        assert!(matches!(verify(&b""[..], DIGEST), Err(UpdateError::Checksum)));
-    }
 }

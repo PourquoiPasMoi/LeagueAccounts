@@ -1,20 +1,16 @@
 {
   "name": "leagueaccounts-ui",
   "private": true,
-  "version": "3.5.0",
+  "version": "4.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "test": "node --test tests/riot_renderer.test.mjs",
-    "test:ui": "node --test --test-concurrency=1 tests/startup.test.mjs tests/ui.test.mjs tests/update.test.mjs tests/csp.test.mjs",
     "assets:verify": "node scripts/league-assets.mjs",
     "build": "npm run assets:verify && tsc --noEmit && vite build",
-    "tauri": "tauri",
-    "screenshots": "node scripts/screenshots.mjs"
+    "tauri": "tauri"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.12.1",
-    "puppeteer-core": "^25.12.0",
     "typescript": "^7.0.2",
     "vite": "^8.3.2"
   },

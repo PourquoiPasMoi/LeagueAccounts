@@ -19,7 +19,7 @@ import { watchTierNames } from "./fit";
 import { wireControlMotion } from "./motion";
 import { wireTooltips } from "./tooltips";
 import { failStartup, revealApp } from "./startup";
-import { checkUpdateNow, launchUpdate, showUpdateBanner, wireUpdates } from "./update";
+import { checkUpdateNow, launchUpdate, wireUpdates } from "./update";
 import {
   APEX,
   TIER_ORDER,
@@ -1669,44 +1669,7 @@ const IN_TAURI = "__TAURI_INTERNALS__" in window;
 const uiBusy = (): boolean =>
   Boolean(activeLogin || state.refreshing || document.querySelector(".overlay, .drawer-overlay, .login-overlay, .profile-overlay, .menu, .is-open"));
 
-/** Dev-only: `?scene=` opens a screen with demo data (used for README screenshots). */
-function runDemoScene(): void {
-  const scene = new URLSearchParams(location.search).get("scene");
-  const byName = (part: string) => state.accounts.find((account) => account.name.includes(part))!;
-  const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-  void (async () => {
-    await wait(300);
-    if (scene === "tft") setMode("tft");
-    if (scene === "list") {
-      state.view = "list";
-      $("#accounts").innerHTML = "";
-      render();
-    }
-    if (scene === "settings") void openSettings();
-    if (scene === "add") openAddDrawer();
-    if (scene === "login") void login(byName("Hextech"));
-    // The mock bans Kebab Enjoyer: logging in asks first, with the time left.
-    if (scene === "banned") void login(byName("Kebab"));
-    if (scene === "profile") showProfile(byName("Hextech"));
-    if (scene === "finder") showSkinFinder();
-    if (scene === "update") showUpdateBanner({ version: "3.1.0", name: "v3.1.0", url: "", notes: "", publishedAt: "" }, true);
-    if (scene === "menu") {
-      const card = document.querySelector<HTMLElement>("#accounts > .card:nth-child(2)")!;
-      const rect = card.getBoundingClientRect();
-      openMenu(byName("Lux"), rect.left + 180, rect.top + 60);
-    }
-  })();
-}
-
 async function start(): Promise<void> {
-  if (!IN_TAURI && import.meta.env.DEV) {
-    (await import("./mock")).installMock();
-    $("#dev-tools").hidden = false;
-    $("#reset-demo").addEventListener("click", () => {
-      localStorage.removeItem(PREFS_KEY);
-      location.reload();
-    });
-  }
   loadPrefs();
   useLang(lang());
   applyLanguage();
@@ -1749,7 +1712,6 @@ async function start(): Promise<void> {
   if (!(await launchUpdate(revealApp))) await revealApp();
   // First run: ask the user before anything else, in a language they chose.
   if (needsLanguageChoice()) await welcomeLanguage();
-  if (!IN_TAURI && import.meta.env.DEV) runDemoScene();
 }
 
 observeSelects();

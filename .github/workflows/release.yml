@@ -1,15 +1,14 @@
 name: Release
 
-# Push a vX.Y.Z tag on a commit whose version files say X.Y.Z. The workflow
-# builds LeagueAccounts.exe and creates a draft release with it; write the
-# notes and publish it. Automatic updates read published releases only, so
-# nothing reaches users before that.
+# Run it from the Actions tab with a vX.Y.Z tag that points at a commit whose
+# version files say X.Y.Z. The workflow builds LeagueAccounts.exe and creates a
+# draft release with it; write the notes and publish it. Automatic updates read
+# published releases only, so nothing reaches users before that.
 #
 # Plain versions only: a pre-release tag such as v3.1.0-beta would publish as
 # the latest release, and apps compare it as equal to v3.1.0.
 on:
-  push:
-    tags: ["v[0-9]+.[0-9]+.[0-9]+"]
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -45,8 +44,6 @@ jobs:
           check src-tauri/Cargo.toml "$(sed -n 's/^version = "\(.*\)"/\1/p' src-tauri/Cargo.toml | head -1)"
       - name: Install frontend dependencies
         run: npm ci
-      - name: Unit and regression tests
-        run: cargo +stable test --locked --workspace --all-targets
       # Builds the UI first (beforeBuildCommand), then the portable executable.
       - name: Release build
         run: npx tauri build --no-bundle

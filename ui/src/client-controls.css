@@ -5,9 +5,6 @@
   --client-gold-hover: linear-gradient(to top, #c89c3c, #dcc188 50%, #e1c998 71%, #f0e6d8);
 }
 .native-icon { display: inline-block; flex-shrink: 0; background: currentColor; mask: var(--icon) center / var(--icon-mask-size, contain) no-repeat; }
-.dev-tools { display: flex; align-items: center; gap: 10px; }
-.dev-tools[hidden] { display: none; }
-.dev-badge { font: 11px Spiegel, NotoCJK, sans-serif; letter-spacing: .08em; padding: 3px 6px; border: 1px solid #3b7778; color: #8ed6d1; background: #0c262c; white-space: nowrap; }
 ::-webkit-scrollbar { width: 11px; height: 11px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { border: 3px solid transparent; border-radius: 0; background: #785a28; background-clip: padding-box; min-height: 32px; }

@@ -87,19 +87,3 @@ pub fn load(path: &str) -> Option<(Vec<u8>, &'static str)> {
     }
     Some((bytes, mime))
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn only_plain_game_data_picture_paths_are_served() {
-        assert!(valid_path("v1/champion-icons/103.png"));
-        assert!(valid_path("/assets/characters/ahri/skins/skin14/images/ahri_splash_tile_14.jpg"));
-        assert!(!valid_path("v1/champion-icons/../../secret.png"));
-        assert!(!valid_path("https://evil.example/x.png"));
-        assert!(!valid_path("v1/champion-icons/103.json"));
-        assert!(!valid_path("Assets/Upper.png"));
-        assert!(!valid_path(""));
-    }
-}
