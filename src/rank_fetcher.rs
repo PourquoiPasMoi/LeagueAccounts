@@ -368,6 +368,7 @@ impl RankFetcher {
         rank.reached_last_season = reached;
         rank.finished_last_season = finished;
         rank.riot_id_not_found = Some(false);
+        rank.recent_games = parse_opgg_games(body);
         Ok((rank, ProfileUpdate::parse(&decoded_payload)))
     }
 
@@ -641,6 +642,67 @@ impl RankFetcher {
     }
 }
 
+static LD_JSON: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r#"(?s)<script type="application/ld\+json"[^>]*>(.*?)</script>"#).expect("valid regex")
+});
+
+/// Recent games from the page's schema.org data (`PlayGameAction` items).
+/// This block is published for search engines, so it is far steadier than the
+/// page's internal payload; anything unreadable is simply skipped.
+pub fn parse_opgg_games(body: &str) -> Vec<crate::models::OpggGame> {
+    use time::format_description::well_known::Rfc3339;
+    let mut games = Vec::new();
+    for capture in LD_JSON.captures_iter(body) {
+        let Ok(json) = serde_json::from_str::<serde_json::Value>(&capture[1]) else { continue };
+        let nodes = json["@graph"].as_array().cloned().unwrap_or_else(|| vec![json.clone()]);
+        for node in nodes.iter().filter(|node| node["@type"] == "ItemList") {
+            for entry in node["itemListElement"].as_array().into_iter().flatten() {
+                let item = &entry["item"];
+                if item["@type"] != "PlayGameAction" {
+                    continue;
+                }
+                let Some(start) = item["startTime"]
+                    .as_str()
+                    .and_then(|text| time::OffsetDateTime::parse(text, &Rfc3339).ok())
+                else {
+                    continue;
+                };
+                let property = |name: &str| {
+                    item["additionalProperty"]
+                        .as_array()
+                        .into_iter()
+                        .flatten()
+                        .find(|property| property["name"] == name)
+                        .map(|property| property["value"].clone())
+                        .unwrap_or_default()
+                };
+                let number = |name: &str| property(name).as_u64().map(|value| value as u32).unwrap_or(0);
+                let champion = property("champion").as_str().unwrap_or_default().trim().to_owned();
+                if champion.is_empty() {
+                    continue;
+                }
+                let win = match property("result").as_str().unwrap_or_default() {
+                    "WIN" => Some(true),
+                    "LOSE" => Some(false),
+                    _ => None,
+                };
+                games.push(crate::models::OpggGame {
+                    start: u64::try_from(start.unix_timestamp_nanos() / 1_000_000).unwrap_or(0),
+                    queue: property("queueType").as_str().unwrap_or_default().to_owned(),
+                    champion,
+                    win,
+                    kills: number("kills"),
+                    deaths: number("deaths"),
+                    assists: number("assists"),
+                    cs: number("cs"),
+                    op_score_x10: property("opScore").as_f64().map(|score| (score * 10.0).round().max(0.0) as u32),
+                });
+            }
+        }
+    }
+    games
+}
+
 impl RankProvider for RankFetcher {
     fn fetch_rank(&self, account: &Account) -> RankInfo {
         RankFetcher::fetch_rank(self, account)
@@ -722,6 +784,29 @@ fn title_case(value: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn opgg_structured_games_are_read_and_bad_items_skipped() {
+        let body = r#"<html><script type="application/ld+json">{"@context":"https://schema.org","@graph":[
+            {"@type":"ItemList","itemListElement":[
+              {"@type":"ListItem","item":{"@type":"PlayGameAction","startTime":"2026-11-11T00:55:18+09:00",
+                "additionalProperty":[{"name":"queueType","value":"FLEXRANKED"},{"name":"champion","value":"Viktor"},
+                  {"name":"result","value":"LOSE"},{"name":"kills","value":0},{"name":"deaths","value":4},
+                  {"name":"assists","value":1},{"name":"cs","value":74},{"name":"opScore","value":1.6}]}},
+              {"@type":"ListItem","item":{"@type":"PlayGameAction","startTime":"not a date","additionalProperty":[]}},
+              {"@type":"ListItem","item":{"@type":"PlayGameAction","startTime":"2026-11-10T00:00:00Z",
+                "additionalProperty":[{"name":"champion","value":"Elise"},{"name":"result","value":"REMAKE"}]}}
+            ]}]}</script></html>"#;
+        let games = parse_opgg_games(body);
+        assert_eq!(games.len(), 2);
+        assert_eq!(games[0].champion, "Viktor");
+        assert_eq!(games[0].queue, "FLEXRANKED");
+        assert_eq!(games[0].win, Some(false));
+        assert_eq!((games[0].kills, games[0].deaths, games[0].assists, games[0].cs), (0, 4, 1, 74));
+        assert_eq!(games[0].op_score_x10, Some(16));
+        assert_eq!(games[0].start, 1_794_326_118_000);
+        assert_eq!(games[1].win, None);
+    }
 
     #[test]
     fn parses_current_rank_and_level() {

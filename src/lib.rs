@@ -10,6 +10,8 @@ pub mod autotype;
 pub mod clipboard;
 pub mod credentials;
 pub mod game_locale;
+pub mod image_cache;
+pub mod profiles;
 pub mod locales;
 pub mod logging;
 pub mod models;

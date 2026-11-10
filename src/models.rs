@@ -124,6 +124,25 @@ pub struct AccountKey {
     pub region: String,
 }
 
+/// One recent game from the structured data on an OP.GG profile page.
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct OpggGame {
+    /// Unix ms when the game started.
+    pub start: u64,
+    /// OP.GG's queue type, e.g. `SOLORANKED`, `FLEXRANKED`, `NORMAL`, `ARAM`.
+    pub queue: String,
+    pub champion: String,
+    /// `None` for a remake or an unknown result.
+    pub win: Option<bool>,
+    pub kills: u32,
+    pub deaths: u32,
+    pub assists: u32,
+    pub cs: u32,
+    /// OP Score times ten (6.4 → 64).
+    pub op_score_x10: Option<u32>,
+}
+
 /// Values returned by the rank provider.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct RankInfo {
@@ -139,6 +158,8 @@ pub struct RankInfo {
     pub tft: Option<TftRank>,
     pub provenance: Option<RankProvenance>,
     pub tft_provenance: Option<RankProvenance>,
+    /// Recent LoL games listed on the profile page (empty when unavailable).
+    pub recent_games: Vec<OpggGame>,
 }
 
 #[derive(Clone, Copy, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]

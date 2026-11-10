@@ -36,6 +36,8 @@ export interface Settings {
   uiScale: number;
   /** Empty until the welcome dialog has been answered once. */
   uiLanguage: string;
+  /** Riot Points per euro, for the account value estimate. */
+  rpPerEuro: number;
   riotClientFound: boolean;
   tftInstalled: boolean;
 }
@@ -148,6 +150,151 @@ export interface AccountView {
 export interface Ban {
   until: number | null;
 }
+
+/** Snapshot read from the League client at the account's last sync. */
+export interface Profile {
+  syncedAt: number;
+  summonerLevel: number;
+  profileIconId: number;
+  ranked: RankedQueue[];
+  champions: OwnedChampion[];
+  matches: MatchSummary[];
+  wallet: { rp: number | null; blueEssence: number | null };
+}
+
+export interface RankedQueue {
+  /** RANKED_SOLO_5x5, RANKED_FLEX_SR, RANKED_TFT, ... */
+  queue: string;
+  tier: string;
+  division: string;
+  lp: number;
+  wins: number;
+  losses: number;
+}
+
+export interface OwnedChampion {
+  id: number;
+  name: string;
+  alias: string;
+  title: string;
+  masteryLevel: number;
+  masteryPoints: number;
+  purchased: number;
+  skins: OwnedSkin[];
+}
+
+export interface OwnedSkin {
+  id: number;
+  name: string;
+  /** Game-data image path (see `gameImage`). */
+  tile: string;
+  rarity: string;
+  chromasOwned: number;
+  chromasTotal: number;
+}
+
+export interface MatchSummary {
+  gameId: number;
+  created: number;
+  durationSeconds: number;
+  queueId: number;
+  mode: string;
+  championId: number;
+  win: boolean;
+  kills: number;
+  deaths: number;
+  assists: number;
+  cs: number;
+  championLevel: number;
+}
+
+export interface RankPoint {
+  at: number;
+  mode: "lol" | "tft";
+  tier: string;
+  division: string;
+  lp: number;
+}
+
+/** One archived game: full detail from the League client, or a summary from OP.GG. */
+export interface MatchRecord {
+  source: "client" | "opgg";
+  gameId: number;
+  created: number;
+  durationSeconds: number;
+  queueId: number;
+  queue: string;
+  mode: string;
+  championId: number;
+  champion: string;
+  win: boolean;
+  remake: boolean;
+  kills: number;
+  deaths: number;
+  assists: number;
+  cs: number;
+  championLevel: number;
+  gold: number;
+  damage: number;
+  damageTaken: number;
+  damageMitigated: number;
+  healing: number;
+  vision: number;
+  wardsPlaced: number;
+  wardsKilled: number;
+  controlWards: number;
+  ccSeconds: number;
+  turretKills: number;
+  teamKills: number;
+  teamDamage: number;
+  position: string;
+  items: number[];
+  spells: number[];
+  largestMultiKill: number;
+  doubleKills: number;
+  tripleKills: number;
+  quadraKills: number;
+  pentaKills: number;
+  firstBlood: boolean;
+  opScoreX10: number | null;
+}
+
+export interface ProfileView {
+  profile: Profile | null;
+  history: RankPoint[];
+  /** Every archived game, newest first. */
+  games: MatchRecord[];
+}
+
+/** Who is signed in to the Riot Client right now. */
+export interface SessionStatus {
+  accountId: string | null;
+  clientOpen: boolean;
+  inGame: boolean;
+}
+
+/** One owned skin, for finding which account has it. */
+export interface SkinOwner {
+  key: Key;
+  championId: number;
+  championName: string;
+  skinId: number;
+  skinName: string;
+  tile: string;
+  rarity: string;
+}
+
+const GAME_DATA = "https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/";
+
+/**
+ * URL of a game-data picture. In the app it goes through the `lacache`
+ * protocol, which downloads it once and then serves it from disk.
+ */
+export const gameImage = (path: string): string =>
+  ("__TAURI_INTERNALS__" in window ? "http://lacache.localhost/" : GAME_DATA) + path.replace(/^\/+/, "");
+
+export const championIcon = (id: number): string => gameImage(`v1/champion-icons/${id}.png`);
+export const profileIcon = (id: number): string => gameImage(`v1/profile-icons/${id}.jpg`);
 
 export const accountLabel = (account: AccountView): string => account.name || account.accountId;
 
@@ -300,6 +447,11 @@ export const api = {
   openHomeFixAuthor: () => call<void>("open_home_fix_author"),
   /** Opens Pengu Loader's site; the plugin needs it installed. */
   openPenguLoader: () => call<void>("open_pengu_loader"),
+  getProfile: (key: Key) => call<ProfileView>("get_profile", { key }),
+  /** Needs the League client open and signed in as this account. */
+  syncProfile: (key: Key) => call<ProfileView>("sync_profile", { key }),
+  skinIndex: () => call<SkinOwner[]>("skin_index"),
+  sessionStatus: () => call<SessionStatus>("session_status"),
 };
 
 export const events = {
@@ -321,4 +473,7 @@ export const events = {
     listen<RefreshDone>("refresh-done", (event) => handler(event.payload)),
   onAccountUpdate: (handler: (account: AccountView) => void): Promise<UnlistenFn> =>
     listen<AccountView>("account-update", (event) => handler(event.payload)),
+  /** A new profile snapshot was stored for this account. */
+  onProfileUpdate: (handler: (key: Key) => void): Promise<UnlistenFn> =>
+    listen<Key>("profile-update", (event) => handler(event.payload)),
 };

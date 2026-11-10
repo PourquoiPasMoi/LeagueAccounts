@@ -17,7 +17,8 @@ use std::path::Path;
 use std::time::Duration;
 
 /// `owner/name` of the repository whose releases are checked.
-pub const REPOSITORY: &str = "Tariolle/LeagueAccounts";
+/// Our fork: updates come only from its releases, never from upstream.
+pub const REPOSITORY: &str = "PourquoiPasMoi/LeagueAccounts";
 /// The release asset that replaces the running executable.
 const EXECUTABLE_ASSET: &str = "LeagueAccounts.exe";
 const MAX_EXECUTABLE_BYTES: u64 = 256 * 1024 * 1024;

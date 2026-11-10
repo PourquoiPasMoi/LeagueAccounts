@@ -1,0 +1,104 @@
+/* Animated highlights, loaded last so they sit on top of league.css.
+   1. The selected card's gold frame: a light that travels around the border
+      plus a slow breathing glow, like the client's selected/active frames.
+   2. Rank crests: a pulsing tier-colored glow (the crest itself stays still), like the crests on
+      the client's ranked profile.
+   Every animated value also has a static resting state, so with reduced motion
+   (styles.css shortens all animations to nothing) the card still looks lit. */
+
+@property --frame-angle {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
+
+/* ---------------------------------------------------------- selected frame */
+
+.card.selected {
+  box-shadow: 0 0 0 1px #c89b3c26, 0 0 16px 1px #c89b3c33, inset 0 0 22px #c89b3c14;
+}
+/* Entering and leaving cards keep their own fade animations. */
+.card.selected:not(.enter, .enter-stagger, .card-out) {
+  animation: frame-breathe 3.2s ease-in-out infinite;
+}
+.card.selected::before {
+  border-image: conic-gradient(
+    from var(--frame-angle),
+    #785a28, #c89b3c 18%, #f0e6d2 25%, #c89b3c 32%, #785a28 50%,
+    #785a28, #c89b3c 68%, #f0e6d2 75%, #c89b3c 82%, #785a28
+  ) 1;
+  animation: frame-orbit 6s linear infinite;
+}
+
+/* The card's own inset shadow sits under this dark fill, so light it here. */
+.card.selected::after {
+  box-shadow: inset 0 0 26px #c89b3c1c;
+}
+
+@keyframes frame-orbit {
+  to { --frame-angle: 360deg; }
+}
+@keyframes frame-breathe {
+  0%, 100% { box-shadow: 0 0 0 1px #c89b3c1f, 0 0 12px 0 #c89b3c26, inset 0 0 18px #c89b3c0d; }
+  50% { box-shadow: 0 0 0 1px #c89b3c4d, 0 0 24px 3px #c89b3c4d, inset 0 0 28px #c89b3c24; }
+}
+
+/* ------------------------------------------------------------- rank crests */
+
+.card-rank .emblem-wrap {
+  position: relative;
+  isolation: isolate;
+}
+/* Soft tier-colored light behind the crest. */
+.card-rank .emblem-wrap::before {
+  content: '';
+  position: absolute;
+  inset: 12% 14%;
+  z-index: -1;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--tier) 26%, transparent), transparent);
+  filter: blur(8px);
+  opacity: .35;
+  pointer-events: none;
+  animation: crest-aura 3.6s ease-in-out infinite;
+  animation-delay: calc(var(--i, 0) * -.45s);
+}
+.card-rank .emblem {
+  filter: drop-shadow(0 0 4px color-mix(in srgb, var(--tier) 30%, transparent));
+  animation: crest-float 3.6s ease-in-out infinite;
+  animation-delay: calc(var(--i, 0) * -.45s);
+  will-change: filter;
+}
+/* Selected and hovered cards shine a little brighter. */
+.card:is(.selected, :hover) .card-rank .emblem-wrap::before {
+  inset: 6% 8%;
+}
+.card:is(.selected, :hover) .card-rank .emblem {
+  animation-name: crest-float-bright;
+}
+
+@keyframes crest-aura {
+  0%, 100% { opacity: .25; }
+  50% { opacity: .55; }
+}
+/* Glow only: the crest itself stays still. */
+@keyframes crest-float {
+  0%, 100% { filter: drop-shadow(0 0 3px color-mix(in srgb, var(--tier) 22%, transparent)); }
+  50% { filter: drop-shadow(0 0 7px color-mix(in srgb, var(--tier-light) 38%, transparent)); }
+}
+@keyframes crest-float-bright {
+  0%, 100% { filter: drop-shadow(0 0 4px color-mix(in srgb, var(--tier) 32%, transparent)); }
+  50% { filter: drop-shadow(0 0 10px color-mix(in srgb, var(--tier-light) 52%, transparent)); }
+}
+
+/* No light for crests that have no rank to show, or a banned account. */
+.card:is([data-tier='Unranked'], [data-tier='Error'], .banned) .card-rank .emblem-wrap::before {
+  display: none;
+}
+.card:is([data-tier='Unranked'], [data-tier='Error'], .banned) .card-rank .emblem {
+  filter: none;
+  animation: none;
+}
+
+/* The list view's crests are half the size: a tighter glow. */
+.accounts.list .card-rank .emblem-wrap::before { filter: blur(5px); }

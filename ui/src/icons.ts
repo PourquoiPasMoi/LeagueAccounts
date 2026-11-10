@@ -1,5 +1,10 @@
 import {
   ArrowDownUp,
+  ArrowLeft,
+  ChartLine,
+  Gem,
+  Shirt,
+  Swords,
   ChevronDown,
   Download,
   EyeOff,
@@ -13,6 +18,11 @@ import {
 
 const ICONS: Record<string, IconNode> = {
   "arrow-down-up": ArrowDownUp,
+  "arrow-left": ArrowLeft,
+  "chart-line": ChartLine,
+  gem: Gem,
+  shirt: Shirt,
+  swords: Swords,
   "chevron-down": ChevronDown,
   download: Download,
   "eye-off": EyeOff,

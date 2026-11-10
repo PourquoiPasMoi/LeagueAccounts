@@ -45,6 +45,11 @@
         <section class="side-section">
           <h3 class="side-title" data-i18n="side.distribution"></h3>
           <div id="distribution" class="distribution"></div>
+          <button id="total-value" class="side-value" hidden data-i18n-title="finder.title">
+            <span class="side-value-label"><span data-icon="gem"></span><span data-i18n="value.total"></span></span>
+            <span class="side-value-amount"></span>
+            <span class="side-value-detail"></span>
+          </button>
         </section>
 
         <section class="side-section side-bottom">
@@ -102,6 +107,7 @@
               <option value="region" data-i18n="sort.region"></option>
             </select>
           </div>
+          <button class="btn btn-ghost finder-btn" id="open-finder" data-i18n-title="finder.title"><span data-icon="shirt"></span> <span data-i18n="finder.button"></span></button>
           <div class="view-toggle" role="tablist">
             <button data-view="grid" data-i18n-title="view.grid"><span data-icon="layout-grid"></span></button>
             <button data-view="list" data-i18n-title="view.list"><span data-icon="list"></span></button>
