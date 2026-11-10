@@ -516,6 +516,7 @@ const en = {
   "err.game_settings_save": "Couldn't save the settings file.",
   "err.game_settings_lock": "Couldn't change the read-only lock.",
   "err.game_settings_restore": "There is no earlier version to restore.",
+  "settings.tools": "Accounts and tools",
 };
 
 type MessageKey = keyof typeof en;
@@ -1036,6 +1037,7 @@ const tr: Dict = {
   "err.game_settings_save": "Ayar dosyası kaydedilemedi.",
   "err.game_settings_lock": "Salt okunur kilidi değiştirilemedi.",
   "err.game_settings_restore": "Geri yüklenecek önceki bir sürüm yok.",
+  "settings.tools": "Hesaplar ve araçlar",
 };
 
 const de: Dict = {
@@ -1553,6 +1555,7 @@ const de: Dict = {
   "err.game_settings_save": "Die Einstellungsdatei konnte nicht gespeichert werden.",
   "err.game_settings_lock": "Der Schreibschutz konnte nicht geändert werden.",
   "err.game_settings_restore": "Es gibt keine frühere Version zum Wiederherstellen.",
+  "settings.tools": "Konten und Werkzeuge",
 };
 
 const es: Dict = {
@@ -2070,6 +2073,7 @@ const es: Dict = {
   "err.game_settings_save": "No se pudo guardar el archivo de ajustes.",
   "err.game_settings_lock": "No se pudo cambiar el bloqueo de solo lectura.",
   "err.game_settings_restore": "No hay una versión anterior para restaurar.",
+  "settings.tools": "Cuentas y herramientas",
 };
 
 const fr: Dict = {
@@ -2587,6 +2591,7 @@ const fr: Dict = {
   "err.game_settings_save": "Impossible d'enregistrer le fichier de paramètres.",
   "err.game_settings_lock": "Impossible de changer le verrou lecture seule.",
   "err.game_settings_restore": "Aucune version précédente à restaurer.",
+  "settings.tools": "Comptes et outils",
 };
 
 const pt: Dict = {
@@ -3104,6 +3109,7 @@ const pt: Dict = {
   "err.game_settings_save": "Não foi possível salvar o arquivo de configurações.",
   "err.game_settings_lock": "Não foi possível mudar o bloqueio de somente leitura.",
   "err.game_settings_restore": "Não há versão anterior para restaurar.",
+  "settings.tools": "Contas e ferramentas",
 };
 
 const zh: Dict = {
@@ -3604,6 +3610,7 @@ const zh: Dict = {
   "err.game_settings_save": "无法保存设置文件。",
   "err.game_settings_lock": "无法更改只读锁定。",
   "err.game_settings_restore": "没有可恢复的早期版本。",
+  "settings.tools": "账号与工具",
 };
 
 const zhTw: Dict = {
@@ -4104,6 +4111,7 @@ const zhTw: Dict = {
   "err.game_settings_save": "無法儲存設定檔。",
   "err.game_settings_lock": "無法變更唯讀鎖定。",
   "err.game_settings_restore": "沒有可還原的先前版本。",
+  "settings.tools": "帳號與工具",
 };
 
 export const LANGUAGES = [

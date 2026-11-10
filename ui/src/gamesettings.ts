@@ -180,19 +180,25 @@ export async function openGameSettings(): Promise<void> {
   const edits = new Map<string, string>();
   let capturing: { name: string; slot: number } | null = null;
 
+  // The same framed dialog as Settings: title and divider, corner close
+  // button, and the action buttons sitting on the bottom frame.
   const overlay = fragment(`
-    <div class="profile-overlay gs-overlay" role="dialog" aria-modal="true" aria-label="${esc(t("gs.title"))}">
-      <div class="profile-page gs-page">
-        <header class="gs-head"></header>
+    <div class="overlay gs-overlay">
+      <div class="modal gs-modal" role="dialog" aria-modal="true" aria-label="${esc(t("gs.title"))}">
+        <header class="modal-head"><h2>${esc(t("gs.title"))}</h2></header>
+        <div class="modal-close-mount">
+          <button class="modal-close" data-gs="close" aria-label="${esc(t("common.close"))}"><span></span></button>
+        </div>
+        <div class="gs-head"></div>
         <div class="gs-layout">
           <nav class="gs-nav" role="tablist"></nav>
           <div class="gs-content"></div>
         </div>
-        <footer class="gs-foot"></footer>
+        <footer class="modal-foot gs-foot"></footer>
       </div>
     </div>`);
   const previousFocus = document.activeElement as HTMLElement | null;
-  document.body.append(overlay);
+  $("#modal-root").append(overlay);
   const head = $(".gs-head", overlay);
   const nav = $(".gs-nav", overlay);
   const content = $(".gs-content", overlay);
@@ -217,27 +223,22 @@ export async function openGameSettings(): Promise<void> {
   // ------------------------------------------------------------ rendering
 
   const renderHead = () => {
-    if (!view) {
-      head.innerHTML = "";
+    if (!view?.path) {
+      head.innerHTML = `<p class="gs-subtitle">${esc(t("gs.subtitle"))}</p>`;
       return;
     }
     const locked = view.locked;
+    const count = edits.size;
     head.innerHTML = `
-      <div class="gs-title">
-        <h2>${icon("sliders", 20)}<span>${esc(t("gs.title"))}</span></h2>
-        <p>${esc(t("gs.subtitle"))}</p>
+      <div class="gs-status ${locked ? "is-locked" : "is-unlocked"}" data-tooltip="${esc(t(locked ? "gs.lockedHint" : "gs.unlockedHint"))}">
+        ${icon(locked ? "lock" : "lock-open", 15)}<b>${esc(t(locked ? "gs.locked" : "gs.unlocked"))}</b>
+        <button class="text-button" data-gs="toggle-lock" ${busy ? "disabled" : ""}>${esc(t(locked ? "gs.unlock" : "gs.lock"))}</button>
       </div>
-      ${view.path ? `
-      <div class="gs-status ${locked ? "is-locked" : "is-unlocked"}">
-        ${icon(locked ? "lock" : "lock-open", 16)}
-        <div><b>${esc(t(locked ? "gs.locked" : "gs.unlocked"))}</b><span>${esc(t(locked ? "gs.lockedHint" : "gs.unlockedHint"))}</span></div>
-        <button class="btn btn-ghost" data-gs="toggle-lock" ${busy ? "disabled" : ""}>${esc(t(locked ? "gs.unlock" : "gs.lock"))}</button>
-      </div>` : ""}
-      <div class="gs-head-actions">
-        ${view.backups ? `<button class="btn btn-ghost" data-gs="undo" ${busy ? "disabled" : ""} data-tooltip="${esc(view.lastBackup ? new Date(view.lastBackup).toLocaleString(localeTag()) : "")}">${icon("undo", 14)}<span>${esc(t("gs.undo"))}</span></button>` : ""}
-        ${view.path ? `<button class="btn btn-ghost" data-gs="folder">${icon("folder-open", 14)}<span>${esc(t("gs.openFolder"))}</span></button>` : ""}
-        <button class="icon-btn profile-close" data-gs="close" aria-label="${esc(t("common.close"))}">${icon("x", 16)}</button>
-      </div>`;
+      <span class="gs-changes${count ? " has-changes" : ""}">${esc(count ? t("gs.changes", { count }) : t("gs.noChanges"))}</span>
+      <label class="toggle-row gs-lock-after"><span class="toggle-text"><strong>${esc(t("gs.keepLocked"))}</strong></span>
+        <input type="checkbox" data-gs-lock-after ${lockAfter ? "checked" : ""}/><span class="switch"></span></label>
+      ${view.backups ? `<button class="btn btn-ghost" data-gs="undo" ${busy ? "disabled" : ""} data-tooltip="${esc(view.lastBackup ? new Date(view.lastBackup).toLocaleString(localeTag()) : "")}">${icon("undo", 14)}<span>${esc(t("gs.undo"))}</span></button>` : ""}
+      <button class="btn btn-ghost" data-gs="folder">${icon("folder-open", 14)}<span>${esc(t("gs.openFolder"))}</span></button>`;
   };
 
   const renderNav = () => {
@@ -248,10 +249,9 @@ export async function openGameSettings(): Promise<void> {
   const renderFoot = () => {
     const count = edits.size;
     foot.innerHTML = view?.path ? `
-      <span class="gs-changes${count ? " has-changes" : ""}">${esc(count ? t("gs.changes", { count }) : t("gs.noChanges"))}</span>
-      <label class="check-row"><input type="checkbox" data-gs-lock-after ${lockAfter ? "checked" : ""}/><span>${esc(t("gs.keepLocked"))}</span></label>
       <button class="btn btn-ghost" data-gs="revert" ${!count || busy ? "disabled" : ""}>${esc(t("gs.revert"))}</button>
-      <button class="btn btn-primary" data-gs="apply" ${!count || busy ? "disabled" : ""}>${icon(lockAfter ? "lock" : "check", 14)}<span>${esc(t(lockAfter ? "gs.applyLock" : "gs.apply"))}</span></button>` : "";
+      <button class="btn btn-primary" data-gs="apply" ${!count || busy ? "disabled" : ""}>${esc(t(lockAfter ? "gs.applyLock" : "gs.apply"))}</button>`
+      : `<button class="btn btn-ghost" data-gs="close">${esc(t("common.close"))}</button>`;
   };
 
   const controlHtml = (control: Control): string => {
@@ -270,7 +270,7 @@ export async function openGameSettings(): Promise<void> {
       <output>${esc(shown)}</output></label>`;
   };
 
-  const panel = (title: string, body: string) => (body.trim() ? `<section class="gs-panel"><h3>${esc(title)}</h3>${body}</section>` : "");
+  const panel = (title: string, body: string) => (body.trim() ? `<section class="settings-section gs-panel"><h3>${esc(title)}</h3>${body}</section>` : "");
 
   const soundHtml = () => panel(t("gs.cat.sound"), SOUND_CHANNELS.map(([channel, label]) => {
     const volume = value(G, "Volume", `${channel}Volume`);
@@ -320,7 +320,7 @@ export async function openGameSettings(): Promise<void> {
           const others = slot.length ? (owners.get(id) ?? []).filter((owner) => owner !== label) : [];
           return `<button class="gs-slot${active ? " is-capturing" : ""}${slot.length ? "" : " is-empty"}${others.length ? " is-conflict" : ""}" data-gs-bind="${esc(name)}" data-slot="${index}"
             ${others.length ? `data-tooltip="${esc(t("gs.conflict", { names: others.join(", ") }))}"` : ""}>
-            ${active ? esc(t("gs.pressKey")) : slot.length ? slot.map((token) => `<kbd>${esc(keyLabel(token))}</kbd>`).join("<i>+</i>") : esc(t("gs.unbound"))}
+            ${active ? esc(t("gs.pressKey")) : slot.length ? esc(slot.map(keyLabel).join(" + ")) : esc(t("gs.unbound"))}
           </button>`;
         }).join("")}</div>
         ${quickValue !== undefined ? `<label class="gs-quick"><input type="checkbox" data-gs-toggle data-file="${I}" data-section="Quickbinds" data-name="${esc(quick)}" ${quickValue === "1" ? "checked" : ""}/><span>${esc(t("gs.quickCast"))}</span></label>` : `<span></span>`}
@@ -372,10 +372,10 @@ export async function openGameSettings(): Promise<void> {
     if (keepFocus) {
       // Typing in the raw list: keep the field and caret, update only the markers.
       keepFocus.closest(".gs-row")?.classList.toggle("is-changed", edits.has(key(keepFocus.dataset.file!, keepFocus.dataset.section!, keepFocus.dataset.name!)));
-      renderFoot();
-      return;
+    } else {
+      renderContent();
     }
-    renderContent();
+    renderHead();
     renderFoot();
   };
 
@@ -421,7 +421,7 @@ export async function openGameSettings(): Promise<void> {
     open = false;
     document.removeEventListener("keydown", onKey, true);
     document.removeEventListener("mousedown", onMouse, true);
-    void leave(overlay, "profile-out");
+    void leave(overlay, "overlay-out");
     previousFocus?.focus?.();
   };
 
@@ -438,11 +438,13 @@ export async function openGameSettings(): Promise<void> {
       set(I, "GameEvents", name, formatBinding(slots));
     }
     renderContent();
+    renderHead();
     renderFoot();
   };
 
   const onKey = (event: KeyboardEvent) => {
-    if (document.querySelector("#modal-root > .overlay:not(.overlay-out)")) return;
+    // A dialog opened on top (discard confirmation) owns the keyboard.
+    if ([...document.querySelectorAll("#modal-root > .overlay:not(.overlay-out)")].at(-1) !== overlay) return;
     if (capturing) {
       event.preventDefault();
       event.stopImmediatePropagation();
@@ -478,6 +480,10 @@ export async function openGameSettings(): Promise<void> {
     finishCapture([...modifiers, button]);
   };
 
+  overlay.addEventListener("mousedown", (event) => {
+    // Clicking the dimmed backdrop closes, like the other dialogs.
+    if (event.target === overlay) void close();
+  });
   overlay.addEventListener("click", (event) => {
     const target = event.target as HTMLElement;
     const action = target.closest<HTMLElement>("[data-gs]")?.dataset.gs;
@@ -534,6 +540,7 @@ export async function openGameSettings(): Promise<void> {
       const output = input.parentElement?.querySelector("output");
       if (output) output.textContent = input.closest(".gs-volume") || max === 1 ? String(Math.round(((Number(input.value) - min) / (max - min)) * 100)) : String(Math.round(Number(input.value)));
       input.closest(".gs-row")?.classList.toggle("is-changed", edits.has(key(file, section, name)) || Boolean(input.closest(".gs-volume") && edits.has(key(file, section, name.replace("Volume", "Mute")))));
+      renderHead();
       return renderFoot();
     }
     if (input.matches("[data-gs-raw]")) {

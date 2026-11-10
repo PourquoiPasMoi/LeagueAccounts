@@ -1,92 +1,71 @@
-/* Game settings page, styled after the League client's in-game settings:
-   gold sidebar tabs, diamond-thumb sliders and keycap bindings. */
+/* Game settings: the same framed dialog as Settings (league.css .modal), with
+   client-style category tabs on the left and settings sections on the right. */
 
-.gs-overlay .gs-page { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; }
+.gs-modal {
+  width: min(1120px, 100%);
+  height: calc(100dvh - var(--titlebar) - 64px);
+  max-height: 820px;
+}
 
-/* ------------------------------------------------------------- header */
+/* ------------------------------------------------------------- bar under the title */
 
 .gs-head {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  display: flex;
   align-items: center;
-  gap: 18px;
-  padding: 22px max(28px, calc((100% - 1500px) / 2)) 18px;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  padding: 14px 30px 12px;
   border-bottom: 1px solid #c8aa6e26;
 }
-.gs-title h2 {
-  margin: 0; display: flex; align-items: center; gap: 10px;
-  font: 700 26px/1.1 Beaufort, WenKai, NotoCJK, serif; letter-spacing: .05em; text-transform: uppercase; color: #f0e6d2;
-}
-.gs-title h2 .icon { color: #c8aa6e; }
-.gs-title p { margin: 6px 0 0; font-size: 12px; color: #a09b8c; }
-.gs-status {
-  display: flex; align-items: center; gap: 12px;
-  padding: 9px 12px 9px 14px;
-  border: 1px solid; max-width: 520px;
-}
-.gs-status b { display: block; font: 700 12px/1.2 Beaufort, WenKai, NotoCJK, serif; letter-spacing: .1em; text-transform: uppercase; }
-.gs-status span { display: block; font-size: 11px; color: #a09b8c; line-height: 1.35; }
-.gs-status .btn { height: 30px; padding: 0 12px; flex: none; }
-.gs-status.is-locked { border-color: #785a28; background: linear-gradient(90deg, #c8aa6e17, transparent); }
-.gs-status.is-locked > .icon, .gs-status.is-locked b { color: #e6d4a9; }
-.gs-status.is-unlocked { border-color: #8f3a33; background: linear-gradient(90deg, #c2433a14, transparent); }
-.gs-status.is-unlocked > .icon, .gs-status.is-unlocked b { color: #e8a49b; }
-.gs-head-actions { display: flex; align-items: center; gap: 8px; }
-.gs-head-actions .btn { height: 34px; display: inline-flex; align-items: center; gap: 7px; padding: 0 12px; }
+.gs-subtitle { margin: 0 auto; font-size: 12px; color: #a09b8c; }
+.gs-status { display: inline-flex; align-items: center; gap: 8px; padding: 5px 10px; border: 1px solid; }
+.gs-status b { font: 700 12px/1 Beaufort, WenKai, NotoCJK, serif; letter-spacing: .1em; text-transform: uppercase; }
+.gs-status .text-button { margin-left: 6px; font-size: 11.5px; color: #cdbe91; }
+.gs-status .text-button:hover { color: #f0e6d2; }
+.gs-status.is-locked { border-color: #785a28; background: #c8aa6e12; }
+.gs-status.is-locked .icon, .gs-status.is-locked b { color: #e6d4a9; }
+.gs-status.is-unlocked { border-color: #8f3a33; background: #c2433a12; }
+.gs-status.is-unlocked .icon, .gs-status.is-unlocked b { color: #e8a49b; }
+.gs-changes { font-size: 12px; color: #7d786c; }
+.gs-changes.has-changes { color: #e6d4a9; }
+.gs-lock-after { margin-left: auto; padding: 0; }
+.gs-lock-after .toggle-text strong { font: 12px/16px Spiegel, NotoCJK, sans-serif; letter-spacing: .025em; color: #a09b8c; }
+.gs-head .btn { height: 30px; padding: 0 12px; display: inline-flex; align-items: center; gap: 7px; font-size: 11px; }
 
 /* ------------------------------------------------------------- layout */
 
-.gs-layout {
-  display: grid;
-  grid-template-columns: 220px minmax(0, 1fr);
-  min-height: 0;
-  padding: 0 max(28px, calc((100% - 1500px) / 2));
-}
-.gs-nav {
-  display: flex; flex-direction: column; gap: 2px;
-  padding: 18px 16px 18px 0;
-  border-right: 1px solid #c8aa6e1f;
-}
+.gs-layout { flex: 1; min-height: 0; display: grid; grid-template-columns: 200px minmax(0, 1fr); }
+.gs-nav { display: flex; flex-direction: column; padding: 16px 0 16px 18px; border-right: 1px solid #c8aa6e1f; }
 .gs-nav button {
   position: relative;
   display: flex; align-items: center; gap: 10px;
-  padding: 11px 14px;
+  padding: 10px 14px;
   font: 700 12px/1 Beaufort, WenKai, NotoCJK, serif; letter-spacing: .1em; text-transform: uppercase;
   color: #a09b8c; text-align: left;
-  border: 1px solid transparent;
 }
-.gs-nav button .icon { color: #785a28; }
-.gs-nav button:hover { color: #f0e6d2; background: #c8aa6e0a; }
-.gs-nav button[aria-selected="true"] {
-  color: #f0e6d2;
-  border-color: #785a28;
-  background: linear-gradient(90deg, #c8aa6e24, #c8aa6e05);
-}
+.gs-nav button .icon { color: #5b5a56; }
+.gs-nav button:hover { color: #f0e6d2; }
+.gs-nav button:hover .icon { color: #a09b8c; }
+.gs-nav button[aria-selected="true"] { color: #f0e6d2; background: linear-gradient(90deg, transparent, #c8aa6e1c); }
 .gs-nav button[aria-selected="true"] .icon { color: #c8aa6e; }
-.gs-nav button[aria-selected="true"]::before {
-  content: ''; position: absolute; left: -1px; top: -1px; bottom: -1px; width: 3px;
-  background: linear-gradient(180deg, #f0e6d2, #c89b3c);
+.gs-nav button[aria-selected="true"]::after {
+  content: ''; position: absolute; right: -1px; top: 0; bottom: 0; width: 2px;
+  background: linear-gradient(180deg, #c89b3c, #f0e6d2, #c89b3c);
 }
 .gs-content {
   overflow-y: auto;
-  padding: 18px 0 26px 22px;
-  display: flex; flex-direction: column; gap: 16px;
+  padding: 18px 30px 26px 28px;
+  display: flex; flex-direction: column; gap: 14px;
   animation: client-fade 200ms linear both;
 }
-.gs-hint { display: flex; align-items: center; gap: 8px; }
-.gs-hint .icon { flex: none; color: #c8aa6e; }
+.gs-hint { display: flex; align-items: center; gap: 8px; font-size: 11px; color: #7d786c; }
+.gs-hint .icon { flex: none; color: #785a28; }
 .gs-warning { border-color: #8f3a3380; background: #c2433a10; }
 .gs-warning .icon { color: #e06d62; }
 
-.gs-panel {
-  padding: 14px 18px 8px;
-  border: 1px solid #1e282d;
-  background: #010a1399;
-}
-.gs-panel h3 {
-  margin: 0 0 6px;
-  font: 700 12px/1 Beaufort, WenKai, NotoCJK, serif; letter-spacing: .12em; text-transform: uppercase; color: #c8aa6e;
-}
+/* Sections: the Settings dialog's titles and dividers. */
+.gs-panel { gap: 0; }
+.gs-panel h3 { margin: 2px 0 6px; }
 
 /* ------------------------------------------------------------- rows */
 
@@ -95,111 +74,91 @@
   display: grid;
   align-items: center;
   gap: 14px;
-  min-height: 44px;
-  padding: 6px 10px 6px 12px;
-  margin: 0 -10px 0 -12px;
-  border-top: 1px solid #ffffff08;
-  font-size: 12.5px; color: #cdbe91;
+  min-height: 38px;
+  padding: 3px 0;
+  font: 12px/16px Spiegel, NotoCJK, sans-serif; letter-spacing: .025em; color: #a09b8c;
 }
-.gs-panel h3 + .gs-row { border-top: 0; }
-.gs-row:hover { background: #c8aa6e08; }
-/* A gold notch marks values that differ from the file. */
+.gs-row > span:first-child { color: #a09b8c; }
+.gs-row:hover > span:first-child, .gs-row.toggle-row:hover strong { color: #f0e6d2; }
+/* A gold mark beside values that differ from the file. */
 .gs-row.is-changed::before {
-  content: ''; position: absolute; left: 0; top: 10px; bottom: 10px; width: 2px;
-  background: #c8aa6e; box-shadow: 0 0 8px #c8aa6e;
+  content: ''; position: absolute; left: -12px; top: 50%; width: 5px; height: 5px;
+  transform: translateY(-50%) rotate(45deg);
+  background: #c8aa6e; box-shadow: 0 0 6px #c8aa6e;
 }
-.gs-row.toggle-row { display: flex; justify-content: flex-start; align-items: center; gap: 12px; padding-right: 10px; }
+.gs-row.toggle-row { display: flex; justify-content: flex-start; align-items: center; gap: 12px; }
 .gs-row.toggle-row .toggle-text { flex: 1; text-align: left; }
-.gs-row.toggle-row strong { font-weight: 400; color: #cdbe91; font-size: 12.5px; }
+.gs-row.toggle-row strong { font: 12px/16px Spiegel, NotoCJK, sans-serif; letter-spacing: .025em; color: #a09b8c; font-weight: 400; }
 
-/* Slider: gold filled track with the client's diamond thumb. */
-.gs-slider { grid-template-columns: minmax(150px, 220px) minmax(0, 1fr) 44px; }
-.gs-volume { grid-template-columns: minmax(150px, 220px) minmax(0, 1fr) 44px 32px; }
+/* Slider: thin gold track with the client's diamond thumb. */
+.gs-slider { grid-template-columns: minmax(150px, 220px) minmax(0, 1fr) 40px; }
+.gs-volume { grid-template-columns: minmax(150px, 220px) minmax(0, 1fr) 40px 30px; }
 .gs-slider output { text-align: right; font: 700 13px/1 Beaufort, WenKai, NotoCJK, serif; color: #f0e6d2; }
-.gs-slider input[type="range"] {
-  -webkit-appearance: none; appearance: none;
-  width: 100%; height: 18px; background: none; cursor: pointer;
-}
+.gs-slider input[type="range"] { -webkit-appearance: none; appearance: none; width: 100%; height: 18px; background: none; cursor: pointer; }
 .gs-slider input[type="range"]::-webkit-slider-runnable-track {
-  height: 4px;
-  background: linear-gradient(90deg, #785a28, #c8aa6e var(--fill, 50%), #1e2328 var(--fill, 50%));
-  border: 1px solid #010a13; box-shadow: 0 0 0 1px #463714;
+  height: 2px;
+  background: linear-gradient(90deg, #785a28, #c8aa6e var(--fill, 50%), #3c3c41 var(--fill, 50%));
 }
 .gs-slider input[type="range"]::-webkit-slider-thumb {
   -webkit-appearance: none; appearance: none;
-  width: 13px; height: 13px; margin-top: -5.5px;
+  width: 12px; height: 12px; margin-top: -5px;
   transform: rotate(45deg);
-  background: linear-gradient(135deg, #f0e6d2, #c8aa6e 55%, #785a28);
-  border: 1px solid #010a13; box-shadow: 0 0 0 1px #c8aa6e, 0 0 8px #c8aa6e66;
+  background: #1e2328;
+  border: 2px solid #c8aa6e;
 }
 .gs-slider input[type="range"]:hover::-webkit-slider-thumb,
-.gs-slider input[type="range"]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 1px #f0e6d2, 0 0 12px #c8aa6eaa; }
+.gs-slider input[type="range"]:focus-visible::-webkit-slider-thumb { border-color: #f0e6d2; background: #c8aa6e; }
 .gs-slider input[type="range"]:focus { outline: none; }
 .gs-volume.is-muted input[type="range"], .gs-volume.is-muted output { opacity: .4; }
-.gs-mute { width: 30px; height: 30px; color: #a09b8c; }
+.gs-mute { width: 28px; height: 28px; color: #a09b8c; }
 .gs-mute:hover { color: #f0e6d2; }
 .gs-mute[aria-pressed="true"] { color: #e06d62; }
 
-/* Key bindings: two keycap slots per action, plus quick cast. */
-.gs-key { grid-template-columns: minmax(170px, 1fr) minmax(0, 2fr) 120px; }
+/* Hotkeys: two framed fields per action, text like the client's hotkey boxes. */
+.gs-key { grid-template-columns: minmax(160px, 1fr) minmax(0, 1.8fr) 110px; }
 .gs-slots { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .gs-slot {
-  display: flex; align-items: center; justify-content: center; gap: 4px;
-  height: 32px; padding: 0 8px;
+  height: 30px; padding: 0 8px;
   border: 1px solid #463714;
-  background: linear-gradient(180deg, #1e2328, #10171c);
-  color: #f0e6d2; font-size: 12px;
-  transition: border-color 120ms, box-shadow 120ms;
+  background: #010a13;
+  color: #f0e6d2;
+  font: 700 12px/1 Beaufort, WenKai, NotoCJK, serif; letter-spacing: .06em; text-transform: uppercase;
 }
-.gs-slot:hover { border-color: #c8aa6e; }
-.gs-slot.is-empty { color: #5b5a56; font-style: italic; }
-.gs-slot.is-conflict { border-color: #b5484f; box-shadow: inset 0 0 10px #b5484f33; }
+.gs-slot:hover { border-color: #785a28; background: #1e2328; }
+.gs-slot.is-empty { color: #5b5a56; font-weight: 400; text-transform: none; font-family: Spiegel, NotoCJK, sans-serif; }
+.gs-slot.is-conflict { border-color: #b5484f; color: #e8a49b; }
 .gs-slot.is-capturing {
-  border-color: #f0e6d2; color: #f0e6d2;
-  background: linear-gradient(180deg, #2a2a20, #171a14);
-  box-shadow: 0 0 0 1px #c8aa6e, 0 0 14px #c8aa6e66;
+  border-color: #c8aa6e; color: #f0e6d2; background: #1e2328;
+  box-shadow: 0 0 0 1px #c8aa6e66, inset 0 0 10px #c8aa6e26;
   animation: gs-blink 1s ease-in-out infinite;
+  text-transform: none; font-family: Spiegel, NotoCJK, sans-serif; font-weight: 400;
 }
-@keyframes gs-blink { 50% { box-shadow: 0 0 0 1px #c8aa6e, 0 0 4px #c8aa6e33; } }
-.gs-slot kbd {
-  display: inline-block; min-width: 22px; padding: 2px 6px;
-  font: 700 11px/16px Beaufort, WenKai, NotoCJK, serif; letter-spacing: .04em; text-align: center;
-  color: #f0e6d2; background: #010a13; border: 1px solid #785a28; border-bottom-width: 2px;
-}
-.gs-slot i { font-style: normal; color: #785a28; font-size: 11px; }
+@keyframes gs-blink { 50% { box-shadow: 0 0 0 1px #c8aa6e22, inset 0 0 4px #c8aa6e11; } }
 .gs-quick { display: inline-flex; align-items: center; gap: 7px; font-size: 11.5px; color: #a09b8c; cursor: pointer; justify-self: end; }
 .gs-quick input { accent-color: #c8aa6e; }
 
-/* Raw list. */
-.gs-search { position: sticky; top: -18px; z-index: 2; }
+/* Raw list: field style of the Settings dialog. */
+.gs-search { position: sticky; top: -18px; z-index: 2; background: #010a13; }
 .gs-raw { grid-template-columns: minmax(200px, 1fr) minmax(0, 1.4fr); }
-.gs-raw > span { font-family: ui-monospace, Consolas, monospace; font-size: 11.5px; color: #a09b8c; overflow: hidden; text-overflow: ellipsis; }
+.gs-raw > span { font-family: ui-monospace, Consolas, monospace; font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; }
 .gs-raw input {
   height: 30px; padding: 0 10px;
-  border: 1px solid #1e2328; background: #010a13;
+  border: 1px solid #455159; background: #050e16;
   color: #f0e6d2; font-family: ui-monospace, Consolas, monospace; font-size: 12px;
 }
 .gs-raw input:focus { outline: none; border-color: #c8aa6e; }
 
-/* ------------------------------------------------------------- footer */
+/* ------------------------------------------------------------- footer on the frame */
 
-.gs-foot {
-  display: flex; align-items: center; justify-content: flex-end; gap: 14px;
-  padding: 14px max(28px, calc((100% - 1500px) / 2));
-  border-top: 1px solid #785a28;
-  background: linear-gradient(0deg, #0a1520, #010a13);
-}
-.gs-foot:empty { display: none; }
-.gs-changes { margin-right: auto; font-size: 12px; color: #738891; }
-.gs-changes.has-changes { color: #e6d4a9; }
-.gs-foot .btn { height: 38px; padding: 0 18px; display: inline-flex; align-items: center; gap: 8px; }
-.gs-foot .btn-primary:disabled { opacity: .45; }
+.gs-foot .btn-primary:disabled, .gs-foot .btn-ghost:disabled { opacity: .5; }
 
 @media (max-width: 900px) {
-  .gs-head { grid-template-columns: minmax(0, 1fr) auto; }
-  .gs-status { grid-column: 1 / -1; grid-row: 2; }
-  .gs-layout { grid-template-columns: minmax(0, 1fr); }
-  .gs-nav { flex-direction: row; overflow-x: auto; border-right: 0; border-bottom: 1px solid #c8aa6e1f; padding: 10px 0; }
-  .gs-content { padding-left: 0; }
+  .gs-layout { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
+  .gs-nav { flex-direction: row; overflow-x: auto; border-right: 0; border-bottom: 1px solid #c8aa6e1f; padding: 8px 12px; }
+  .gs-nav button[aria-selected="true"]::after { top: auto; left: 0; right: 0; bottom: -1px; width: auto; height: 2px; }
   .gs-key { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* Settings dialog: Import, Export, Log folder and Shortcuts (moved from the sidebar). */
+.settings-tools { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding-top: 2px; }
+.settings-tools .btn { height: 32px; display: inline-flex; align-items: center; justify-content: flex-start; gap: 8px; padding: 0 12px; font-size: 11px; }
