@@ -135,29 +135,28 @@ pub fn swap(paths: &Paths, target_version: &str) -> io::Result<()> {
     }
 }
 
-/// A pending rollback copy may be overwritten only after its healthy install
-/// has aged out of the rollback window. Without this gate, a second release
-/// within 24 hours would delete the only copy of the last working build.
+/// A pending rollback copy may be replaced once the running build has proven
+/// itself: its install is marked healthy, so the running executable becomes
+/// the new rollback copy and the older one is no longer needed. Only an install
+/// that never reported healthy keeps its rollback copy, since that copy may be
+/// the last build known to work. (The original rule also waited 24 hours,
+/// which refused every second release published on the same day.)
 fn ensure_rollback_window_closed(paths: &Paths, previous: Option<&[u8]>) -> io::Result<()> {
     match fs::symlink_metadata(&paths.old) {
         Ok(_) => {}
         Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(()),
         Err(error) => return Err(error),
     }
-    let expired = previous
+    let unproven = previous
         .and_then(|bytes| serde_json::from_slice::<InstallReceipt>(bytes).ok())
-        .is_some_and(|receipt| {
-            receipt.installed_at_ms > 0
-                && receipt.healthy
-                && now_ms().saturating_sub(receipt.installed_at_ms) >= ROLLBACK_WINDOW_MS
-        });
-    if expired {
-        Ok(())
-    } else {
+        .is_some_and(|receipt| !receipt.healthy);
+    if unproven {
         Err(io::Error::new(
             io::ErrorKind::PermissionDenied,
-            "previous version is still within its rollback window",
+            "the installed version has not started successfully yet",
         ))
+    } else {
+        Ok(())
     }
 }
 

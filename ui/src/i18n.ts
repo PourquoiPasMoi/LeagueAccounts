@@ -517,6 +517,11 @@ const en = {
   "err.game_settings_lock": "Couldn't change the read-only lock.",
   "err.game_settings_restore": "There is no earlier version to restore.",
   "settings.tools": "Accounts and tools",
+  "update.installNow": "Update now",
+  "update.retry": "Try again",
+  "update.failedTitle": "Update failed",
+  "update.failedText": "Version {version} couldn't be installed.",
+  "update.busy": "Finish the login or rank refresh first, then restart.",
 };
 
 type MessageKey = keyof typeof en;
@@ -1038,6 +1043,11 @@ const tr: Dict = {
   "err.game_settings_lock": "Salt okunur kilidi değiştirilemedi.",
   "err.game_settings_restore": "Geri yüklenecek önceki bir sürüm yok.",
   "settings.tools": "Hesaplar ve araçlar",
+  "update.installNow": "Şimdi güncelle",
+  "update.retry": "Tekrar dene",
+  "update.failedTitle": "Güncelleme başarısız",
+  "update.failedText": "{version} sürümü yüklenemedi.",
+  "update.busy": "Önce giriş ya da lig yenilemesi bitsin, sonra yeniden başlatın.",
 };
 
 const de: Dict = {
@@ -1556,6 +1566,11 @@ const de: Dict = {
   "err.game_settings_lock": "Der Schreibschutz konnte nicht geändert werden.",
   "err.game_settings_restore": "Es gibt keine frühere Version zum Wiederherstellen.",
   "settings.tools": "Konten und Werkzeuge",
+  "update.installNow": "Jetzt aktualisieren",
+  "update.retry": "Erneut versuchen",
+  "update.failedTitle": "Update fehlgeschlagen",
+  "update.failedText": "Version {version} konnte nicht installiert werden.",
+  "update.busy": "Warte, bis Anmeldung oder Rangaktualisierung fertig sind, und starte dann neu.",
 };
 
 const es: Dict = {
@@ -2074,6 +2089,11 @@ const es: Dict = {
   "err.game_settings_lock": "No se pudo cambiar el bloqueo de solo lectura.",
   "err.game_settings_restore": "No hay una versión anterior para restaurar.",
   "settings.tools": "Cuentas y herramientas",
+  "update.installNow": "Actualizar ahora",
+  "update.retry": "Reintentar",
+  "update.failedTitle": "Error al actualizar",
+  "update.failedText": "No se pudo instalar la versión {version}.",
+  "update.busy": "Termina el inicio de sesión o la actualización de rangos y luego reinicia.",
 };
 
 const fr: Dict = {
@@ -2592,6 +2612,11 @@ const fr: Dict = {
   "err.game_settings_lock": "Impossible de changer le verrou lecture seule.",
   "err.game_settings_restore": "Aucune version précédente à restaurer.",
   "settings.tools": "Comptes et outils",
+  "update.installNow": "Mettre à jour",
+  "update.retry": "Réessayer",
+  "update.failedTitle": "Échec de la mise à jour",
+  "update.failedText": "La version {version} n'a pas pu être installée.",
+  "update.busy": "Terminez la connexion ou l'actualisation des rangs, puis redémarrez.",
 };
 
 const pt: Dict = {
@@ -3110,6 +3135,11 @@ const pt: Dict = {
   "err.game_settings_lock": "Não foi possível mudar o bloqueio de somente leitura.",
   "err.game_settings_restore": "Não há versão anterior para restaurar.",
   "settings.tools": "Contas e ferramentas",
+  "update.installNow": "Atualizar agora",
+  "update.retry": "Tentar de novo",
+  "update.failedTitle": "Falha na atualização",
+  "update.failedText": "Não foi possível instalar a versão {version}.",
+  "update.busy": "Termine o login ou a atualização de elos e depois reinicie.",
 };
 
 const zh: Dict = {
@@ -3611,6 +3641,11 @@ const zh: Dict = {
   "err.game_settings_lock": "无法更改只读锁定。",
   "err.game_settings_restore": "没有可恢复的早期版本。",
   "settings.tools": "账号与工具",
+  "update.installNow": "立即更新",
+  "update.retry": "重试",
+  "update.failedTitle": "更新失败",
+  "update.failedText": "无法安装版本 {version}。",
+  "update.busy": "请等登录或段位刷新完成后再重启。",
 };
 
 const zhTw: Dict = {
@@ -4112,6 +4147,11 @@ const zhTw: Dict = {
   "err.game_settings_lock": "無法變更唯讀鎖定。",
   "err.game_settings_restore": "沒有可還原的先前版本。",
   "settings.tools": "帳號與工具",
+  "update.installNow": "立即更新",
+  "update.retry": "重試",
+  "update.failedTitle": "更新失敗",
+  "update.failedText": "無法安裝版本 {version}。",
+  "update.busy": "請等登入或階級更新完成後再重新啟動。",
 };
 
 export const LANGUAGES = [
