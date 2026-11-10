@@ -1,6 +1,6 @@
-// Automatic updates: the launch update screen, the restart notice once an
-// update was installed in the background, and the manual download banner
-// when it can't be installed automatically.
+// Automatic updates: the launch update screen, the "Restart now / Later" choice
+// once an update is installed, and a banner that installs it directly when
+// automatic updates are off or an install failed. Nothing opens GitHub.
 import { ApiError, api, events, type Release, type UpdateStatus } from "./api";
 import { $, esc, fragment, leave, toast } from "./dom";
 import { errorText, lang, t } from "./i18n";
@@ -9,12 +9,8 @@ import { icon } from "./icons";
 const DISMISSED_UPDATE = "leagueaccounts.dismissedUpdate";
 /** Hold the loading screen up to this long from the start of the launch check. */
 const LAUNCH_HOLD_MS = 3000;
-const RESTART_SECONDS = 10;
-const IDLE_POLL_MS = 15_000;
 
 let current: UpdateStatus | null = null;
-/** A dialog, menu, login or rank refresh is in progress. */
-let busy: () => boolean = () => false;
 const changed = new Set<() => void>();
 
 let screen: HTMLElement | null = null;
@@ -25,16 +21,15 @@ let progressBanner: HTMLElement | null = null;
 let silent = false;
 let holding = false;
 let notice: HTMLElement | null = null;
-let watcher: number | undefined;
-/** "Later" on the restart notice: the new version starts next launch. */
+/** "Later" on the restart choice: the new version starts next launch. */
 let declined = false;
 
 const describe = (error: unknown): string =>
   error instanceof ApiError ? errorText(error.code, error.detail) : errorText("unknown", String(error));
 
 /** Subscribe before reading the state, so no change in between is missed. */
-export async function wireUpdates(options: { busy: () => boolean }): Promise<void> {
-  busy = options.busy;
+// `busy` is kept for callers; the restart is always the user's choice now.
+export async function wireUpdates(_options: { busy: () => boolean }): Promise<void> {
   await events.onUpdateStatus(apply);
   apply(await api.updateStatus());
 }
@@ -48,15 +43,15 @@ function apply(status: UpdateStatus): void {
   renderProgress();
   renderResult();
   const { phase, release } = status;
-  if (phase === "downloading" && status.launch && !screen && !silent) showProgress();
+  if (phase === "downloading" && !screen && !silent) showProgress();
   if (phase !== "downloading") removeProgress();
   if ((phase === "available" || phase === "failed") && previous?.phase !== phase && release) {
     if (screen) void closeScreen();
-    showUpdateBanner(release);
+    showUpdateBanner(release, phase === "failed");
   }
   if (phase === "ready" && previous?.phase !== "ready") {
-    if (screen) void restart();
-    else if (!holding) watchForRestart();
+    if (screen) showScreenChoice();
+    else if (!holding) askToRestart();
   }
 }
 
@@ -91,7 +86,7 @@ export async function launchUpdate(reveal: () => Promise<void>): Promise<boolean
   holding = false;
   const phase = current?.phase;
   if (!current?.launch || (phase !== "downloading" && phase !== "ready")) {
-    if (phase === "ready") watchForRestart();
+    if (phase === "ready") askToRestart();
     return false;
   }
   const loader = document.querySelector<HTMLElement>("#startup-loader");
@@ -105,16 +100,40 @@ export async function launchUpdate(reveal: () => Promise<void>): Promise<boolean
       <p class="update-screen-title">${esc(t("update.screen"))}</p>
       <div class="update-meter" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-label="${esc(t("update.screen"))}"><span></span></div>
       <p class="update-screen-detail"></p>
-      <button type="button" class="text-button">${esc(t("update.background"))}</button>
+      <div class="update-screen-actions">
+        <button type="button" class="text-button" data-screen="background">${esc(t("update.background"))}</button>
+      </div>
     </div>`);
   loader.append(screen);
-  $("button", screen).addEventListener("click", () => {
-    silent = true;
-    void closeScreen();
+  screen.addEventListener("click", (event) => {
+    const action = (event.target as HTMLElement).closest<HTMLElement>("[data-screen]")?.dataset.screen;
+    if (action === "background") {
+      silent = true;
+      void closeScreen();
+    }
+    if (action === "restart") {
+      screen?.querySelectorAll("button").forEach((button) => (button.disabled = true));
+      void restart();
+    }
+    if (action === "later") {
+      declined = true;
+      void closeScreen();
+      toast("info", t("update.nextLaunch", { version: current?.release?.version ?? "" }), "", 6000);
+    }
   });
   renderScreen();
-  if (phase === "ready") void restart();
+  if (phase === "ready") showScreenChoice();
   return true;
+}
+
+/** The download finished on the update screen: restart now, or open the app and update next time. */
+function showScreenChoice(): void {
+  if (!screen) return;
+  $(".update-screen-title", screen).textContent = t("update.ready");
+  $(".update-screen-actions", screen).innerHTML = `
+    <button type="button" class="btn btn-primary" data-screen="restart">${icon("refresh-cw", 15)}${esc(t("update.restartNow"))}</button>
+    <button type="button" class="btn btn-ghost" data-screen="later">${esc(t("update.later"))}</button>`;
+  renderScreen();
 }
 
 const megabytes = (bytes: number): string =>
@@ -128,7 +147,7 @@ function renderScreen(): void {
   $("span", $(".update-meter", screen)).style.transform = `scaleX(${fraction})`;
   $(".update-meter", screen).setAttribute("aria-valuenow", String(Math.floor(fraction * 100)));
   $(".update-screen-detail", screen).textContent = installed
-    ? t("update.applying")
+    ? t(current.phase === "restarting" ? "update.applying" : "update.installed", { version: current.release?.version ?? "" })
     : current.total
       ? `${megabytes(current.received)} / ${megabytes(current.total)} MB`
       : "";
@@ -184,86 +203,53 @@ async function closeScreen(): Promise<void> {
   screen = null;
   revealAfterScreen = null;
   await reveal?.();
-  if (current?.phase === "ready") watchForRestart();
+  if (current?.phase === "ready") askToRestart();
 }
 
 async function restart(): Promise<boolean> {
   try {
     await api.restartToUpdate();
     return true;
-  } catch {
-    // A login started meanwhile: ask again at the next idle moment.
+  } catch (error) {
+    // A login or refresh is running: keep the choice up so it can be retried.
+    toast("info", t("update.busy"), describe(error), 5000);
     if (screen) await closeScreen();
-    else watchForRestart();
+    else askToRestart();
     return false;
   }
 }
 
-// ---------------------------------------------------------------- restart notice
+// ---------------------------------------------------------------- restart choice
 
-function watchForRestart(): void {
-  if (declined || watcher !== undefined) return;
-  const tick = async () => {
-    if (notice || busy()) return;
-    const idle = await api.updateIdle().catch(() => false);
-    if (idle && !notice && !busy() && !declined) showRestartNotice();
-  };
-  watcher = window.setInterval(() => void tick(), IDLE_POLL_MS);
-  void tick();
-}
-
-function stopWatching(): void {
-  clearInterval(watcher);
-  watcher = undefined;
-}
-
-function showRestartNotice(): void {
+/** Ask once the update is installed: restart now, or keep going until the app is closed. */
+function askToRestart(): void {
+  if (declined || notice) return;
   const version = current?.release?.version ?? "";
-  let seconds = RESTART_SECONDS;
-  document.querySelector(".update-banner")?.remove();
+  document.querySelector(".update-banner:not([data-update-progress])")?.remove();
   const element = fragment(`
     <div class="update-banner" role="status" data-update-notice>
       <div class="update-body">
         <strong>${esc(t("update.ready"))}</strong>
-        <span aria-live="off"></span>
+        <span>${esc(t("update.installed", { version }))}</span>
       </div>
       <button class="btn btn-primary" data-update="restart">${icon("refresh-cw", 15)}${esc(t("update.restartNow"))}</button>
       <button class="btn btn-ghost" data-update="later">${esc(t("update.later"))}</button>
     </div>`);
   notice = element;
-  const countdown = $(".update-body span", element);
-  const render = () => (countdown.textContent = t("update.restarting", { seconds }));
   const close = () => {
-    clearInterval(timer);
     if (notice === element) notice = null;
     void leave(element, "toast-out");
   };
-  const restartNow = async () => {
-    clearInterval(timer);
-    element.querySelectorAll("button").forEach((button) => (button.disabled = true));
-    if (!(await restart())) close();
-  };
-  // A match may have started during the countdown; Restart now skips this.
-  const restartIfIdle = async () => {
-    clearInterval(timer);
-    if (await api.updateIdle().catch(() => false)) await restartNow();
-    else close();
-  };
-  const timer = setInterval(() => {
-    // Something started: ask again once the app is idle.
-    if (busy()) return close();
-    seconds -= 1;
-    if (seconds > 0) render();
-    else void restartIfIdle();
-  }, 1000);
-  render();
   $("#toasts").before(element);
-  element.addEventListener("click", (event) => {
+  element.addEventListener("click", async (event) => {
     const action = (event.target as HTMLElement).closest<HTMLElement>("[data-update]")?.dataset.update;
-    if (action === "restart") void restartNow();
+    if (action === "restart") {
+      element.querySelectorAll("button").forEach((button) => (button.disabled = true));
+      close();
+      await restart();
+    }
     if (action === "later") {
       declined = true;
-      stopWatching();
       close();
       toast("info", t("update.nextLaunch", { version }), "", 6000);
     }
@@ -272,28 +258,32 @@ function showRestartNotice(): void {
 
 // ---------------------------------------------------------------- download banner
 
-/** "Update available" with a link to the release page, for a manual download. */
-export function showUpdateBanner(release: Release, force = false): void {
-  try {
-    if (!force && localStorage.getItem(DISMISSED_UPDATE) === release.version) return;
-  } catch {
-    // Storage unavailable: show it.
+/** A newer release that wasn't installed yet: Update now downloads and installs it here. */
+export function showUpdateBanner(release: Release, failed = false): void {
+  if (!failed) {
+    try {
+      if (localStorage.getItem(DISMISSED_UPDATE) === release.version) return;
+    } catch {
+      // Storage unavailable: show it.
+    }
   }
-  document.querySelector(".update-banner")?.remove();
+  document.querySelector(".update-banner:not([data-update-progress])")?.remove();
   const banner = fragment(`
     <div class="update-banner" role="status">
       <div class="update-body">
-        <strong>${esc(t("update.available"))}</strong>
-        <span>${esc(t("update.text", { version: release.version }))}</span>
+        <strong>${esc(t(failed ? "update.failedTitle" : "update.available"))}</strong>
+        <span>${esc(t(failed ? "update.failedText" : "update.text", { version: release.version }))}</span>
       </div>
-      <button class="btn btn-primary" data-update="open">${icon("download", 15)}${esc(t("update.download"))}</button>
+      <button class="btn btn-primary" data-update="install">${icon("download", 15)}${esc(t(failed ? "update.retry" : "update.installNow"))}</button>
       <button class="icon-btn" data-update="later" aria-label="${esc(t("update.later"))}" data-tooltip="${esc(t("update.later"))}">${icon("x")}</button>
     </div>`);
   $("#toasts").before(banner);
   banner.addEventListener("click", (event) => {
     const action = (event.target as HTMLElement).closest<HTMLElement>("[data-update]")?.dataset.update;
-    if (action === "open") {
-      api.openRelease(release.url).catch((error) => toast("error", t("toast.openFailed"), describe(error), 5000));
+    if (action === "install") {
+      silent = false;
+      void leave(banner, "toast-out");
+      api.checkUpdate().then(apply, (error) => toast("error", t("toast.updateFailed"), describe(error), 5000));
     }
     if (action === "later") {
       try {
@@ -313,9 +303,8 @@ export async function checkUpdateNow(button: HTMLButtonElement, output: HTMLElem
   output.dataset.live = "";
   output.textContent = "…";
   try {
+    silent = false;
     apply(await api.checkUpdate());
-    const { phase, release } = current!;
-    if ((phase === "available" || phase === "failed") && release) showUpdateBanner(release, true);
     renderResult();
   } catch (error) {
     delete output.dataset.live;
@@ -336,7 +325,7 @@ function renderResult(): void {
     checking: "…",
     upToDate: t(current.release ? "update.latest" : "update.none"),
     available: t("update.text", { version }),
-    failed: t("update.text", { version }),
+    failed: t("update.failedText", { version }),
     downloading: t("update.downloading", { version }),
     ready: t("update.installed", { version }),
     restarting: t("update.applying"),

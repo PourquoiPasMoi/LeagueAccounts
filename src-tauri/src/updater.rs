@@ -130,7 +130,9 @@ struct Install {
 }
 
 /// Look for a newer release; returns the install to run when one should start.
-fn check(app: &AppHandle, shared: &Arc<Shared>, launch: bool) -> Result<Option<Install>, UpdateError> {
+/// `install_anyway`: a check the user asked for installs a newer release even
+/// when automatic updates are off.
+fn check(app: &AppHandle, shared: &Arc<Shared>, launch: bool, install_anyway: bool) -> Result<Option<Install>, UpdateError> {
     let Some(busy) = Busy::take(shared) else {
         return Ok(None);
     };
@@ -153,7 +155,7 @@ fn check(app: &AppHandle, shared: &Arc<Shared>, launch: bool) -> Result<Option<I
     let newer = latest
         .as_ref()
         .is_some_and(|release| updates::is_newer(&release.version, env!("CARGO_PKG_VERSION")));
-    let automatic = shared.settings.lock().map(|settings| settings.auto_update).unwrap_or(false);
+    let automatic = install_anyway || shared.settings.lock().map(|settings| settings.auto_update).unwrap_or(false);
     let install = match (&latest, &updater.paths) {
         (Some(release), Some(paths))
             if newer
@@ -232,7 +234,7 @@ pub fn spawn(app: AppHandle, shared: Arc<Shared>) {
         loop {
             let automatic = shared.settings.lock().map(|settings| settings.auto_update).unwrap_or(false);
             if automatic && Instant::now() >= next_check {
-                let wait = match check(&app, &shared, launch) {
+                let wait = match check(&app, &shared, launch, false) {
                     Ok(Some(job)) => {
                         install(&app, job);
                         CHECK_INTERVAL
@@ -251,9 +253,10 @@ pub fn spawn(app: AppHandle, shared: Arc<Shared>) {
     });
 }
 
-/// Settings › Check now. An install continues in the background.
+/// Settings › Check now, or Update now / Try again on the banner: downloads and
+/// installs a newer release. The install continues in the background.
 pub fn check_now(app: AppHandle, shared: Arc<Shared>) -> CommandResult<UpdateStatus> {
-    match check(&app, &shared, false) {
+    match check(&app, &shared, false, true) {
         Ok(Some(job)) => {
             let app = app.clone();
             thread::spawn(move || install(&app, job));
