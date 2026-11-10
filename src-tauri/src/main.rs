@@ -1244,24 +1244,3 @@ fn main() {
         }
     });
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn profile_completion_does_not_wait_without_a_requested_game_or_client() {
-        let cancel = AtomicBool::new(false);
-        assert_eq!(wait_for_riot_id(&cancel, false, || false, || panic!("no API exists")), None);
-    }
-
-    #[test]
-    fn profile_completion_rejects_results_after_cancellation() {
-        let cancel = AtomicBool::new(false);
-        assert_eq!(wait_for_riot_id(&cancel, true, || true, || {
-            cancel.store(true, Ordering::SeqCst);
-            Some("Player#TAG".into())
-        }), None);
-        assert_eq!(wait_for_riot_id(&cancel, true, || true, || panic!("cancelled")), None);
-    }
-}

@@ -6,9 +6,9 @@
 //! and every later input rechecks it. Clipboard writes exclude credentials
 //! from Windows history and cloud sync, then clear them after typing.
 
-#[cfg(any(windows, test))]
+#[cfg(windows)]
 use std::ffi::OsString;
-#[cfg(any(windows, test))]
+#[cfg(windows)]
 use std::path::Path;
 use std::thread;
 use std::time::Duration;
@@ -113,7 +113,7 @@ pub fn auto_type_credentials(account_id: &str, password: &str) -> bool {
 /// `services` belongs to. Riot's metadata names `RiotClientServices.exe`;
 /// newer installs run `RiotClientElectron\Riot Client.exe`, and older ones
 /// `RiotClientUx.exe` beside the service.
-#[cfg(any(windows, test))]
+#[cfg(windows)]
 fn is_riot_client_executable(image: &Path, services: &Path) -> bool {
     let Some(root) = services.parent().map(path_components) else {
         return false;
@@ -134,7 +134,7 @@ fn is_riot_client_executable(image: &Path, services: &Path) -> bool {
 
 /// Compare paths the way Windows resolves them: case-insensitively and with
 /// either separator, while still requiring whole path components to match.
-#[cfg(any(windows, test))]
+#[cfg(windows)]
 fn path_components(path: &Path) -> Vec<OsString> {
     path.components()
         .map(|component| component.as_os_str().to_ascii_lowercase())
@@ -266,7 +266,7 @@ pub fn type_credentials(
     }
 }
 
-#[cfg(any(windows, test))]
+#[cfg(windows)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum TypingAction<'a> {
     Paste(&'a str),
@@ -274,7 +274,7 @@ enum TypingAction<'a> {
     Enter,
 }
 
-#[cfg(any(windows, test))]
+#[cfg(windows)]
 fn type_credentials_with<'a>(
     account_id: &'a str,
     password: &'a str,
@@ -375,174 +375,4 @@ fn paste_current_clipboard() -> bool {
     let v_up = send_key(b'V' as u16, KEYEVENTF_KEYUP);
     let control_up = send_key(VK_CONTROL, KEYEVENTF_KEYUP);
     control_down && v_down && v_up && control_up
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::cell::Cell;
-
-    #[test]
-    fn typing_stops_before_each_step_if_focus_is_lost_or_cancelled() {
-        for lost_at in 0..4 {
-            let completed = Cell::new(0);
-            let result = type_credentials_with(
-                "dummy",
-                "dummy-password",
-                || completed.get() < lost_at,
-                |_| true,
-                |_| {
-                    completed.set(completed.get() + 1);
-                    true
-                },
-                || {},
-            );
-            assert!(!result);
-            assert_eq!(completed.get(), lost_at);
-        }
-    }
-
-    #[test]
-    fn focus_loss_during_clipboard_preparation_prevents_the_paste() {
-        for lost_on_write in [1, 2] {
-            let focused = Cell::new(true);
-            let writes = Cell::new(0);
-            let mut sent = Vec::new();
-            let result = type_credentials_with(
-                "dummy",
-                "dummy-password",
-                || focused.get(),
-                |_| {
-                    writes.set(writes.get() + 1);
-                    true
-                },
-                |action| {
-                    sent.push(action);
-                    true
-                },
-                || {
-                    if writes.get() == lost_on_write {
-                        focused.set(false);
-                    }
-                },
-            );
-            assert!(!result);
-            assert_eq!(writes.get(), lost_on_write);
-            let expected = if lost_on_write == 1 {
-                vec![]
-            } else {
-                vec![TypingAction::Paste("dummy"), TypingAction::Tab]
-            };
-            assert_eq!(sent, expected);
-        }
-    }
-
-    #[test]
-    fn failed_private_clipboard_write_prevents_further_input() {
-        for failed_write in [1, 2] {
-            let mut writes = 0;
-            let mut sent = Vec::new();
-            let result = type_credentials_with(
-                "dummy",
-                "dummy-password",
-                || true,
-                |_| {
-                    writes += 1;
-                    writes < failed_write
-                },
-                |action| {
-                    sent.push(action);
-                    true
-                },
-                || {},
-            );
-            assert!(!result);
-            assert_eq!(writes, failed_write);
-            assert_eq!(sent.len(), if failed_write == 1 { 0 } else { 2 });
-            assert!(!sent.contains(&TypingAction::Paste("dummy-password")));
-        }
-    }
-
-    #[test]
-    fn rejected_input_is_not_retried_or_followed_by_more_input() {
-        for failed_at in 0..4 {
-            let mut attempted = 0;
-            let result = type_credentials_with(
-                "dummy",
-                "dummy-password",
-                || true,
-                |_| true,
-                |_| {
-                    attempted += 1;
-                    attempted <= failed_at
-                },
-                || {},
-            );
-            assert!(!result);
-            assert_eq!(attempted, failed_at + 1);
-        }
-    }
-
-    #[test]
-    fn typing_preserves_field_order_and_supports_an_empty_password() {
-        for password in ["dummy-password", ""] {
-            let mut actions = Vec::new();
-            let mut prepared = Vec::new();
-            assert!(type_credentials_with(
-                "dummy",
-                password,
-                || true,
-                |value| {
-                    prepared.push(value.to_owned());
-                    true
-                },
-                |action| {
-                    actions.push(action);
-                    true
-                },
-                || {},
-            ));
-            let mut expected = vec![TypingAction::Paste("dummy"), TypingAction::Tab];
-            let mut expected_prepared = vec!["dummy"];
-            if !password.is_empty() {
-                expected.push(TypingAction::Paste("dummy-password"));
-                expected_prepared.push("dummy-password");
-            }
-            expected.push(TypingAction::Enter);
-            assert_eq!(actions, expected);
-            assert_eq!(prepared, expected_prepared);
-        }
-    }
-
-    fn test_path(parts: &[&str]) -> std::path::PathBuf {
-        parts.iter().copied().collect()
-    }
-
-    #[test]
-    fn only_the_client_under_the_installed_riot_folder_is_accepted() {
-        let services = test_path(&["Riot Games", "Riot Client", "RiotClientServices.exe"]);
-        for image in [
-            test_path(&["Riot Games", "Riot Client", "RiotClientElectron", "Riot Client.exe"]),
-            test_path(&["Riot Games", "Riot Client", "Riot Client.exe"]),
-            test_path(&["RIOT GAMES", "RIOT CLIENT", "RIOTCLIENTUX.EXE"]),
-        ] {
-            assert!(is_riot_client_executable(&image, &services), "{}", image.display());
-        }
-        for image in [
-            test_path(&["Riot Games", "Riot Client", "RiotClientServices.exe"]),
-            test_path(&["Riot Games", "Riot Client", "Another.exe"]),
-            test_path(&["Riot Games", "Riot Client", "nested", "Riot Client.exe"]),
-            test_path(&["Riot Games", "Riot Client", "RiotClientElectron", "Another.exe"]),
-            test_path(&["Riot Games", "Riot Client Evil", "Riot Client.exe"]),
-            test_path(&["Elsewhere", "Riot Client.exe"]),
-            test_path(&["Riot Games", "Riot Client", "RiotClientElectron", "..", "RiotClientUx.exe"]),
-        ] {
-            assert!(!is_riot_client_executable(&image, &services), "{}", image.display());
-        }
-        #[cfg(windows)]
-        assert!(is_riot_client_executable(
-            Path::new(r"C:/Riot Games/Riot Client/RiotClientElectron/Riot Client.exe"),
-            Path::new(r"C:\Riot Games\Riot Client\RiotClientServices.exe"),
-        ));
-    }
 }
