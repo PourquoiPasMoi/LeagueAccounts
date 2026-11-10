@@ -163,7 +163,7 @@ To fill an account's profile, log in to it once through the app with "Launch the
 | *Riot Client was not found* | Install the Riot Client, or use Settings, Login, Type into the previous window. |
 | Ranks show Unavailable or *Riot ID not found* | Check the Riot ID and region; OP.GG may also be rate limiting. |
 | Shown online while using [Deceive](https://github.com/molenzwiebel/Deceive) | Start Deceive first, then log in with League Accounts. |
-| Anything else | Attach the newest file from Log folder (sidebar) to an [issue](https://github.com/PourquoiPasMoi/LeagueAccounts/issues). |
+| Anything else | Attach the newest file from Settings, Log folder to an [issue](https://github.com/PourquoiPasMoi/LeagueAccounts/issues). |
 
 ## Building from source
 

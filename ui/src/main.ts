@@ -921,6 +921,15 @@ async function openSettings(): Promise<void> {
           <button type="button" class="btn btn-ghost" data-check-update>${icon("refresh-cw", 14)}${esc(t("settings.checkNow"))}</button>
         </div>
       </section>
+      <section class="settings-section">
+        <h3>${esc(t("settings.tools"))}</h3>
+        <div class="settings-tools">
+          <button type="button" class="btn btn-ghost" data-tool="import">${icon("download", 14)}${esc(t("side.import"))}</button>
+          <button type="button" class="btn btn-ghost" data-tool="export">${icon("upload", 14)}${esc(t("side.export"))}</button>
+          <button type="button" class="btn btn-ghost" data-tool="logs">${icon("folder-open", 14)}${esc(t("side.logs"))}</button>
+          <button type="button" class="btn btn-ghost" data-tool="shortcuts">${icon("keyboard", 14)}${esc(t("side.shortcuts"))}</button>
+        </div>
+      </section>
       </div>
       <div class="settings-col">
       <section class="settings-section">
@@ -965,6 +974,11 @@ async function openSettings(): Promise<void> {
       root.addEventListener("click", (event) => {
         const check = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-check-update]");
         if (check) void checkUpdateNow(check, $(".update-result", root));
+        const tool = (event.target as HTMLElement).closest<HTMLElement>("[data-tool]")?.dataset.tool;
+        if (tool === "import") void importData();
+        if (tool === "export") void exportData();
+        if (tool === "logs") void guard(() => api.openLogsFolder(), "toast.logsFailed");
+        if (tool === "shortcuts") showShortcuts();
         const preset = (event.target as HTMLElement).closest<HTMLElement>("[data-interval]");
         if (preset) {
           interval.value = preset.dataset.interval ?? "30";
