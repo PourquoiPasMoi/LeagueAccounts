@@ -74,8 +74,9 @@ function mean(games: MatchRecord[], value: (game: MatchRecord) => number | null)
   return { value: values.reduce((sum, entry) => sum + entry, 0) / values.length, count: values.length };
 }
 
-/** Client games have duration and full stats; OP.GG games only K/D/A and CS. */
-const detailed = (game: MatchRecord): boolean => game.source === "client" && game.durationSeconds > 0;
+/** Client games and OP.GG match-list games have duration and full stats; games
+ * from an OP.GG page summary only K/D/A and CS. */
+const detailed = (game: MatchRecord): boolean => game.durationSeconds > 0;
 
 function metricValue(game: MatchRecord, metric: TrendMetric): number | null {
   if (metric === "kda") return kdaOf(game.kills, game.deaths, game.assists);
@@ -162,14 +163,17 @@ export function statsHtml(all: MatchRecord[], profile: Profile | null, filters: 
     </section>
     <div class="stats-columns">
       <div class="stats-main">
+        ${playStylePanel(games)}
         ${championTable(games, profile)}
         ${formPanel(games, profile)}
         ${recordsPanel(games, profile)}
       </div>
       <div class="stats-side">
         ${rolesPanel(games)}
+        ${sidesPanel(games)}
         ${streaksPanel(games)}
         ${weekdayPanel(games)}
+        ${hoursPanel(games)}
       </div>
     </div>`;
 }
@@ -404,5 +408,100 @@ function recordsPanel(games: MatchRecord[], profile: Profile | null): string {
           <b>${esc(record.value)}</b>
         </li>`;
       }).join("")}</ul>
+    </section>`;
+}
+
+// ---------------------------------------------------------------- play style, sides, hours
+
+/** Like OP.GG's season play style: totals, champion pool and recent form against the whole list. */
+function playStylePanel(games: MatchRecord[]): string {
+  const rich = games.filter(detailed);
+  const seconds = rich.reduce((sum, game) => sum + game.durationSeconds, 0);
+  const hours = Math.floor(seconds / 3600);
+  const rest = Math.round((seconds % 3600) / 60);
+  const pool = new Set(games.map((game) => game.champion || String(game.championId))).size;
+  const total = Object.values(NAMES).filter((id) => id > 0 && id < 1000).length;
+  const summary = (list: MatchRecord[]) => {
+    const n = Math.max(1, list.length);
+    const k = list.reduce((sum, game) => sum + game.kills, 0);
+    const d = list.reduce((sum, game) => sum + game.deaths, 0);
+    const a = list.reduce((sum, game) => sum + game.assists, 0);
+    const detail = list.filter(detailed);
+    return {
+      rate: list.filter((game) => game.win).length / n,
+      kda: kdaOf(k, d, a),
+      kp: mean(detail.filter((game) => game.teamKills > 0), (game) => (game.kills + game.assists) / game.teamKills)?.value ?? null,
+      cs: mean(detail, (game) => game.cs / minutes(game))?.value ?? null,
+      damage: mean(detail, (game) => game.damage / minutes(game))?.value ?? null,
+      vision: mean(detail, (game) => game.vision / minutes(game))?.value ?? null,
+    };
+  };
+  const recent = summary(games.slice(0, 20));
+  const all = summary(games);
+  const rows: [string, number | null, number | null, (value: number) => string][] = [
+    [t("stats.winRate"), recent.rate, all.rate, percent],
+    [t("stats.kda"), recent.kda, all.kda, (value) => number(value, 2)],
+    [t("stats.kp"), recent.kp, all.kp, percent],
+    [t("stats.csMin"), recent.cs, all.cs, (value) => number(value, 1)],
+    [t("stats.damageMin"), recent.damage, all.damage, (value) => number(value)],
+    [t("stats.visionMin"), recent.vision, all.vision, (value) => number(value, 2)],
+  ];
+  const showCompare = games.length > 20;
+  return `
+    <section class="profile-panel">
+      <h3>${esc(t("stats.playStyle"))}</h3>
+      <div class="style-grid">
+        <div><span>${esc(t("stats.playTime"))}</span><b>${esc(seconds ? `${hours}h ${rest}m` : "—")}</b><em>${esc(t("stats.gamesCount", { count: rich.length }))}</em></div>
+        <div><span>${esc(t("stats.championPool"))}</span><b>${esc(`${pool} / ${total}`)}</b><em>${esc(percent(pool / Math.max(1, total)))}</em></div>
+      </div>
+      ${showCompare ? `
+      <table class="compare-table">
+        <caption>${esc(t("stats.recentVsAll"))}</caption>
+        <thead><tr><th></th><th>${esc(t("stats.recent"))}</th><th>${esc(t("stats.overall"))}</th></tr></thead>
+        <tbody>${rows.filter(([, left, right]) => left !== null && right !== null).map(([label, left, right, format]) => `
+          <tr><td>${esc(label)}</td><td class="${left! > right! * 1.02 ? "is-good" : left! < right! * 0.98 ? "is-bad" : ""}">${esc(format(left!))}</td><td>${esc(format(right!))}</td></tr>`).join("")}
+        </tbody>
+      </table>` : ""}
+    </section>`;
+}
+
+function sidesPanel(games: MatchRecord[]): string {
+  const sides = (["blue", "red"] as const).map((side) => {
+    const list = games.filter((game) => game.side === side);
+    const wins = list.filter((game) => game.win).length;
+    return { side, games: list.length, wins };
+  });
+  if (!sides.some((side) => side.games)) return "";
+  return `
+    <section class="profile-panel">
+      <h3>${esc(t("stats.sides"))}</h3>
+      <div class="side-split">${sides.map((side) => `
+        <div class="is-${side.side}">
+          <span>${esc(t(side.side === "blue" ? "stats.blueSide" : "stats.redSide"))}</span>
+          <b class="${side.games ? (side.wins / side.games >= 0.5 ? "is-good" : "is-bad") : ""}">${side.games ? esc(percent(side.wins / side.games)) : "—"}</b>
+          <em>${esc(t("profile.winLoss", { wins: side.wins, losses: side.games - side.wins }))}</em>
+        </div>`).join("")}
+      </div>
+    </section>`;
+}
+
+function hoursPanel(games: MatchRecord[]): string {
+  if (!games.length) return "";
+  const hours = Array.from({ length: 24 }, () => ({ games: 0, wins: 0 }));
+  games.forEach((game) => {
+    const hour = new Date(game.created).getHours();
+    hours[hour].games++;
+    if (game.win) hours[hour].wins++;
+  });
+  const max = Math.max(1, ...hours.map((hour) => hour.games));
+  return `
+    <section class="profile-panel">
+      <h3>${esc(t("stats.hours"))}</h3>
+      <div class="hour-chart">${hours.map((hour, index) => `
+        <div class="hour" data-tooltip="${esc(`${t("stats.hoursHint", { hour: index })}: ${t("stats.gamesCount", { count: hour.games })}${hour.games ? ` · ${t("profile.winLoss", { wins: hour.wins, losses: hour.games - hour.wins })}` : ""}`)}">
+          <span class="hour-bar"><span style="--p:${hour.games / max}"></span></span>
+          <em>${index % 6 === 0 ? index : ""}</em>
+        </div>`).join("")}
+      </div>
     </section>`;
 }

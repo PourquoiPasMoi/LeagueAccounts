@@ -122,8 +122,9 @@ pub struct Wallet {
     pub blue_essence: Option<i64>,
 }
 
-/// One game in the account's archive. Client games carry every field; OP.GG
-/// games carry the result, K/D/A, CS and OP Score only.
+/// One game in the account's archive. Client games and OP.GG match-list games
+/// carry every field; games read from an OP.GG page's summary carry the result,
+/// K/D/A, CS and OP Score only (their `duration_seconds` is 0).
 #[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase", default)]
 pub struct MatchRecord {
@@ -174,6 +175,25 @@ pub struct MatchRecord {
     pub first_blood: bool,
     /// OP Score times ten, OP.GG games only.
     pub op_score_x10: Option<u32>,
+    /// `blue`, `red` or empty when unknown.
+    pub side: String,
+}
+
+impl MatchRecord {
+    /// Has full stats (damage, gold, length), not just the K/D/A summary.
+    fn detailed(&self) -> bool {
+        self.duration_seconds > 0
+    }
+}
+
+/// When OP.GG's season history was last read for an account.
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct OpggSync {
+    /// Unix ms of the last successful read.
+    pub at: u64,
+    /// The whole match list was read once (later reads only add new games).
+    pub complete: bool,
 }
 
 /// One rank observation, recorded when the standing changes.
@@ -291,9 +311,12 @@ fn same_game(a: &MatchRecord, b: &MatchRecord) -> bool {
     if a.game_id != 0 && a.game_id == b.game_id {
         return true;
     }
-    // OP.GG games have no id: the same start time and champion is the same game.
+    // OP.GG games have no id: about the same start time and the same champion
+    // (the page summary and the match list round start times differently).
     if a.game_id == 0 && b.game_id == 0 {
-        return a.created == b.created && a.champion.eq_ignore_ascii_case(&b.champion);
+        return a.champion.eq_ignore_ascii_case(&b.champion)
+            && (a.created.abs_diff(b.created) < 120_000
+                || (a.created.abs_diff(b.created) < 20 * 60_000 && (a.kills, a.deaths, a.assists) == (b.kills, b.deaths, b.assists)));
     }
     a.source != b.source
         && a.created.abs_diff(b.created) < 20 * 60_000
@@ -307,8 +330,14 @@ fn merge_into(archive: &mut Vec<MatchRecord>, incoming: Vec<MatchRecord>) -> usi
     for record in incoming {
         match archive.iter().position(|existing| same_game(existing, &record)) {
             Some(index) => {
-                if record.source == "client" && archive[index].source != "client" {
-                    archive[index] = record;
+                let existing = &mut archive[index];
+                if record.source == "client" && existing.source != "client" {
+                    *existing = record;
+                } else if record.source == "opgg" && existing.source == "opgg" && record.detailed() && !existing.detailed() {
+                    // The match list's full stats replace the page summary's.
+                    *existing = record;
+                } else if record.source == "opgg" && existing.source == "client" && existing.side.is_empty() {
+                    existing.side = record.side;
                 }
             }
             None => {
@@ -330,8 +359,9 @@ pub fn merge_games(key: &AccountKey, incoming: Vec<MatchRecord>) -> usize {
     let Ok(directory) = directory() else { return 0 };
     let path = archive_path(&directory, key);
     let mut games: Vec<MatchRecord> = read_json(&path);
+    let before = games.clone();
     let added = merge_into(&mut games, incoming);
-    if added > 0 || games.iter().any(|game| game.source == "client") {
+    if games != before {
         if let Err(error) = write_json(&path, &games) {
             logging::record(Event::ProfileSaveFailed, Reason::from_error(&error));
         }
@@ -340,7 +370,7 @@ pub fn merge_games(key: &AccountKey, incoming: Vec<MatchRecord>) -> usize {
 }
 
 /// OP.GG's `queueType` as the client's queue id, so both sources filter alike.
-fn opgg_queue_id(queue: &str) -> i64 {
+pub(crate) fn opgg_queue_id(queue: &str) -> i64 {
     match queue {
         "SOLORANKED" => 420,
         "FLEXRANKED" => 440,
@@ -376,6 +406,29 @@ pub fn record_opgg_games(key: &AccountKey, games: &[OpggGame]) -> usize {
         })
         .collect();
     merge_games(key, records)
+}
+
+fn opgg_sync_path(directory: &Path, key: &AccountKey) -> PathBuf {
+    directory.join(format!("{}.opgg.json", file_stem(key)))
+}
+
+pub fn opgg_sync(key: &AccountKey) -> OpggSync {
+    directory()
+        .map(|directory| read_json(&opgg_sync_path(&directory, key)))
+        .unwrap_or_default()
+}
+
+pub fn store_opgg_sync(key: &AccountKey, sync: &OpggSync) {
+    let _lock = WRITE_LOCK.lock();
+    let Ok(directory) = directory() else { return };
+    if let Err(error) = write_json(&opgg_sync_path(&directory, key), sync) {
+        logging::record(Event::ProfileSaveFailed, Reason::from_error(&error));
+    }
+}
+
+/// The archive already has this game with full stats.
+pub fn has_detailed(archive: &[MatchRecord], game: &MatchRecord) -> bool {
+    archive.iter().any(|existing| existing.detailed() && same_game(existing, game))
 }
 
 fn read_json<T: for<'de> Deserialize<'de> + Default>(path: &Path) -> T {
@@ -422,6 +475,7 @@ pub fn remove(key: &AccountKey) {
         let _ = std::fs::remove_file(history_path(&directory, key));
         let _ = std::fs::remove_file(archive_path(&directory, key));
         let _ = std::fs::remove_file(seasons_path(&directory, key));
+        let _ = std::fs::remove_file(opgg_sync_path(&directory, key));
     }
 }
 
@@ -731,6 +785,11 @@ pub fn parse_client_game(game: &Value, puuid: &str) -> Option<MatchRecord> {
         penta_kills: uint(&stats["pentaKills"]),
         first_blood: stats["firstBloodKill"].as_bool().unwrap_or(false) || stats["firstBloodAssist"].as_bool().unwrap_or(false),
         op_score_x10: None,
+        side: match team {
+            100 => "blue".into(),
+            200 => "red".into(),
+            _ => String::new(),
+        },
     })
 }
 
