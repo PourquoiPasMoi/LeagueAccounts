@@ -3,7 +3,7 @@ members = ["src-tauri"]
 
 [package]
 name = "leagueaccounts"
-version = "4.2.0"
+version = "4.2.1"
 edition = "2021"
 description = "League of Legends account manager for Windows"
 license = "MIT"

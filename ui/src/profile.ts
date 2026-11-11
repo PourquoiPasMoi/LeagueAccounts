@@ -75,7 +75,7 @@ export function openProfile(context: ProfileContext): void {
   if (!initial) return;
   const id = keyId(keyOf(initial));
   let view: ProfileView = { profile: null, history: [], games: [], seasons: [] };
-  const statsFilters: StatsFilters = { queue: "all", range: 20, metric: "kda" };
+  const statsFilters: StatsFilters = { queue: "all", range: 0, metric: "kda" };
   let tab: Tab = "overview";
   let chartMode: Mode = context.mode;
   let selectedChampion: number | null = null;
@@ -405,27 +405,24 @@ const seasonRankLabel = (tier: string, division: string, lp?: number): string =>
   return lp === undefined ? base : `${base} · ${lp} LP`;
 };
 
-/** Past seasons from OP.GG, as on its profile page: season, final tier, LP, peak. */
+/** Past seasons from OP.GG as compact boxes: big crest, the final rank and LP; peak on hover. */
 function seasonHistory(seasons: SeasonRank[]): string {
   if (!seasons.length) return "";
   return `
     <section class="profile-panel season-history">
       <h3>${esc(t("profile.seasons"))}</h3>
-      <table class="season-table">
-        <thead><tr>
-          <th>${esc(t("profile.season"))}</th><th>${esc(t("profile.seasonTier"))}</th><th>LP</th><th>${esc(t("profile.seasonPeakHead"))}</th>
-        </tr></thead>
-        <tbody>${seasons.map((season) => `
-          <tr style="--tier:${palette(season.tier).base}">
-            <td class="season-name">${esc(season.season)}</td>
-            <td><span class="season-rank">${emblem(season.tier, 26, "lol")}<b>${esc(seasonRankLabel(season.tier, season.division))}</b></span></td>
-            <td class="season-lp">${esc(String(season.lp))}</td>
-            <td>${season.peakTier
-              ? `<span class="season-rank is-peak" style="--tier:${palette(season.peakTier).base}">${emblem(season.peakTier, 22, "lol")}<span>${esc(seasonRankLabel(season.peakTier, season.peakDivision, season.peakLp))}</span></span>`
-              : `<span class="muted">—</span>`}</td>
-          </tr>`).join("")}
-        </tbody>
-      </table>
+      <div class="season-boxes">${seasons.map((season) => {
+        const tier = normalizeTier(season.tier);
+        const rank = APEX.has(tier) || !season.division ? tierName(tier) : `${tierName(tier)} ${season.division}`;
+        const peak = season.peakTier ? seasonRankLabel(season.peakTier, season.peakDivision, season.peakLp) : "";
+        return `
+        <div class="season-box" style="--tier:${palette(season.tier).base}" data-tooltip="${esc(peak ? `${season.season} · ${t("profile.seasonPeak", { rank: peak })}` : season.season)}">
+          <em>${esc(season.season)}</em>
+          <span class="season-crest">${emblem(season.tier, 64, "lol")}</span>
+          <b>${esc(rank)}</b>
+          <span>${esc(`${season.lp} LP`)}</span>
+        </div>`;
+      }).join("")}</div>
     </section>`;
 }
 
