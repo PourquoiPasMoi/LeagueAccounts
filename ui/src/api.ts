@@ -259,9 +259,22 @@ export interface MatchRecord {
   opScoreX10: number | null;
 }
 
+/** A finished season's Solo/Duo rank from OP.GG. */
+export interface SeasonRank {
+  season: string;
+  tier: string;
+  division: string;
+  lp: number;
+  peakTier: string;
+  peakDivision: string;
+  peakLp: number;
+}
+
 export interface ProfileView {
   profile: Profile | null;
   history: RankPoint[];
+  /** Past seasons' Solo/Duo ranks, newest first. */
+  seasons: SeasonRank[];
   /** Every archived game, newest first. */
   games: MatchRecord[];
 }

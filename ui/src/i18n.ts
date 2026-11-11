@@ -522,6 +522,9 @@ const en = {
   "update.failedTitle": "Update failed",
   "update.failedText": "Version {version} couldn't be installed.",
   "update.busy": "Finish the login or rank refresh first, then restart.",
+  "profile.seasons": "Past seasons",
+  "profile.seasonPeak": "Peak: {rank}",
+  "profile.historyNote": "This chart starts on {date}, when League Accounts and OP.GG first recorded this account's LP. Riot doesn't publish older LP history, so earlier days can't be filled in; it grows with every rank update from here.",
 };
 
 type MessageKey = keyof typeof en;
@@ -1048,6 +1051,9 @@ const tr: Dict = {
   "update.failedTitle": "Güncelleme başarısız",
   "update.failedText": "{version} sürümü yüklenemedi.",
   "update.busy": "Önce giriş ya da lig yenilemesi bitsin, sonra yeniden başlatın.",
+  "profile.seasons": "Geçmiş sezonlar",
+  "profile.seasonPeak": "Zirve: {rank}",
+  "profile.historyNote": "Bu grafik, League Accounts ve OP.GG'nin bu hesabın LP'sini ilk kez kaydettiği {date} tarihinde başlıyor. Riot daha eski LP geçmişini yayınlamıyor; her lig güncellemesiyle büyüyor.",
 };
 
 const de: Dict = {
@@ -1571,6 +1577,9 @@ const de: Dict = {
   "update.failedTitle": "Update fehlgeschlagen",
   "update.failedText": "Version {version} konnte nicht installiert werden.",
   "update.busy": "Warte, bis Anmeldung oder Rangaktualisierung fertig sind, und starte dann neu.",
+  "profile.seasons": "Frühere Saisons",
+  "profile.seasonPeak": "Höchster Rang: {rank}",
+  "profile.historyNote": "Das Diagramm beginnt am {date}, als League Accounts und OP.GG die LP dieses Kontos zum ersten Mal erfasst haben. Riot veröffentlicht keinen älteren LP-Verlauf; er wächst mit jeder Rangaktualisierung.",
 };
 
 const es: Dict = {
@@ -2094,6 +2103,9 @@ const es: Dict = {
   "update.failedTitle": "Error al actualizar",
   "update.failedText": "No se pudo instalar la versión {version}.",
   "update.busy": "Termina el inicio de sesión o la actualización de rangos y luego reinicia.",
+  "profile.seasons": "Temporadas anteriores",
+  "profile.seasonPeak": "Pico: {rank}",
+  "profile.historyNote": "Este gráfico empieza el {date}, cuando League Accounts y OP.GG registraron por primera vez los PL de esta cuenta. Riot no publica el historial anterior; crece con cada actualización de rango.",
 };
 
 const fr: Dict = {
@@ -2617,6 +2629,9 @@ const fr: Dict = {
   "update.failedTitle": "Échec de la mise à jour",
   "update.failedText": "La version {version} n'a pas pu être installée.",
   "update.busy": "Terminez la connexion ou l'actualisation des rangs, puis redémarrez.",
+  "profile.seasons": "Saisons passées",
+  "profile.seasonPeak": "Pic : {rank}",
+  "profile.historyNote": "Ce graphique commence le {date}, quand League Accounts et OP.GG ont enregistré les LP de ce compte pour la première fois. Riot ne publie pas l'historique plus ancien ; il s'enrichit à chaque mise à jour du rang.",
 };
 
 const pt: Dict = {
@@ -3140,6 +3155,9 @@ const pt: Dict = {
   "update.failedTitle": "Falha na atualização",
   "update.failedText": "Não foi possível instalar a versão {version}.",
   "update.busy": "Termine o login ou a atualização de elos e depois reinicie.",
+  "profile.seasons": "Temporadas anteriores",
+  "profile.seasonPeak": "Pico: {rank}",
+  "profile.historyNote": "Este gráfico começa em {date}, quando o League Accounts e o OP.GG registraram os PDL desta conta pela primeira vez. A Riot não publica o histórico mais antigo; ele cresce a cada atualização de elo.",
 };
 
 const zh: Dict = {
@@ -3646,6 +3664,9 @@ const zh: Dict = {
   "update.failedTitle": "更新失败",
   "update.failedText": "无法安装版本 {version}。",
   "update.busy": "请等登录或段位刷新完成后再重启。",
+  "profile.seasons": "往季段位",
+  "profile.seasonPeak": "最高：{rank}",
+  "profile.historyNote": "此图表从 {date} 开始，即 League Accounts 和 OP.GG 首次记录该账号胜点的日期。Riot 不公开更早的胜点历史，之后每次段位更新都会继续补充。",
 };
 
 const zhTw: Dict = {
@@ -4152,6 +4173,9 @@ const zhTw: Dict = {
   "update.failedTitle": "更新失敗",
   "update.failedText": "無法安裝版本 {version}。",
   "update.busy": "請等登入或階級更新完成後再重新啟動。",
+  "profile.seasons": "過往賽季",
+  "profile.seasonPeak": "最高：{rank}",
+  "profile.historyNote": "此圖表從 {date} 開始，即 League Accounts 和 OP.GG 首次記錄此帳號 LP 的日期。Riot 不公開更早的 LP 歷史，之後每次階級更新都會繼續補充。",
 };
 
 export const LANGUAGES = [

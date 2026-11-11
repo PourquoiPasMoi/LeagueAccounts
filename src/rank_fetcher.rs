@@ -369,6 +369,8 @@ impl RankFetcher {
         rank.finished_last_season = finished;
         rank.riot_id_not_found = Some(false);
         rank.recent_games = parse_opgg_games(body);
+        rank.lp_history = parse_opgg_lp_history(&decoded_payload);
+        rank.seasons = parse_opgg_seasons(&decoded_payload);
         Ok((rank, ProfileUpdate::parse(&decoded_payload)))
     }
 
@@ -701,6 +703,121 @@ pub fn parse_opgg_games(body: &str) -> Vec<crate::models::OpggGame> {
         }
     }
     games
+}
+
+/// The JSON array that follows `marker` (which ends just before its `[`),
+/// cut out by bracket matching so the rest of the page payload is ignored.
+fn json_array_after(text: &str, marker: &str) -> Option<serde_json::Value> {
+    let start = text.find(marker)? + marker.len();
+    let bytes = text.as_bytes();
+    if bytes.get(start) != Some(&b'[') {
+        return None;
+    }
+    let (mut depth, mut in_string, mut escaped) = (0usize, false, false);
+    for (offset, &byte) in bytes[start..].iter().enumerate() {
+        if in_string {
+            match byte {
+                _ if escaped => escaped = false,
+                b'\\' => escaped = true,
+                b'"' => in_string = false,
+                _ => {}
+            }
+            continue;
+        }
+        match byte {
+            b'"' => in_string = true,
+            b'[' | b'{' => depth += 1,
+            b']' | b'}' => {
+                depth = depth.checked_sub(1)?;
+                if depth == 0 {
+                    return serde_json::from_str(&text[start..=start + offset]).ok();
+                }
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
+fn title_tier(value: &str) -> String {
+    let lower = value.trim().to_lowercase();
+    let mut chars = lower.chars();
+    chars.next().map(|first| first.to_uppercase().chain(chars).collect()).unwrap_or_default()
+}
+
+fn roman(division: i64) -> String {
+    match division {
+        1 => "I",
+        2 => "II",
+        3 => "III",
+        4 => "IV",
+        _ => "",
+    }
+    .to_owned()
+}
+
+fn is_apex(tier: &str) -> bool {
+    matches!(tier, "Master" | "Grandmaster" | "Challenger")
+}
+
+/// OP.GG's recorded LP points (`lpHistories`) for the current season.
+pub fn parse_opgg_lp_history(decoded: &str) -> Vec<crate::models::OpggLpPoint> {
+    use time::format_description::well_known::Rfc3339;
+    let Some(entries) = json_array_after(decoded, "\"lpHistories\":") else { return Vec::new() };
+    entries
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|entry| {
+            let at = time::OffsetDateTime::parse(entry["created_at"].as_str()?, &Rfc3339).ok()?;
+            let info = &entry["tier_info"];
+            let tier = title_tier(info["tier"].as_str()?);
+            if tier.is_empty() {
+                return None;
+            }
+            // `label` is "D 4": the tier's initial and the division number.
+            let division = info["label"]
+                .as_str()
+                .and_then(|label| label.split_whitespace().nth(1))
+                .and_then(|number| number.parse().ok())
+                .map(roman)
+                .unwrap_or_default();
+            Some(crate::models::OpggLpPoint {
+                at: u64::try_from(at.unix_timestamp_nanos() / 1_000_000).ok()?,
+                division: if is_apex(&tier) { String::new() } else { division },
+                tier,
+                lp: info["lp"].as_i64().unwrap_or(0),
+            })
+        })
+        .collect()
+}
+
+/// Past seasons' Solo/Duo ranks (end of season and peak).
+pub fn parse_opgg_seasons(decoded: &str) -> Vec<crate::models::SeasonRank> {
+    // The page has several `data` lists; the seasons one starts with a `season` entry.
+    let Some(start) = decoded.find("\"data\":[{\"season\":") else { return Vec::new() };
+    let Some(entries) = json_array_after(&decoded[start..], "\"data\":") else { return Vec::new() };
+    let rank = |info: &serde_json::Value| {
+        let tier = title_tier(info["value"].as_str().unwrap_or_default());
+        if tier.is_empty() || tier == "Unranked" {
+            return (String::new(), String::new(), 0);
+        }
+        let division = if is_apex(&tier) { String::new() } else { roman(info["division"].as_i64().unwrap_or(0)) };
+        let lp = info["lp"].as_str().and_then(|lp| lp.parse().ok()).or_else(|| info["lp"].as_i64()).unwrap_or(0);
+        (tier, division, lp)
+    };
+    let mut seasons: Vec<crate::models::SeasonRank> = Vec::new();
+    for entry in entries.as_array().into_iter().flatten() {
+        let Some(season) = entry["season"].as_str().map(str::trim).filter(|season| season.starts_with('S')) else { continue };
+        let ranks = &entry["rank_entries"];
+        let (tier, division, lp) = rank(&ranks["rank_info"]);
+        if tier.is_empty() || seasons.iter().any(|known| known.season == season) {
+            continue;
+        }
+        let (peak_tier, peak_division, peak_lp) = rank(&ranks["high_rank_info"]);
+        seasons.push(crate::models::SeasonRank { season: season.to_owned(), tier, division, lp, peak_tier, peak_division, peak_lp });
+    }
+    seasons
 }
 
 impl RankProvider for RankFetcher {
