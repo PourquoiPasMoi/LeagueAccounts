@@ -129,6 +129,99 @@ const CATEGORIES: [Category, MessageKey, string][] = [
 
 const key = (file: string, section: string, name: string) => `${file}\u0000${section}\u0000${name}`;
 
+// ---------------------------------------------------------------- smart search
+
+/** Extra words people type for a setting (by setting name), so "ult" finds Ability 4. */
+const TAGS: Record<string, string> = {
+  evtCastSpell1: "q skill spell", evtCastSpell2: "w skill spell", evtCastSpell3: "e skill spell", evtCastSpell4: "r ult ulti ultimate skill spell",
+  evtCastAvatarSpell1: "d flash ignite teleport summoners", evtCastAvatarSpell2: "f flash ignite teleport summoners",
+  evtLevelSpell1: "skill up rank up points", evtLevelSpell2: "skill up rank up points", evtLevelSpell3: "skill up rank up points", evtLevelSpell4: "skill up rank up points ult",
+  evtUseVisionItem: "ward vision trinket 4", evtUseItem7: "recall back home b base",
+  evtUseItem1: "inventory slot active", evtUseItem2: "inventory slot active", evtUseItem3: "inventory slot active",
+  evtUseItem4: "inventory slot active", evtUseItem5: "inventory slot active", evtUseItem6: "inventory slot active",
+  evtPlayerAttackMoveClick: "am a move amove attackmove", evtPlayerAttackMove: "am a move amove attackmove",
+  evtPlayerStopPosition: "s halt", evtPlayerHoldPosition: "stand still", evtPlayerMoveClick: "walk right click",
+  evtCameraLockToggle: "y lock unlock", evtCameraSnap: "space center focus", evtSelectSelf: "f1 center camera",
+  evtOpenShop: "p store buy", evtChatHistory: "messages log", evtPushToTalk: "voice mic microphone",
+  evntPlayerPing: "ping alert", evntPlayerPingCursor: "ping alert", evntPlayerPingDanger: "ping danger retreat",
+  evtPlayerPingMIA: "ss missing ping", evtPlayerPingOMW: "coming ping", evtPlayerPingAreaIsWarded: "ward ping vision",
+  evtRadialEmoteInstantOpen: "emote wheel radial", evtEmoteDance: "emote", evtEmoteJoke: "emote", evtEmoteLaugh: "emote",
+  evtEmoteTaunt: "emote", evtEmoteToggle: "emote mastery badge",
+  Master: "volume sound audio overall", Music: "volume sound audio songs", Announcer: "volume sound audio voice over",
+  Voice: "volume sound audio champion lines vo", Sfx: "volume sound audio effects sfx", Ambience: "volume sound audio background",
+  Pings: "volume sound audio alerts", Notifications: "volume sound audio alerts",
+  GlobalScale: "hud ui size interface", ChatScale: "chat size text", ShopScale: "shop store size",
+  FlipMiniMap: "minimap map side", MinimapMoveSelf: "minimap map side", ShowTeamFramesOnLeft: "team portraits",
+  MirroredScoreboard: "tab scoreboard", ShowFPSAndLatency: "fps ping latency frames framerate network",
+  ShowTimestamps: "chat time", ShowAlliedChat: "chat team", ShowAllChannelChat: "chat all enemies", EnableChatFilter: "chat profanity swear",
+  ShowSummonerNames: "names nicknames", ShowSpellCosts: "mana cost", DrawHealthBars: "hp health bar", ShowHealthBarShake: "hp health bar",
+  ShowAttackRadius: "range attack circle", ShowNeutralCamps: "jungle camps", ShowOffScreenPointsOfInterest: "arrows offscreen",
+  ShowPlayerPerks: "runes perks", FlashScreenWhenDamaged: "damage red flash", FlashScreenWhenStunned: "cc stun flash",
+  LossOfControlEnabled: "cc stun", ShowSlows: "cc slow",
+  CursorScale: "mouse pointer cursor size", MapScrollSpeed: "camera speed scroll", AutoAcquireTarget: "auto attack aa",
+  EnableTargetedAttackMove: "attack move cursor am", EnableLeftMouseButtonAttackMove: "attack move left click am",
+  PredictMovement: "prediction latency", TargetChampionsOnlyAsToggle: "champions only", SnapCameraOnRespawn: "camera respawn",
+  EnableScreenShake: "shake camera", ShowTurretRangeIndicators: "tower turret range", RecommendJunglePaths: "jungle path",
+  RelativeTeamColors: "colors team red blue",
+  ColorBrightness: "color brightness light", ColorContrast: "color contrast", ColorGamma: "color gamma", ColorLevel: "color level",
+};
+
+/** Lower-case words, splitting camelCase setting names ("ShowFPSAndLatency" → show fps and latency). */
+function words(text: string): string[] {
+  return text
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2")
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean);
+}
+
+/** Edit distance, giving up once it exceeds `limit`. */
+function distance(a: string, b: string, limit: number): number {
+  if (Math.abs(a.length - b.length) > limit) return limit + 1;
+  let previous = Array.from({ length: b.length + 1 }, (_, index) => index);
+  for (let i = 1; i <= a.length; i++) {
+    const row = [i];
+    let best = i;
+    for (let j = 1; j <= b.length; j++) {
+      row[j] = Math.min(previous[j] + 1, row[j - 1] + 1, previous[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+      best = Math.min(best, row[j]);
+    }
+    if (best > limit) return limit + 1;
+    previous = row;
+  }
+  return previous[b.length];
+}
+
+/** How well one typed word matches a setting's words (0 = not at all). */
+function tokenScore(token: string, haystack: string[], joined: string): number {
+  const typos = token.length >= 7 ? 2 : token.length >= 4 ? 1 : 0;
+  let best = 0;
+  for (const word of haystack) {
+    if (word === token) return 4;
+    if (word.startsWith(token)) best = Math.max(best, 3);
+    else if (token.length >= 3 && word.includes(token)) best = Math.max(best, 2);
+    else if (typos && distance(token, word, typos) <= typos) best = Math.max(best, 2.5);
+    else if (typos && word.length > token.length && distance(token, word.slice(0, token.length), typos) <= typos) best = Math.max(best, 1.5);
+  }
+  // Words typed together ("quickcast", "minimap").
+  if (!best && token.length >= 4 && joined.includes(token)) best = 2;
+  return best;
+}
+
+/** Score a setting for the query; 0 when any typed word is missing. */
+function matchScore(query: string[], haystack: string[]): number {
+  const joined = haystack.join("");
+  let total = 0;
+  for (const token of query) {
+    const score = tokenScore(token, haystack, joined);
+    if (!score) return 0;
+    total += score;
+  }
+  return total;
+}
+
 // ---------------------------------------------------------------- key bindings
 
 const UNBOUND = "[<Unbound>]";
@@ -175,6 +268,8 @@ export async function openGameSettings(): Promise<void> {
   let category: Category = "hotkeys";
   let lockAfter = true;
   let query = "";
+  /** The smart search box above the categories; results replace the category view. */
+  let find = "";
   let busy = false;
   /** Edited values by setting key; compared with the file to find changes. */
   const edits = new Map<string, string>();
@@ -242,8 +337,10 @@ export async function openGameSettings(): Promise<void> {
   };
 
   const renderNav = () => {
-    nav.innerHTML = CATEGORIES.map(([id, label, glyph]) => `
-      <button role="tab" data-gs-cat="${id}" aria-selected="${id === category}">${icon(glyph, 16)}<span>${esc(t(label))}</span></button>`).join("");
+    nav.innerHTML = `
+      <label class="search gs-find">${icon("search", 14)}<input data-gs-find type="text" value="${esc(find)}" placeholder="${esc(t("gs.find"))}" autocomplete="off" spellcheck="false"/></label>
+      ${CATEGORIES.map(([id, label, glyph]) => `
+      <button role="tab" data-gs-cat="${id}" aria-selected="${!find.trim() && id === category}">${icon(glyph, 16)}<span>${esc(t(label))}</span></button>`).join("")}`;
   };
 
   const renderFoot = () => {
@@ -272,7 +369,7 @@ export async function openGameSettings(): Promise<void> {
 
   const panel = (title: string, body: string) => (body.trim() ? `<section class="settings-section gs-panel"><h3>${esc(title)}</h3>${body}</section>` : "");
 
-  const soundHtml = () => panel(t("gs.cat.sound"), SOUND_CHANNELS.map(([channel, label]) => {
+  const soundRow = (channel: string, label: string): string => {
     const volume = value(G, "Volume", `${channel}Volume`);
     if (volume === undefined) return "";
     const muted = value(G, "Volume", `${channel}Mute`) === "1";
@@ -284,7 +381,8 @@ export async function openGameSettings(): Promise<void> {
       <output>${Math.round(number * 100)}</output>
       <button class="icon-btn gs-mute" data-gs-mute="${channel}" aria-pressed="${muted}" data-tooltip="${esc(t("gs.mute"))}">${icon(muted ? "volume-x" : "volume", 15)}</button>
     </div>`;
-  }).join(""));
+  };
+  const soundHtml = () => panel(t("gs.cat.sound"), SOUND_CHANNELS.map(([channel, label]) => soundRow(channel, label)).join(""));
 
   const bindingCounts = (): Map<string, string[]> => {
     const owners = new Map<string, string[]>();
@@ -302,9 +400,7 @@ export async function openGameSettings(): Promise<void> {
     return owners;
   };
 
-  const hotkeysHtml = () => {
-    const owners = bindingCounts();
-    return `<p class="muted profile-note gs-hint">${icon("info", 14)}${esc(t("gs.keyHint"))}</p>` + HOTKEYS.map(([group, rows]) => panel(group, rows.map(([name, label]) => {
+  const hotkeyRow = (name: string, label: string, owners: Map<string, string[]>): string => {
       const binding = value(I, "GameEvents", name);
       if (binding === undefined) return "";
       const slots = parseBinding(binding);
@@ -325,7 +421,78 @@ export async function openGameSettings(): Promise<void> {
         }).join("")}</div>
         ${quickValue !== undefined ? `<label class="gs-quick"><input type="checkbox" data-gs-toggle data-file="${I}" data-section="Quickbinds" data-name="${esc(quick)}" ${quickValue === "1" ? "checked" : ""}/><span>${esc(t("gs.quickCast"))}</span></label>` : `<span></span>`}
       </div>`;
-    }).join(""))).join("");
+  };
+  const hotkeysHtml = () => {
+    const owners = bindingCounts();
+    return `<p class="gs-hint">${esc(t("gs.keyHint"))}</p>` + HOTKEYS.map(([group, rows]) => panel(group, rows.map(([name, label]) => hotkeyRow(name, label, owners)).join(""))).join("");
+  };
+
+  const rawRow = (file: string, section: string, name: string): string => {
+    const current = value(file, section, name) ?? "";
+    const changed = edits.has(key(file, section, name)) ? " is-changed" : "";
+    return `<label class="gs-row gs-raw${changed}"><span>${esc(name)}</span>
+      <input type="text" data-gs-raw data-file="${esc(file)}" data-section="${esc(section)}" data-name="${esc(name)}" value="${esc(current)}" spellcheck="false" autocomplete="off"/></label>`;
+  };
+
+  /** Every setting the search can find, as (where it lives, words to match, how to draw it). */
+  const searchEntries = (): { place: string; words: string[]; html: () => string }[] => {
+    const owners = bindingCounts();
+    const entries: { place: string; words: string[]; html: () => string }[] = [];
+    const add = (place: string, label: string, name: string, extra: string, html: () => string) =>
+      entries.push({ place, words: words(`${label} ${name} ${TAGS[name] ?? ""} ${extra}`), html });
+    const hotkeys = t("gs.cat.hotkeys");
+    for (const [group, rows] of HOTKEYS) {
+      for (const [name, label] of rows) {
+        const binding = value(I, "GameEvents", name);
+        if (binding === undefined) continue;
+        // The current key counts too: searching "space" finds what Space does.
+        const keys = parseBinding(binding).flat().join(" ");
+        const quick = QUICK_CAST[name] ? "quick cast smart cast self cast" : "";
+        add(`${hotkeys} · ${group}`, label, name, `${group} hotkey keybind key bind shortcut ${keys} ${quick}`, () => hotkeyRow(name, label, owners));
+      }
+    }
+    const sound = t("gs.cat.sound");
+    for (const [channel, label] of SOUND_CHANNELS) {
+      if (value(G, "Volume", `${channel}Volume`) === undefined) continue;
+      add(sound, label, channel, "volume mute", () => soundRow(channel, label));
+    }
+    for (const [cat, labelKey] of [["interface", "gs.cat.interface"], ["game", "gs.cat.game"], ["accessibility", "gs.cat.accessibility"]] as const) {
+      for (const [title, controls] of PANELS[cat]) {
+        for (const control of controls) {
+          if (value(control.file, control.section, control.name) === undefined) continue;
+          add(`${t(labelKey)} · ${title}`, control.label, control.name, `${title} ${control.section}`, () => controlHtml(control));
+        }
+      }
+    }
+    // The raw list last, so curated controls rank first for the same words.
+    const all = t("gs.cat.advanced");
+    for (const file of view?.files ?? []) {
+      for (const section of file.sections) {
+        for (const setting of section.settings) {
+          entries.push({
+            place: `${all} · ${file.name} · ${section.name}`,
+            words: words(`${setting.name} ${section.name} ${TAGS[setting.name] ?? ""} raw`),
+            html: () => rawRow(file.name, section.name, setting.name),
+          });
+        }
+      }
+    }
+    return entries;
+  };
+
+  const searchHtml = (): string => {
+    const tokens = words(find);
+    const results = searchEntries()
+      .map((entry, order) => ({ entry, order, score: matchScore(tokens, entry.words) * (entry.place.startsWith(t("gs.cat.advanced")) ? 0.7 : 1) }))
+      .filter((result) => result.score > 0)
+      .sort((a, b) => b.score - a.score || a.order - b.order)
+      .slice(0, 60);
+    if (!results.length) return `<p class="muted profile-note">${esc(t("gs.findNone", { query: find.trim() }))}</p>`;
+    // Group by where each setting lives, keeping the best matches' groups first.
+    const groups = new Map<string, string[]>();
+    for (const { entry } of results) groups.set(entry.place, [...(groups.get(entry.place) ?? []), entry.html()]);
+    return `<p class="gs-hint">${esc(t("gs.findCount", { count: results.length }))}</p>` +
+      [...groups].map(([place, rows]) => panel(place, rows.join(""))).join("");
   };
 
   const advancedHtml = () => {
@@ -333,12 +500,7 @@ export async function openGameSettings(): Promise<void> {
     const sections = (view?.files ?? []).flatMap((file) => file.sections.map((section) => {
       const rows = section.settings.filter((setting) => !needle || `${section.name} ${setting.name} ${value(file.name, section.name, setting.name)}`.toLowerCase().includes(needle));
       if (!rows.length) return "";
-      return panel(`${file.name} · ${section.name}`, rows.map((setting) => {
-        const current = value(file.name, section.name, setting.name) ?? "";
-        const changed = edits.has(key(file.name, section.name, setting.name)) ? " is-changed" : "";
-        return `<label class="gs-row gs-raw${changed}"><span>${esc(setting.name)}</span>
-          <input type="text" data-gs-raw data-file="${esc(file.name)}" data-section="${esc(section.name)}" data-name="${esc(setting.name)}" value="${esc(current)}" spellcheck="false" autocomplete="off"/></label>`;
-      }).join(""));
+      return panel(`${file.name} · ${section.name}`, rows.map((setting) => rawRow(file.name, section.name, setting.name)).join(""));
     }));
     return `<label class="search gs-search">${icon("search", 15)}<input data-gs-search type="text" value="${esc(query)}" placeholder="${esc(t("gs.search"))}" autocomplete="off" spellcheck="false"/></label>${sections.join("")}`;
   };
@@ -354,7 +516,8 @@ export async function openGameSettings(): Promise<void> {
     }
     const notice = view.leagueOpen ? `<div class="profile-empty gs-warning">${icon("alert", 18)}<div><p>${esc(t("gs.leagueOpen"))}</p></div></div>` : "";
     let body = "";
-    if (category === "hotkeys") body = hotkeysHtml();
+    if (find.trim()) body = searchHtml();
+    else if (category === "hotkeys") body = hotkeysHtml();
     else if (category === "sound") body = soundHtml();
     else if (category === "advanced") body = advancedHtml();
     else body = PANELS[category].map(([title, controls]) => panel(title, controls.map(controlHtml).join(""))).join("");
@@ -462,7 +625,19 @@ export async function openGameSettings(): Promise<void> {
     if (event.key === "Escape") {
       event.preventDefault();
       event.stopImmediatePropagation();
+      if (find) {
+        find = "";
+        renderNav();
+        renderContent();
+        return;
+      }
       void close();
+      return;
+    }
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "f") {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      nav.querySelector<HTMLInputElement>("[data-gs-find]")?.select();
     }
   };
 
@@ -497,8 +672,9 @@ export async function openGameSettings(): Promise<void> {
     if (action === "undo") return void run(() => api.restoreGameSettings(), "gs.restored").then(() => { edits.clear(); render(); });
     if (action === "folder") return void api.openGameSettingsFolder().catch((error) => toast("error", t("toast.openFailed"), describe(error)));
     const cat = target.closest<HTMLElement>("[data-gs-cat]")?.dataset.gsCat as Category | undefined;
-    if (cat && cat !== category) {
+    if (cat && (cat !== category || find)) {
       category = cat;
+      find = "";
       capturing = null;
       content.scrollTop = 0;
       renderNav();
@@ -520,6 +696,14 @@ export async function openGameSettings(): Promise<void> {
   overlay.addEventListener("input", (event) => {
     const input = event.target as HTMLInputElement;
     const { file, section, name } = input.dataset;
+    if (input.matches("[data-gs-find]")) {
+      find = input.value;
+      nav.querySelectorAll<HTMLButtonElement>("[data-gs-cat]").forEach((button) => {
+        button.setAttribute("aria-selected", String(!find.trim() && button.dataset.gsCat === category));
+      });
+      content.scrollTop = 0;
+      return renderContent();
+    }
     if (input.matches("[data-gs-search]")) {
       query = input.value;
       renderContent();

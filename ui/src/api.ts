@@ -373,6 +373,8 @@ export interface Bootstrap {
   version: string;
   loggingAvailable: boolean;
   loadError: ErrorPayload | null;
+  /** A release that failed to start; the previous version was restored. */
+  updateFailed: string | null;
   settings: Settings;
   schedule: Schedule;
 }

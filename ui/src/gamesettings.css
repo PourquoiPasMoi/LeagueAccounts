@@ -58,8 +58,7 @@
   display: flex; flex-direction: column; gap: 14px;
   animation: client-fade 200ms linear both;
 }
-.gs-hint { display: flex; align-items: center; gap: 8px; font-size: 11px; color: #7d786c; }
-.gs-hint .icon { flex: none; color: #785a28; }
+.gs-hint { margin: 0; font-size: 11px; color: #7d786c; }
 .gs-warning { border-color: #8f3a3380; background: #c2433a10; }
 .gs-warning .icon { color: #e06d62; }
 
@@ -162,3 +161,40 @@
 /* Settings dialog: Import, Export, Log folder and Shortcuts (moved from the sidebar). */
 .settings-tools { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding-top: 2px; }
 .settings-tools .btn { height: 32px; display: inline-flex; align-items: center; justify-content: flex-start; gap: 8px; padding: 0 12px; font-size: 11px; }
+
+/* Smart search above the categories. */
+.gs-find { flex: none; display: flex; align-items: center; margin: 0 14px 10px 0; height: 32px; min-height: 0; }
+.gs-find input { font-size: 12px; }
+
+/* Sidebar: total value sits right above two framed tiles (Game settings, Settings). */
+.side-bottom .side-value { margin: 0 0 10px; }
+.side-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.side-tile {
+  position: relative;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+  min-height: 62px; padding: 9px 6px 8px;
+  border: 1px solid #463714;
+  background: linear-gradient(180deg, #1e2328, #0a1015);
+  color: #cdbe91;
+  font: 700 10.5px/1.15 Beaufort, WenKai, NotoCJK, serif; letter-spacing: .08em; text-transform: uppercase; text-align: center;
+  transition: border-color 120ms, color 120ms, box-shadow 120ms;
+}
+.side-tile::after {
+  content: ''; position: absolute; left: 8px; right: 8px; bottom: -1px; height: 1px;
+  background: linear-gradient(90deg, transparent, #785a28, transparent);
+}
+.side-tile > [data-icon] { display: grid; place-items: center; width: 22px; height: 22px; }
+.side-tile .icon { --icon-size: 20px; width: 18px; height: 18px; color: #c8aa6e; }
+.side-tile [data-icon='settings'] { --icon-mask-size: 21px; }
+.side-tile:is(:hover, :focus-visible) {
+  outline: none;
+  border-color: #c8aa6e; color: #f0e6d2;
+  background: linear-gradient(180deg, #2a2a26, #12171a);
+  box-shadow: inset 0 0 12px #c8aa6e1f, 0 0 10px #c8aa6e1a;
+}
+.side-tile:is(:hover, :focus-visible) .icon { color: #f0e6d2; }
+.side-tile:active { border-color: #785a28; }
+@media (max-width: 800px) {
+  .side-tiles { grid-template-columns: 1fr; }
+  .side-tile { min-height: 40px; font-size: 0; gap: 0; }
+}

@@ -1717,6 +1717,7 @@ async function start(): Promise<void> {
   render();
   if (boot.loadError) toast("error", t("toast.loadFailed"), errorText(boot.loadError.code, boot.loadError.detail), 8000);
   if (!boot.loggingAvailable) toast("info", t("toast.noLogging"), t("toast.noLoggingText"));
+  if (boot.updateFailed) toast("error", t("update.failedTitle"), t("update.rolledBack", { version: boot.updateFailed }), 12000);
   await Promise.all([wireEvents(), wireUpdates({ busy: uiBusy }), IN_TAURI ? wireWindow() : Promise.resolve()]);
   renderSchedule();
   setInterval(renderSchedule, 1000);

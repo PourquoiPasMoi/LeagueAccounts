@@ -114,6 +114,8 @@ struct Bootstrap {
     version: &'static str,
     logging_available: bool,
     load_error: Option<AppError>,
+    /// The version that failed to start; the previous version was restored.
+    update_failed: Option<String>,
     settings: SettingsView,
     schedule: Schedule,
 }
@@ -240,6 +242,7 @@ async fn bootstrap(app: AppHandle, state: AppState<'_>) -> CommandResult<Bootstr
         version: env!("CARGO_PKG_VERSION"),
         logging_available: logging::is_available(),
         load_error: state.load_error.clone(),
+        update_failed: leagueaccounts::self_update::failed_update(&std::env::args_os().collect::<Vec<_>>()),
         settings: settings_view(&app, &state),
         schedule: schedule(&state),
     })
@@ -1182,11 +1185,34 @@ async fn app_ready(state: AppState<'_>) -> CommandResult<bool> {
             return Ok(false);
         }
         leagueaccounts::self_update::mark_healthy(&paths, env!("CARGO_PKG_VERSION")).map_err(|error| fail_with("update_failed", error))?;
+        // Healthy: the hidden previous version is no longer needed.
+        thread::spawn(move || leagueaccounts::self_update::remove_previous(&paths));
         Ok(true)
     }).await
 }
 
+/// Rollback watcher mode (`--update-watch`): no window, just guard the update.
+fn run_update_watcher(exe: std::path::PathBuf, pid: u32) -> ! {
+    use leagueaccounts::self_update::{watch_update, WatchOutcome, FAILED_FLAG};
+    if let WatchOutcome::RolledBack { failed_version } = watch_update(&exe, pid) {
+        logging::record(Event::UpdateFailed, Reason::Other);
+        // Never offer the release that failed to start again automatically.
+        if let Ok(path) = settings_file() {
+            let mut settings = Settings::load(Some(&path));
+            settings.mislabeled_release = Some(failed_version.clone());
+            let _ = settings.save(Some(&path));
+        }
+        let _ = std::process::Command::new(&exe).arg(FAILED_FLAG).arg(&failed_version).spawn();
+    }
+    std::process::exit(0);
+}
+
 fn main() {
+    let args: Vec<std::ffi::OsString> = std::env::args_os().collect();
+    if let Some((exe, pid)) = leagueaccounts::self_update::watch_request(&args) {
+        let _ = logging::init();
+        run_update_watcher(exe, pid);
+    }
 
     let result = tauri::Builder::default()
         // Must come first. A second launch (shortcut, Start menu, autostart while the
