@@ -583,25 +583,47 @@
 
 /* ------------------------------------------------------------- season history */
 
-.chart-note { display: flex; align-items: flex-start; gap: 7px; margin: 10px 0 0; font-size: 11px; line-height: 1.5; color: #7d786c; }
-.chart-note .icon { flex: none; margin-top: 2px; color: #785a28; }
-.season-history { margin-top: 16px; padding-top: 14px; border-top: 1px solid #c8aa6e1f; }
-.season-history h4 {
-  margin: 0 0 10px;
-  font: 700 11px/1 Beaufort, WenKai, NotoCJK, serif; letter-spacing: .12em; text-transform: uppercase; color: #c8aa6e;
+.chart-note { margin: 10px 0 0; font-size: 11px; line-height: 1.5; color: #7d786c; }
+
+/* Past seasons: OP.GG's season table in the client's table style. */
+.season-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.season-table th {
+  padding: 0 10px 8px; text-align: left;
+  font: 700 10.5px/1 Beaufort, WenKai, NotoCJK, serif; letter-spacing: .1em; text-transform: uppercase; color: #a09b8c;
+  border-bottom: 1px solid #c8aa6e26;
 }
-.season-history ol { list-style: none; margin: 0; padding: 0 0 4px; display: flex; gap: 8px; overflow-x: auto; }
-.season-history li {
-  flex: none;
-  display: flex; align-items: center; gap: 8px;
-  padding: 7px 12px 7px 8px;
-  border: 1px solid #1e282d;
-  border-bottom: 2px solid color-mix(in srgb, var(--tier) 55%, transparent);
-  background: linear-gradient(180deg, color-mix(in srgb, var(--tier) 8%, #010a13), #010a13);
-}
-.season-history li:hover { border-color: #785a28; border-bottom-color: var(--tier); }
-.season-crest { display: grid; place-items: center; width: 30px; }
-.season-text { display: flex; flex-direction: column; gap: 1px; }
-.season-text em { font-style: normal; font: 700 10px/1.2 Beaufort, WenKai, NotoCJK, serif; letter-spacing: .1em; color: #a09b8c; }
-.season-text b { font: 700 12.5px/1.2 Beaufort, WenKai, NotoCJK, serif; letter-spacing: .04em; color: #f0e6d2; white-space: nowrap; }
-.season-text span { font-size: 10.5px; color: #7d786c; }
+.season-table td { padding: 6px 10px; border-bottom: 1px solid #1e282d; color: #a09b8c; vertical-align: middle; }
+.season-table tbody tr { box-shadow: inset 2px 0 0 color-mix(in srgb, var(--tier) 60%, transparent); }
+.season-table tbody tr:hover td { background: #c8aa6e0a; color: #f0e6d2; }
+.season-name { font: 700 12px/1 Beaufort, WenKai, NotoCJK, serif; letter-spacing: .08em; color: #cdbe91 !important; white-space: nowrap; }
+.season-rank { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
+.season-rank b { font: 700 13px/1.2 Beaufort, WenKai, NotoCJK, serif; letter-spacing: .04em; color: #f0e6d2; }
+.season-rank.is-peak { font-size: 11.5px; color: #a09b8c; }
+.season-lp { font: 700 13px/1 Beaufort, WenKai, NotoCJK, serif; color: #f0e6d2 !important; }
+
+/* Play style, sides and hours (Stats tab). */
+.style-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 14px; margin-bottom: 14px; }
+.style-grid div { display: flex; flex-direction: column; gap: 3px; }
+.style-grid span { font-size: 10.5px; color: #7d786c; text-transform: uppercase; letter-spacing: .06em; }
+.style-grid b { font: 700 16px/1.1 Beaufort, WenKai, NotoCJK, serif; color: #f0e6d2; }
+.style-grid em { font-style: normal; font-size: 11px; color: #a09b8c; }
+.compare-table { width: 100%; border-collapse: collapse; font-size: 11.5px; }
+.compare-table caption { caption-side: top; text-align: left; padding: 0 0 6px; font-size: 10.5px; color: #7d786c; text-transform: uppercase; letter-spacing: .06em; }
+.compare-table th { padding: 0 6px 6px; text-align: right; font-weight: 400; color: #7d786c; }
+.compare-table th:first-child, .compare-table td:first-child { text-align: left; padding-left: 0; }
+.compare-table td { padding: 5px 6px; text-align: right; border-top: 1px solid #1e282d; color: #f0e6d2; }
+.compare-table td:first-child { color: #a09b8c; }
+.compare-table .is-good { color: #0ac8b9; }
+.compare-table .is-bad { color: #e06d62; }
+.side-split { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.side-split > div { padding: 10px 12px; border: 1px solid #1e282d; background: #010a13; display: flex; flex-direction: column; gap: 4px; }
+.side-split > div.is-blue { border-top: 2px solid #0397ab; }
+.side-split > div.is-red { border-top: 2px solid #be1e37; }
+.side-split span { font: 700 10.5px/1 Beaufort, WenKai, NotoCJK, serif; letter-spacing: .1em; text-transform: uppercase; color: #a09b8c; }
+.side-split b { font: 700 18px/1.1 Beaufort, WenKai, NotoCJK, serif; color: #f0e6d2; }
+.side-split em { font-style: normal; font-size: 11px; color: #7d786c; }
+.hour-chart { display: grid; grid-template-columns: repeat(24, 1fr); gap: 2px; align-items: end; }
+.hour { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.hour-bar { display: flex; align-items: flex-end; width: 100%; height: 60px; background: #ffffff06; }
+.hour-bar span { display: block; width: 100%; height: calc(var(--p) * 100%); background: linear-gradient(0deg, #463714, #c8aa6e); }
+.hour em { font-style: normal; font-size: 9.5px; color: #7d786c; min-height: 11px; }

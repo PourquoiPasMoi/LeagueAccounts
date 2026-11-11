@@ -812,6 +812,54 @@ fn sync_after_login(app: &AppHandle, shared: &Arc<Shared>, key: &AccountKey, acc
     logging::record(Event::ProfileSyncFailed, Reason::Other);
 }
 
+/// OP.GG's season history is read again at most this often per account.
+const OPGG_HISTORY_INTERVAL_MS: u64 = 6 * 3_600_000;
+/// Match-list pages read the first time (20 games each); later reads stop at
+/// the first game already stored.
+const OPGG_FIRST_PAGES: usize = 8;
+const OPGG_NEXT_PAGES: usize = 3;
+
+/// Read the season's LP graph and match list from OP.GG into the account's
+/// files, so history and stats exist without signing in. Returns whether
+/// anything new was stored.
+#[tauri::command]
+async fn sync_opgg_history(app: AppHandle, state: AppState<'_>, key: Key, force: Option<bool>) -> CommandResult<bool> {
+    let account = find_account(&state, key)?;
+    blocking(move || {
+        if account.name.trim().is_empty() {
+            return Ok(false);
+        }
+        let key = account.key();
+        let sync = profiles::opgg_sync(&key);
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|duration| duration.as_millis() as u64)
+            .unwrap_or_default();
+        if !force.unwrap_or(false) && sync.at > 0 && now.saturating_sub(sync.at) < OPGG_HISTORY_INTERVAL_MS {
+            return Ok(false);
+        }
+        let archive = profiles::archive(&key);
+        let pages = if sync.complete { OPGG_NEXT_PAGES } else { OPGG_FIRST_PAGES };
+        let fetcher = RankFetcher::default();
+        let history = fetcher
+            .fetch_history(&account.region, &account.name, pages, |game| sync.complete && profiles::has_detailed(&archive, game))
+            .map_err(|reason| {
+                logging::record(Event::ProfileSyncFailed, reason);
+                fail("opgg_history_failed")
+            })?;
+        let before = (profiles::history(&key).len(), profiles::archive(&key));
+        profiles::record_opgg_lp(&key, &history.lp);
+        profiles::merge_games(&key, history.games);
+        profiles::store_opgg_sync(&key, &profiles::OpggSync { at: now, complete: sync.complete || history.reached_end || pages == OPGG_FIRST_PAGES });
+        let changed = before != (profiles::history(&key).len(), profiles::archive(&key));
+        if changed {
+            let _ = app.emit("profile-update", view_key(&key));
+        }
+        Ok(changed)
+    })
+    .await
+}
+
 /// The stored snapshot and rank history for the account page.
 #[tauri::command]
 async fn get_profile(state: AppState<'_>, key: Key) -> CommandResult<ProfileView> {
@@ -1261,6 +1309,7 @@ fn main() {
             open_home_fix_author,
             open_pengu_loader,
             get_profile,
+            sync_opgg_history,
             sync_profile,
             skin_index,
             session_status,

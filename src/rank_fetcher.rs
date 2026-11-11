@@ -6,7 +6,9 @@ use scraper::{Html, Selector};
 use std::sync::{Arc, LazyLock};
 use std::time::Duration;
 
+mod history;
 mod renewal;
+pub use history::OpggHistory;
 use renewal::{freshness, now_ms, ProfileUpdate, RenewalError, RenewalState, MAX_AGE};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -762,34 +764,7 @@ fn is_apex(tier: &str) -> bool {
 
 /// OP.GG's recorded LP points (`lpHistories`) for the current season.
 pub fn parse_opgg_lp_history(decoded: &str) -> Vec<crate::models::OpggLpPoint> {
-    use time::format_description::well_known::Rfc3339;
-    let Some(entries) = json_array_after(decoded, "\"lpHistories\":") else { return Vec::new() };
-    entries
-        .as_array()
-        .into_iter()
-        .flatten()
-        .filter_map(|entry| {
-            let at = time::OffsetDateTime::parse(entry["created_at"].as_str()?, &Rfc3339).ok()?;
-            let info = &entry["tier_info"];
-            let tier = title_tier(info["tier"].as_str()?);
-            if tier.is_empty() {
-                return None;
-            }
-            // `label` is "D 4": the tier's initial and the division number.
-            let division = info["label"]
-                .as_str()
-                .and_then(|label| label.split_whitespace().nth(1))
-                .and_then(|number| number.parse().ok())
-                .map(roman)
-                .unwrap_or_default();
-            Some(crate::models::OpggLpPoint {
-                at: u64::try_from(at.unix_timestamp_nanos() / 1_000_000).ok()?,
-                division: if is_apex(&tier) { String::new() } else { division },
-                tier,
-                lp: info["lp"].as_i64().unwrap_or(0),
-            })
-        })
-        .collect()
+    json_array_after(decoded, "\"lpHistories\":").map(|entries| history::lp_points(&entries)).unwrap_or_default()
 }
 
 /// Past seasons' Solo/Duo ranks (end of season and peak).

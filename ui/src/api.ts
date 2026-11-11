@@ -257,6 +257,8 @@ export interface MatchRecord {
   pentaKills: number;
   firstBlood: boolean;
   opScoreX10: number | null;
+  /** `blue`, `red` or empty. */
+  side: string;
 }
 
 /** A finished season's Solo/Duo rank from OP.GG. */
@@ -484,6 +486,9 @@ export const api = {
   getProfile: (key: Key) => call<ProfileView>("get_profile", { key }),
   /** Needs the League client open and signed in as this account. */
   syncProfile: (key: Key) => call<ProfileView>("sync_profile", { key }),
+  /** Reads the season's LP graph and match list from OP.GG (at most every 6 h
+   * unless `force`). True when something new was stored. */
+  syncOpggHistory: (key: Key, force = false) => call<boolean>("sync_opgg_history", { key, force }),
   skinIndex: () => call<SkinOwner[]>("skin_index"),
   sessionStatus: () => call<SessionStatus>("session_status"),
   gameSettings: () => call<GameSettingsView>("game_settings"),

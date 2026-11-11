@@ -170,11 +170,20 @@ export function openProfile(context: ProfileContext): void {
     render();
   };
 
+  /** OP.GG's season LP graph and match list, read in the background; works
+   * without signing in. A `profile-update` event reloads the page when done. */
+  const syncOpgg = (force = false) => {
+    void api.syncOpggHistory(keyOf(account()), force).then((changed) => {
+      if (changed && closeActive) void load();
+    }).catch(() => undefined);
+  };
+
   const sync = async () => {
     if (syncing) return;
     syncing = true;
     renderHead();
     try {
+      syncOpgg(true);
       view = await api.syncProfile(keyOf(account()));
       toast("success", t("profile.synced"), accountLabel(account()));
     } catch (error) {
@@ -291,6 +300,7 @@ export function openProfile(context: ProfileContext): void {
   render();
   $(".profile-close", overlay).focus();
   void load();
+  syncOpgg();
 }
 
 export function closeProfile(): void {
@@ -375,8 +385,8 @@ function overviewHtml(account: AccountView, view: ProfileView, chartMode: Mode, 
       </header>
       ${rankChart(view.history.filter((point) => point.mode === chartMode), chartMode)}
       ${historyNote(view.history.filter((point) => point.mode === chartMode))}
-      ${chartMode === "lol" ? seasonHistory(view.seasons ?? []) : ""}
     </section>
+    ${seasonHistory(view.seasons ?? [])}
     ${recentGames(view.games, profile, mode)}`;
 }
 
@@ -386,7 +396,7 @@ function historyNote(points: RankPoint[]): string {
   const span = points.at(-1)!.at - points[0].at;
   if (span > 7 * 86_400_000) return "";
   const since = new Date(points[0].at).toLocaleDateString(localeTag(), { day: "numeric", month: "long" });
-  return `<p class="chart-note">${icon("info", 13)}<span>${esc(t("profile.historyNote", { date: since }))}</span></p>`;
+  return `<p class="chart-note">${esc(t("profile.historyNote", { date: since }))}</p>`;
 }
 
 const seasonRankLabel = (tier: string, division: string, lp?: number): string => {
@@ -395,21 +405,28 @@ const seasonRankLabel = (tier: string, division: string, lp?: number): string =>
   return lp === undefined ? base : `${base} · ${lp} LP`;
 };
 
-/** Past seasons from OP.GG: where each season ended, with its peak on hover. */
+/** Past seasons from OP.GG, as on its profile page: season, final tier, LP, peak. */
 function seasonHistory(seasons: SeasonRank[]): string {
   if (!seasons.length) return "";
   return `
-    <div class="season-history">
-      <h4>${esc(t("profile.seasons"))}</h4>
-      <ol>${seasons.map((season) => {
-        const peak = season.peakTier ? t("profile.seasonPeak", { rank: seasonRankLabel(season.peakTier, season.peakDivision, season.peakLp) }) : "";
-        return `
-        <li style="--tier:${palette(season.tier).base}" ${peak ? `data-tooltip="${esc(peak)}"` : ""}>
-          <span class="season-crest">${emblem(season.tier, 30, "lol")}</span>
-          <span class="season-text"><em>${esc(season.season)}</em><b>${esc(seasonRankLabel(season.tier, season.division))}</b><span>${esc(`${season.lp} LP`)}</span></span>
-        </li>`;
-      }).join("")}</ol>
-    </div>`;
+    <section class="profile-panel season-history">
+      <h3>${esc(t("profile.seasons"))}</h3>
+      <table class="season-table">
+        <thead><tr>
+          <th>${esc(t("profile.season"))}</th><th>${esc(t("profile.seasonTier"))}</th><th>LP</th><th>${esc(t("profile.seasonPeakHead"))}</th>
+        </tr></thead>
+        <tbody>${seasons.map((season) => `
+          <tr style="--tier:${palette(season.tier).base}">
+            <td class="season-name">${esc(season.season)}</td>
+            <td><span class="season-rank">${emblem(season.tier, 26, "lol")}<b>${esc(seasonRankLabel(season.tier, season.division))}</b></span></td>
+            <td class="season-lp">${esc(String(season.lp))}</td>
+            <td>${season.peakTier
+              ? `<span class="season-rank is-peak" style="--tier:${palette(season.peakTier).base}">${emblem(season.peakTier, 22, "lol")}<span>${esc(seasonRankLabel(season.peakTier, season.peakDivision, season.peakLp))}</span></span>`
+              : `<span class="muted">—</span>`}</td>
+          </tr>`).join("")}
+        </tbody>
+      </table>
+    </section>`;
 }
 
 function emptyNotice(): string {
