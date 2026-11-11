@@ -1,11 +1,14 @@
 //! Replace the running portable executable with a verified download, and hand
 //! over to the new process.
 //!
-//! Windows lets a running executable be renamed but not overwritten, so the
-//! swap renames `<name>.exe` to `<name>.old.exe` and moves the download into
-//! its place. An install receipt written before the swap records the target
-//! build; the next process marks it healthy once it is ready, and only then,
-//! a day later, removes the old copy.
+//! Windows lets a running executable be renamed but not overwritten, and only
+//! within its own drive, so the swap renames `<name>.exe` to a hidden
+//! `.<name>.old.exe` beside it and moves the (also hidden) download into its
+//! place. An install receipt in `%APPDATA%\LeagueAccounts\update` records the
+//! target build. The new process marks it healthy once it is ready and then
+//! deletes the hidden copy; if it dies before that, a watcher started from the
+//! old copy puts the previous version back (see `watch_update`). Nothing but
+//! the exe itself stays visible in the user's folder.
 
 use serde::{Deserialize, Serialize};
 use std::ffi::{OsStr, OsString};
@@ -21,9 +24,16 @@ pub const UPDATED_FROM_FLAG: &str = "--updated-from";
 pub const MINIMIZED_FLAG: &str = "--minimized";
 /// A download older than this was abandoned (the app closed or crashed).
 const STALE_DOWNLOAD: Duration = Duration::from_secs(60 * 60);
-/// Keep the replaced executable this long after a healthy install, so a bad
-/// release can still be rolled back by hand.
-const ROLLBACK_WINDOW_MS: u64 = 24 * 60 * 60 * 1000;
+/// `--update-watch <pid>`: run as the rollback watcher for the new process.
+pub const WATCH_FLAG: &str = "--update-watch";
+/// `--update-exe <path>`: the executable the watcher guards.
+pub const WATCH_EXE_FLAG: &str = "--update-exe";
+/// `--update-failed <version>`: the previous version was restored after this
+/// release failed to start.
+pub const FAILED_FLAG: &str = "--update-failed";
+/// How long the new version has to report healthy before the watcher stops
+/// waiting (a slow start is not a failure; only an exit is).
+const WATCH_TIMEOUT: Duration = Duration::from_secs(180);
 
 /// Serialize receipt read-modify-write cycles in this process, so a background
 /// swap and a readiness report cannot interleave. Held only across disk work.
@@ -46,12 +56,16 @@ pub struct InstallReceipt {
 pub struct Paths {
     /// The running executable, under whatever name the user gave it.
     pub exe: PathBuf,
-    /// `<name>.exe.download`: on the same volume, so the swap is a rename.
+    /// `.<name>.exe.download` (hidden): on the same drive, so the swap is a rename.
     pub staged: PathBuf,
-    /// `<name>.old.exe`: the replaced version until it has exited.
+    /// `.<name>.old.exe` (hidden): the replaced version until the new one is healthy.
     pub old: PathBuf,
-    /// `<name>.exe.receipt.json`: the target build and its health.
+    /// The target build and its health, in the app's data folder.
     pub receipt: PathBuf,
+    /// Visible files earlier versions left beside the exe, cleaned up at start.
+    pub legacy_old: PathBuf,
+    pub legacy_receipt: PathBuf,
+    pub legacy_staged: PathBuf,
 }
 
 impl Paths {
@@ -61,9 +75,12 @@ impl Paths {
         let stem = exe.file_stem()?;
         Some(Self {
             exe: exe.to_owned(),
-            staged: directory.join(concat(file_name, ".download")),
-            old: directory.join(concat(stem, ".old.exe")),
-            receipt: directory.join(concat(file_name, ".receipt.json")),
+            staged: directory.join(concat(&concat(OsStr::new("."), &file_name.to_string_lossy()), ".download")),
+            old: directory.join(concat(&concat(OsStr::new("."), &stem.to_string_lossy()), ".old.exe")),
+            receipt: receipt_path(exe),
+            legacy_old: directory.join(concat(stem, ".old.exe")),
+            legacy_receipt: directory.join(concat(file_name, ".receipt.json")),
+            legacy_staged: directory.join(concat(file_name, ".download")),
         })
     }
 
@@ -72,19 +89,54 @@ impl Paths {
     }
 }
 
+/// One receipt per executable location, so copies in different folders don't mix.
+fn receipt_path(exe: &Path) -> PathBuf {
+    use sha2::{Digest, Sha256};
+    let digest = Sha256::digest(exe.to_string_lossy().to_lowercase().as_bytes());
+    let name: String = digest.iter().take(8).map(|byte| format!("{byte:02x}")).collect();
+    let base = crate::utils::app_data_dir().unwrap_or_else(|_| std::env::temp_dir().join("LeagueAccounts"));
+    base.join("update").join(format!("{name}.json"))
+}
+
+/// Set or clear the hidden file attribute (Explorer hides these by default).
+#[cfg(windows)]
+fn set_hidden(path: &Path, hidden: bool) {
+    use std::os::windows::ffi::OsStrExt;
+    use std::os::windows::fs::MetadataExt;
+    const FILE_ATTRIBUTE_HIDDEN: u32 = 0x2;
+    let Ok(metadata) = fs::metadata(path) else { return };
+    let attributes = metadata.file_attributes();
+    let wanted = if hidden { attributes | FILE_ATTRIBUTE_HIDDEN } else { attributes & !FILE_ATTRIBUTE_HIDDEN };
+    if wanted == attributes {
+        return;
+    }
+    let wide: Vec<u16> = path.as_os_str().encode_wide().chain(Some(0)).collect();
+    // SAFETY: `wide` is a NUL-terminated UTF-16 path that outlives the call.
+    unsafe {
+        windows_sys::Win32::Storage::FileSystem::SetFileAttributesW(wide.as_ptr(), wanted);
+    }
+}
+
+#[cfg(not(windows))]
+fn set_hidden(_path: &Path, _hidden: bool) {}
+
 fn concat(name: &OsStr, suffix: &str) -> OsString {
     let mut name = name.to_owned();
     name.push(suffix);
     name
 }
 
-/// Create the download file. Fails early in a read-only folder.
+/// Create the (hidden) download file. Fails early in a read-only folder.
 pub fn create_staged(paths: &Paths) -> io::Result<File> {
-    OpenOptions::new()
+    // A hidden file can't be truncated by a plain create on Windows; start fresh.
+    let _ = fs::remove_file(&paths.staged);
+    let file = OpenOptions::new()
         .write(true)
         .create(true)
         .truncate(true)
-        .open(&paths.staged)
+        .open(&paths.staged)?;
+    set_hidden(&paths.staged, true);
+    Ok(file)
 }
 
 /// Move the running executable aside and the verified download into place.
@@ -101,6 +153,9 @@ pub fn swap(paths: &Paths, target_version: &str) -> io::Result<()> {
         ));
     }
     let _guard = lock_receipts();
+    if let Some(parent) = paths.receipt.parent() {
+        fs::create_dir_all(parent)?;
+    }
     let previous_bytes = match fs::read(&paths.receipt) {
         Ok(bytes) => Some(bytes),
         Err(error) if error.kind() == io::ErrorKind::NotFound => None,
@@ -181,12 +236,15 @@ fn swap_executable(paths: &Paths) -> io::Result<()> {
     let result = (|| {
         fs::rename(&paths.exe, &paths.old)?;
         original_restored = false;
+        set_hidden(&paths.old, true);
         if let Err(error) = fs::rename(&paths.staged, &paths.exe) {
             // Do not hide a failed recovery behind the original install error.
+            set_hidden(&paths.old, false);
             fs::rename(&paths.old, &paths.exe)?;
             original_restored = true;
             return Err(error);
         }
+        set_hidden(&paths.exe, false);
         Ok(())
     })();
     if result.is_err() {
@@ -263,35 +321,125 @@ fn now_ms() -> u64 {
         .unwrap_or(0)
 }
 
-/// Remove what an update left behind: the replaced version, once the new build
-/// has reported healthy and its rollback window has passed, and a download
-/// abandoned long enough ago that no other instance can still be writing it.
-/// Only the two derived names are ever deleted.
+/// Remove what an update left behind: the hidden previous version once the new
+/// build has reported healthy, an abandoned download, and the visible files
+/// earlier versions kept beside the exe (moving an old receipt into place).
 pub fn clean_up(paths: &Paths, after_update: bool) {
     let _guard = lock_receipts();
-    let rollback_expired = read_receipt(&paths.receipt).is_some_and(|receipt| {
-        receipt.installed_at_ms > 0
-            && receipt.healthy
-            && now_ms().saturating_sub(receipt.installed_at_ms) >= ROLLBACK_WINDOW_MS
-    });
-    if rollback_expired {
+    // Earlier versions kept the receipt beside the exe: move it, then judge
+    // their visible rollback copy by it.
+    if let Ok(bytes) = fs::read(&paths.legacy_receipt) {
+        if !paths.receipt.exists() {
+            if let Some(parent) = paths.receipt.parent() {
+                let _ = fs::create_dir_all(parent);
+            }
+            let _ = store_receipt_bytes(&paths.receipt, &bytes);
+        }
+        let _ = fs::remove_file(&paths.legacy_receipt);
+    }
+    let receipt = read_receipt(&paths.receipt);
+    let proven = receipt.as_ref().is_none_or(|receipt| receipt.healthy);
+    if proven {
         // The image of a process that has just exited can stay locked briefly.
         let attempts = if after_update { 10 } else { 1 };
-        for attempt in 1..=attempts {
-            match fs::remove_file(&paths.old) {
-                Err(error) if error.kind() != io::ErrorKind::NotFound && attempt < attempts => {
-                    std::thread::sleep(Duration::from_millis(200));
+        for old in [&paths.old, &paths.legacy_old] {
+            for attempt in 1..=attempts {
+                set_hidden(old, false);
+                match fs::remove_file(old) {
+                    Err(error) if error.kind() != io::ErrorKind::NotFound && attempt < attempts => {
+                        std::thread::sleep(Duration::from_millis(200));
+                    }
+                    _ => break,
                 }
+            }
+        }
+    }
+    for staged in [&paths.staged, &paths.legacy_staged] {
+        let stale = fs::metadata(staged)
+            .and_then(|metadata| metadata.modified())
+            .is_ok_and(|modified| modified.elapsed().is_ok_and(|age| age > STALE_DOWNLOAD));
+        if stale {
+            let _ = fs::remove_file(staged);
+        }
+    }
+}
+
+/// After the new version reported healthy: delete the hidden previous version.
+/// The watcher runs from that file until it sees the healthy receipt, so keep
+/// trying for a few seconds.
+pub fn remove_previous(paths: &Paths) {
+    // Updates from older versions leave a visible copy instead of the hidden one.
+    for old in [&paths.old, &paths.legacy_old] {
+        for _ in 0..40 {
+            set_hidden(old, false);
+            match fs::remove_file(old) {
+                Err(error) if error.kind() != io::ErrorKind::NotFound => std::thread::sleep(Duration::from_millis(250)),
                 _ => break,
             }
         }
     }
-    let stale = fs::metadata(&paths.staged)
-        .and_then(|metadata| metadata.modified())
-        .is_ok_and(|modified| modified.elapsed().is_ok_and(|age| age > STALE_DOWNLOAD));
-    if stale {
-        let _ = fs::remove_file(&paths.staged);
+}
+
+/// What the watcher concluded.
+pub enum WatchOutcome {
+    /// The new version reported healthy (or is still starting): nothing to do.
+    Healthy,
+    /// It exited before reporting healthy and the previous version is back.
+    RolledBack { failed_version: String },
+}
+
+/// Run from the hidden previous version right after an update restart. Waits
+/// for the new process to report healthy; if it exits first, puts this (the
+/// previous) version back in place.
+pub fn watch_update(exe: &Path, new_pid: u32) -> WatchOutcome {
+    let Some(paths) = Paths::for_exe(exe) else { return WatchOutcome::Healthy };
+    let started = std::time::Instant::now();
+    loop {
+        if read_receipt(&paths.receipt).is_some_and(|receipt| receipt.healthy) {
+            return WatchOutcome::Healthy;
+        }
+        if wait_for_exit(new_pid, Duration::from_millis(500)) {
+            // Exited. A healthy report may have landed just before.
+            if read_receipt(&paths.receipt).is_some_and(|receipt| receipt.healthy) {
+                return WatchOutcome::Healthy;
+            }
+            break;
+        }
+        if started.elapsed() > WATCH_TIMEOUT {
+            // Still running but slow: leave it; its own start-up decides.
+            return WatchOutcome::Healthy;
+        }
     }
+    let failed_version = read_receipt(&paths.receipt).map(|receipt| receipt.target_version).unwrap_or_default();
+    let _guard = lock_receipts();
+    // Put the previous version back: the failed build out, the hidden copy in.
+    for attempt in 1..=20 {
+        let moved = fs::remove_file(&paths.exe)
+            .or_else(|error| if error.kind() == io::ErrorKind::NotFound { Ok(()) } else { Err(error) })
+            .and_then(|()| {
+                set_hidden(&paths.old, false);
+                fs::rename(&paths.old, &paths.exe)
+            });
+        match moved {
+            Ok(()) => break,
+            Err(_) if attempt < 20 => std::thread::sleep(Duration::from_millis(250)),
+            Err(_) => return WatchOutcome::Healthy,
+        }
+    }
+    let _ = fs::remove_file(&paths.receipt);
+    WatchOutcome::RolledBack { failed_version }
+}
+
+/// `--update-watch <pid>` and `--update-exe <path>` when this process is the watcher.
+pub fn watch_request(args: &[OsString]) -> Option<(PathBuf, u32)> {
+    let pid = flag_value(args, WATCH_FLAG)?.parse().ok()?;
+    let exe = PathBuf::from(flag_value(args, WATCH_EXE_FLAG)?);
+    Some((exe, pid))
+}
+
+/// `--update-failed <version>` when the previous version was just restored.
+pub fn failed_update(args: &[OsString]) -> Option<String> {
+    flag_value(args, FAILED_FLAG).map(str::to_owned).filter(|version| !version.is_empty())
 }
 
 fn flag_value<'a>(args: &'a [OsString], flag: &str) -> Option<&'a str> {
@@ -339,7 +487,7 @@ pub fn restart_args(args: &[OsString], pid: u32, minimized: bool) -> Vec<OsStrin
         if std::mem::take(&mut skip_value) {
             continue;
         }
-        if arg == UPDATED_FROM_FLAG {
+        if arg == UPDATED_FROM_FLAG || arg == FAILED_FLAG {
             skip_value = true;
         } else if arg != MINIMIZED_FLAG {
             kept.push(arg.clone());

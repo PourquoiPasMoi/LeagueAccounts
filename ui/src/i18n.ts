@@ -525,6 +525,10 @@ const en = {
   "profile.seasons": "Past seasons",
   "profile.seasonPeak": "Peak: {rank}",
   "profile.historyNote": "This chart starts on {date}, when League Accounts and OP.GG first recorded this account's LP. Riot doesn't publish older LP history, so earlier days can't be filled in; it grows with every rank update from here.",
+  "gs.find": "Search all settings…",
+  "gs.findNone": "No setting matches “{query}”.",
+  "gs.findCount": "{count} matching settings",
+  "update.rolledBack": "Version {version} couldn't start, so the previous version was restored. It won't be installed automatically again.",
 };
 
 type MessageKey = keyof typeof en;
@@ -1054,6 +1058,10 @@ const tr: Dict = {
   "profile.seasons": "Geçmiş sezonlar",
   "profile.seasonPeak": "Zirve: {rank}",
   "profile.historyNote": "Bu grafik, League Accounts ve OP.GG'nin bu hesabın LP'sini ilk kez kaydettiği {date} tarihinde başlıyor. Riot daha eski LP geçmişini yayınlamıyor; her lig güncellemesiyle büyüyor.",
+  "gs.find": "Tüm ayarlarda ara…",
+  "gs.findNone": "“{query}” ile eşleşen ayar yok.",
+  "gs.findCount": "{count} eşleşen ayar",
+  "update.rolledBack": "{version} sürümü başlatılamadı, bu yüzden önceki sürüm geri yüklendi. Bir daha otomatik yüklenmeyecek.",
 };
 
 const de: Dict = {
@@ -1580,6 +1588,10 @@ const de: Dict = {
   "profile.seasons": "Frühere Saisons",
   "profile.seasonPeak": "Höchster Rang: {rank}",
   "profile.historyNote": "Das Diagramm beginnt am {date}, als League Accounts und OP.GG die LP dieses Kontos zum ersten Mal erfasst haben. Riot veröffentlicht keinen älteren LP-Verlauf; er wächst mit jeder Rangaktualisierung.",
+  "gs.find": "Alle Einstellungen durchsuchen…",
+  "gs.findNone": "Keine Einstellung passt zu „{query}“.",
+  "gs.findCount": "{count} passende Einstellungen",
+  "update.rolledBack": "Version {version} konnte nicht starten, deshalb wurde die vorherige Version wiederhergestellt. Sie wird nicht mehr automatisch installiert.",
 };
 
 const es: Dict = {
@@ -2106,6 +2118,10 @@ const es: Dict = {
   "profile.seasons": "Temporadas anteriores",
   "profile.seasonPeak": "Pico: {rank}",
   "profile.historyNote": "Este gráfico empieza el {date}, cuando League Accounts y OP.GG registraron por primera vez los PL de esta cuenta. Riot no publica el historial anterior; crece con cada actualización de rango.",
+  "gs.find": "Buscar en todos los ajustes…",
+  "gs.findNone": "Ningún ajuste coincide con «{query}».",
+  "gs.findCount": "{count} ajustes encontrados",
+  "update.rolledBack": "La versión {version} no pudo iniciarse, así que se restauró la versión anterior. No se volverá a instalar automáticamente.",
 };
 
 const fr: Dict = {
@@ -2632,6 +2648,10 @@ const fr: Dict = {
   "profile.seasons": "Saisons passées",
   "profile.seasonPeak": "Pic : {rank}",
   "profile.historyNote": "Ce graphique commence le {date}, quand League Accounts et OP.GG ont enregistré les LP de ce compte pour la première fois. Riot ne publie pas l'historique plus ancien ; il s'enrichit à chaque mise à jour du rang.",
+  "gs.find": "Rechercher un paramètre…",
+  "gs.findNone": "Aucun paramètre ne correspond à « {query} ».",
+  "gs.findCount": "{count} paramètres trouvés",
+  "update.rolledBack": "La version {version} n'a pas pu démarrer, la version précédente a donc été restaurée. Elle ne sera plus installée automatiquement.",
 };
 
 const pt: Dict = {
@@ -3158,6 +3178,10 @@ const pt: Dict = {
   "profile.seasons": "Temporadas anteriores",
   "profile.seasonPeak": "Pico: {rank}",
   "profile.historyNote": "Este gráfico começa em {date}, quando o League Accounts e o OP.GG registraram os PDL desta conta pela primeira vez. A Riot não publica o histórico mais antigo; ele cresce a cada atualização de elo.",
+  "gs.find": "Buscar em todas as configurações…",
+  "gs.findNone": "Nenhuma configuração corresponde a “{query}”.",
+  "gs.findCount": "{count} configurações encontradas",
+  "update.rolledBack": "A versão {version} não conseguiu iniciar, então a versão anterior foi restaurada. Ela não será instalada automaticamente de novo.",
 };
 
 const zh: Dict = {
@@ -3667,6 +3691,10 @@ const zh: Dict = {
   "profile.seasons": "往季段位",
   "profile.seasonPeak": "最高：{rank}",
   "profile.historyNote": "此图表从 {date} 开始，即 League Accounts 和 OP.GG 首次记录该账号胜点的日期。Riot 不公开更早的胜点历史，之后每次段位更新都会继续补充。",
+  "gs.find": "搜索所有设置…",
+  "gs.findNone": "没有与“{query}”匹配的设置。",
+  "gs.findCount": "找到 {count} 项设置",
+  "update.rolledBack": "版本 {version} 无法启动，已恢复为之前的版本。之后不会再自动安装该版本。",
 };
 
 const zhTw: Dict = {
@@ -4176,6 +4204,10 @@ const zhTw: Dict = {
   "profile.seasons": "過往賽季",
   "profile.seasonPeak": "最高：{rank}",
   "profile.historyNote": "此圖表從 {date} 開始，即 League Accounts 和 OP.GG 首次記錄此帳號 LP 的日期。Riot 不公開更早的 LP 歷史，之後每次階級更新都會繼續補充。",
+  "gs.find": "搜尋所有設定…",
+  "gs.findNone": "沒有符合「{query}」的設定。",
+  "gs.findCount": "找到 {count} 項設定",
+  "update.rolledBack": "版本 {version} 無法啟動，已還原為先前的版本。之後不會再自動安裝此版本。",
 };
 
 export const LANGUAGES = [

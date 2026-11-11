@@ -308,8 +308,21 @@ pub fn plugin(shared: Arc<Shared>) -> TauriPlugin<Wry> {
                 return;
             };
             // The next launch runs the new version anyway.
-            if let Err(error) = std::process::Command::new(&paths.exe).args(args).spawn() {
-                logging::record(Event::UpdateFailed, Reason::from_error(&error));
+            match std::process::Command::new(&paths.exe).args(args).spawn() {
+                Ok(child) => {
+                    // The hidden previous version watches the new one and puts
+                    // itself back if the new one exits before reporting healthy.
+                    let watcher = std::process::Command::new(&paths.old)
+                        .arg(self_update::WATCH_FLAG)
+                        .arg(child.id().to_string())
+                        .arg(self_update::WATCH_EXE_FLAG)
+                        .arg(&paths.exe)
+                        .spawn();
+                    if let Err(error) = watcher {
+                        logging::record(Event::UpdateFailed, Reason::from_error(&error));
+                    }
+                }
+                Err(error) => logging::record(Event::UpdateFailed, Reason::from_error(&error)),
             }
         })
         .build()

@@ -52,3 +52,15 @@ The log events carry fixed codes only, never URLs or paths:
 
 - **Workflow:** `.github/workflows/release.yml` runs from the Actions tab for a plain `vX.Y.Z` tag. It checks the tag against the version files, builds the exe, creates a draft release with it, and checks that the digest GitHub reports for the upload matches the build.
 - **Versions:** only complete SemVer versions are compared, with an optional `v` prefix. Prerelease precedence is respected; build metadata does not imply a newer release. The release workflow excludes prerelease tags from the published latest-release channel.
+
+## Files and rollback (4.1.4 and later)
+
+Only `LeagueAccounts.exe` stays visible in the user's folder:
+
+- The download is written to a hidden `.LeagueAccounts.exe.download` beside the exe (same drive, so the swap is a rename).
+- The replaced version becomes a hidden `.LeagueAccounts.old.exe`.
+- The install receipt lives in `%APPDATA%\LeagueAccounts\update\<hash of the exe path>.json`.
+
+When the app restarts into the new version, it also starts the hidden previous version as a watcher (`--update-watch <pid> --update-exe <path>`, no window). As soon as the new version reports healthy, the watcher exits and the new version deletes the hidden copy. If the new version exits before reporting healthy, the watcher puts the previous version back, records the release as one not to install automatically (`mislabeledRelease`), and reopens the app with `--update-failed <version>`, which shows an "Update failed" message. A start that is merely slow (over three minutes) is left alone.
+
+Visible `LeagueAccounts.old.exe` and `LeagueAccounts.exe.receipt.json` files left by earlier versions are moved or deleted on the first healthy start.

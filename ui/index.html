@@ -45,16 +45,19 @@
         <section class="side-section">
           <h3 class="side-title" data-i18n="side.distribution"></h3>
           <div id="distribution" class="distribution"></div>
+        </section>
+
+        <section class="side-section side-bottom">
           <button id="total-value" class="side-value" hidden data-i18n-title="finder.title">
             <span class="side-value-label"><span data-icon="gem"></span><span data-i18n="value.total"></span></span>
             <span class="side-value-amount"></span>
             <span class="side-value-detail"></span>
           </button>
-        </section>
-
-        <section class="side-section side-bottom">
-          <button class="side-link" data-action="game-settings"><span data-icon="sliders"></span> <span data-i18n="side.gameSettings"></span></button>
-          <button class="side-link" data-action="settings"><span data-icon="settings"></span> <span data-i18n="side.settings"></span></button>
+          <!-- Two framed tiles side by side, like the client's footer buttons. -->
+          <div class="side-tiles">
+            <button class="side-tile" data-action="game-settings"><span data-icon="sliders"></span><span data-i18n="side.gameSettings"></span></button>
+            <button class="side-tile" data-action="settings"><span data-icon="settings"></span><span data-i18n="side.settings"></span></button>
+          </div>
           <div class="version" id="version"></div>
         </section>
       </aside>
