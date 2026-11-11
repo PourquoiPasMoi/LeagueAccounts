@@ -7,7 +7,7 @@
 //! named by a hash of `region:account_id` so no account data appears in paths.
 
 use crate::logging::{self, Event, Reason};
-use crate::models::{Account, AccountKey, OpggGame};
+use crate::models::{Account, AccountKey, OpggGame, OpggLpPoint, SeasonRank};
 use crate::riot_client::LeagueApi;
 use crate::utils::app_data_dir;
 use serde::{Deserialize, Serialize};
@@ -215,6 +215,65 @@ fn history_path(directory: &Path, key: &AccountKey) -> PathBuf {
     directory.join(format!("{}.ranks.json", file_stem(key)))
 }
 
+fn seasons_path(directory: &Path, key: &AccountKey) -> PathBuf {
+    directory.join(format!("{}.seasons.json", file_stem(key)))
+}
+
+/// Past seasons' ranks, newest first.
+pub fn seasons(key: &AccountKey) -> Vec<SeasonRank> {
+    directory()
+        .map(|directory| read_json(&seasons_path(&directory, key)))
+        .unwrap_or_default()
+}
+
+/// Keep OP.GG's latest list of past seasons.
+pub fn store_seasons(key: &AccountKey, seasons: &[SeasonRank]) {
+    if seasons.is_empty() {
+        return;
+    }
+    let _lock = WRITE_LOCK.lock();
+    let Ok(directory) = directory() else { return };
+    let path = seasons_path(&directory, key);
+    if read_json::<Vec<SeasonRank>>(&path) == seasons {
+        return;
+    }
+    if let Err(error) = write_json(&path, &seasons) {
+        logging::record(Event::ProfileSaveFailed, Reason::from_error(&error));
+    }
+}
+
+/// Add OP.GG's recorded LP points to the rank history (points this app already
+/// has for about the same moment are kept as they are).
+pub fn record_opgg_lp(key: &AccountKey, points: &[OpggLpPoint]) {
+    if points.is_empty() {
+        return;
+    }
+    let _lock = WRITE_LOCK.lock();
+    let Ok(directory) = directory() else { return };
+    let path = history_path(&directory, key);
+    let mut history: Vec<RankPoint> = read_json(&path);
+    let mut added = false;
+    for point in points {
+        let known = history.iter().any(|existing| existing.mode == "lol" && existing.at.abs_diff(point.at) < 5 * 60_000);
+        if known {
+            continue;
+        }
+        history.push(RankPoint { at: point.at, mode: "lol".into(), tier: point.tier.clone(), division: point.division.clone(), lp: point.lp });
+        added = true;
+    }
+    if !added {
+        return;
+    }
+    history.sort_by_key(|point| point.at);
+    if history.len() > HISTORY_LIMIT {
+        let excess = history.len() - HISTORY_LIMIT;
+        history.drain(..excess);
+    }
+    if let Err(error) = write_json(&path, &history) {
+        logging::record(Event::ProfileSaveFailed, Reason::from_error(&error));
+    }
+}
+
 fn archive_path(directory: &Path, key: &AccountKey) -> PathBuf {
     directory.join(format!("{}.games.json", file_stem(key)))
 }
@@ -362,6 +421,7 @@ pub fn remove(key: &AccountKey) {
         let _ = std::fs::remove_file(profile_path(&directory, key));
         let _ = std::fs::remove_file(history_path(&directory, key));
         let _ = std::fs::remove_file(archive_path(&directory, key));
+        let _ = std::fs::remove_file(seasons_path(&directory, key));
     }
 }
 

@@ -580,3 +580,28 @@
 .records b { font: 700 14px/1.2 Beaufort, WenKai, NotoCJK, serif; color: #f0e6d2; letter-spacing: .02em; }
 
 .form-strip { grid-template-columns: repeat(var(--n, 20), minmax(0, 1fr)); }
+
+/* ------------------------------------------------------------- season history */
+
+.chart-note { display: flex; align-items: flex-start; gap: 7px; margin: 10px 0 0; font-size: 11px; line-height: 1.5; color: #7d786c; }
+.chart-note .icon { flex: none; margin-top: 2px; color: #785a28; }
+.season-history { margin-top: 16px; padding-top: 14px; border-top: 1px solid #c8aa6e1f; }
+.season-history h4 {
+  margin: 0 0 10px;
+  font: 700 11px/1 Beaufort, WenKai, NotoCJK, serif; letter-spacing: .12em; text-transform: uppercase; color: #c8aa6e;
+}
+.season-history ol { list-style: none; margin: 0; padding: 0 0 4px; display: flex; gap: 8px; overflow-x: auto; }
+.season-history li {
+  flex: none;
+  display: flex; align-items: center; gap: 8px;
+  padding: 7px 12px 7px 8px;
+  border: 1px solid #1e282d;
+  border-bottom: 2px solid color-mix(in srgb, var(--tier) 55%, transparent);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--tier) 8%, #010a13), #010a13);
+}
+.season-history li:hover { border-color: #785a28; border-bottom-color: var(--tier); }
+.season-crest { display: grid; place-items: center; width: 30px; }
+.season-text { display: flex; flex-direction: column; gap: 1px; }
+.season-text em { font-style: normal; font: 700 10px/1.2 Beaufort, WenKai, NotoCJK, serif; letter-spacing: .1em; color: #a09b8c; }
+.season-text b { font: 700 12.5px/1.2 Beaufort, WenKai, NotoCJK, serif; letter-spacing: .04em; color: #f0e6d2; white-space: nowrap; }
+.season-text span { font-size: 10.5px; color: #7d786c; }

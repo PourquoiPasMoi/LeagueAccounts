@@ -750,6 +750,8 @@ struct ProfileView {
     history: Vec<RankPoint>,
     /// Every archived game (client and OP.GG), newest first.
     games: Vec<MatchRecord>,
+    /// Past seasons' Solo/Duo ranks from OP.GG, newest first.
+    seasons: Vec<leagueaccounts::models::SeasonRank>,
 }
 
 fn profile_view(key: &AccountKey) -> ProfileView {
@@ -758,7 +760,7 @@ fn profile_view(key: &AccountKey) -> ProfileView {
         profile.champions.retain(|champion| profiles::is_real_champion(champion.id));
         profile
     });
-    ProfileView { profile, history: profiles::history(key), games: profiles::archive(key) }
+    ProfileView { profile, history: profiles::history(key), games: profiles::archive(key), seasons: profiles::seasons(key) }
 }
 
 /// Who is signed in right now, so the UI can mark that account.

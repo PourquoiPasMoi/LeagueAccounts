@@ -15,6 +15,7 @@ import {
   type ProfileView,
   type RankPoint,
   type RankedQueue,
+  type SeasonRank,
   type SkinOwner,
 } from "./api";
 import { errorText, lang, localeTag, t, tierName, type MessageKey } from "./i18n";
@@ -73,7 +74,7 @@ export function openProfile(context: ProfileContext): void {
   const initial = context.account();
   if (!initial) return;
   const id = keyId(keyOf(initial));
-  let view: ProfileView = { profile: null, history: [], games: [] };
+  let view: ProfileView = { profile: null, history: [], games: [], seasons: [] };
   const statsFilters: StatsFilters = { queue: "all", range: 20, metric: "kda" };
   let tab: Tab = "overview";
   let chartMode: Mode = context.mode;
@@ -373,8 +374,42 @@ function overviewHtml(account: AccountView, view: ProfileView, chartMode: Mode, 
         </div>
       </header>
       ${rankChart(view.history.filter((point) => point.mode === chartMode), chartMode)}
+      ${historyNote(view.history.filter((point) => point.mode === chartMode))}
+      ${chartMode === "lol" ? seasonHistory(view.seasons ?? []) : ""}
     </section>
     ${recentGames(view.games, profile, mode)}`;
+}
+
+/** Explain a short chart: LP history only exists from the day it was first recorded. */
+function historyNote(points: RankPoint[]): string {
+  if (!points.length) return "";
+  const span = points.at(-1)!.at - points[0].at;
+  if (span > 7 * 86_400_000) return "";
+  const since = new Date(points[0].at).toLocaleDateString(localeTag(), { day: "numeric", month: "long" });
+  return `<p class="chart-note">${icon("info", 13)}<span>${esc(t("profile.historyNote", { date: since }))}</span></p>`;
+}
+
+const seasonRankLabel = (tier: string, division: string, lp?: number): string => {
+  const name = normalizeTier(tier);
+  const base = APEX.has(name) || !division ? tierName(name) : `${tierName(name)} ${division}`;
+  return lp === undefined ? base : `${base} · ${lp} LP`;
+};
+
+/** Past seasons from OP.GG: where each season ended, with its peak on hover. */
+function seasonHistory(seasons: SeasonRank[]): string {
+  if (!seasons.length) return "";
+  return `
+    <div class="season-history">
+      <h4>${esc(t("profile.seasons"))}</h4>
+      <ol>${seasons.map((season) => {
+        const peak = season.peakTier ? t("profile.seasonPeak", { rank: seasonRankLabel(season.peakTier, season.peakDivision, season.peakLp) }) : "";
+        return `
+        <li style="--tier:${palette(season.tier).base}" ${peak ? `data-tooltip="${esc(peak)}"` : ""}>
+          <span class="season-crest">${emblem(season.tier, 30, "lol")}</span>
+          <span class="season-text"><em>${esc(season.season)}</em><b>${esc(seasonRankLabel(season.tier, season.division))}</b><span>${esc(`${season.lp} LP`)}</span></span>
+        </li>`;
+      }).join("")}</ol>
+    </div>`;
 }
 
 function emptyNotice(): string {

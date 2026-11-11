@@ -143,6 +143,31 @@ pub struct OpggGame {
     pub op_score_x10: Option<u32>,
 }
 
+/// One LP observation OP.GG recorded for the profile.
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct OpggLpPoint {
+    /// Unix ms.
+    pub at: u64,
+    pub tier: String,
+    pub division: String,
+    pub lp: i64,
+}
+
+/// A finished season's Solo/Duo rank from OP.GG: where it ended and its peak.
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct SeasonRank {
+    /// OP.GG's label, e.g. `S2025` or `S2024 S3`.
+    pub season: String,
+    pub tier: String,
+    pub division: String,
+    pub lp: i64,
+    pub peak_tier: String,
+    pub peak_division: String,
+    pub peak_lp: i64,
+}
+
 /// Values returned by the rank provider.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct RankInfo {
@@ -160,6 +185,10 @@ pub struct RankInfo {
     pub tft_provenance: Option<RankProvenance>,
     /// Recent LoL games listed on the profile page (empty when unavailable).
     pub recent_games: Vec<OpggGame>,
+    /// OP.GG's own LP history for the current season (empty when unavailable).
+    pub lp_history: Vec<OpggLpPoint>,
+    /// Past seasons' ranks (empty when unavailable).
+    pub seasons: Vec<SeasonRank>,
 }
 
 #[derive(Clone, Copy, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
