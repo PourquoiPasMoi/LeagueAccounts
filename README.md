@@ -1,8 +1,8 @@
 <div align="center">
 
-<img src="assets/icon.png" width="88" alt="League Accounts icon" />
+<img src="assets/icon.png" width="88" alt="League Companion icon" />
 
-# League Accounts
+# League Companion
 
 All your League of Legends and Teamfight Tactics accounts in one window: one-click login, live ranks, and now a full profile for every account with stats, owned champions and skins, and what the collection is worth.
 
@@ -18,7 +18,7 @@ All your League of Legends and Teamfight Tactics accounts in one window: one-cli
 
 This project is a fork of [League Accounts by Tariolle](https://github.com/Tariolle/LeagueAccounts). The account manager itself is their work: the Riot Client login, OP.GG rank tracking, ban detection, Credential Manager storage, the League client look and the six translations. If you only need a fast account switcher, their version is excellent and you should go star it.
 
-This fork adds a profile page for each account and a few things I wanted on top: knowing which account is signed in, finding which account owns a skin, and adding up what all those skins cost.
+This fork, now called League Companion, adds a profile page for each account and a few things I wanted on top: knowing which account is signed in, finding which account owns a skin, and adding up what all those skins cost.
 
 ## What's new in this fork
 
@@ -28,7 +28,7 @@ Double-click a card (or press Enter, or use Profile in the card menu) and the ac
 
 <img src="docs/screenshots/profile-overview.png" alt="Account overview with ranked cards, rank history and recent games" width="960" />
 
-The overview shows Solo/Duo, Flex and TFT ranks with wins, losses and win rate, a rank history chart, and your recent games. Hover any point on the chart to read the exact rank, LP and the change since the previous point.
+The overview shows Solo/Duo, Flex and TFT ranks with wins, losses and win rate, a rank history chart, and your recent games. Hover any point on the chart to read the exact rank, LP and the change since the previous point. Zoom from all games down to the last week (buttons or Ctrl + scroll) to see each division; the zoom is remembered.
 
 <img src="docs/screenshots/rank-history.png" alt="Rank history chart with the hover readout" width="960" />
 
@@ -80,15 +80,23 @@ Game settings in the sidebar does that for you. It shows your hotkeys as keycaps
   </tr>
 </table>
 
+### Experimental: champ select and live game assistant
+
+Off by default. Turn it on in Settings › Experimental. It is still under development, so expect changes and rough edges; with it off, the app is the account manager and stats described above.
+
+- In champ select, the build page opens with OP.GG's runes, summoner spells and one 6-item build adapted to the enemy team. Apply puts the rune page, spells and item set into the client (only through the League client's own local API, like other build apps), and the item set is the one the shop shows first.
+- When the game starts, the page switches to a live view of both teams: champions, ranks, team composition, K/D/A, kill participation, CS per minute, vision, items and objectives. It reads only Riot's local live game data; nothing is drawn over or injected into the game.
+
 ### Smaller changes
 
+- Closing the window keeps the app in the system tray; quit from the tray icon's menu.
 - The account that is signed in right now gets a teal frame and a Connected or Playing badge, and its Log in button is disabled.
 - The selected card has an animated gold frame, and rank crests glow in their tier color.
 - Champion and skin pictures are downloaded the first time you see them and then load from disk.
 
 ## Everything from the original
 
-- One-click login: League Accounts opens the Riot Client, signs in and launches LoL or TFT.
+- One-click login: the app opens the Riot Client, signs in and launches LoL or TFT.
 - LoL and TFT ranks from OP.GG, refreshed in the background (every 30 minutes by default).
 - The Friend elo filter shows which accounts can play ranked with a friend.
 - Each login reads the account's League ban, and a banned account shows the time left.

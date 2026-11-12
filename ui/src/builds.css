@@ -1,0 +1,204 @@
+/* Champ select builds page: the account page's frame (profile.css) with the
+   client's champ select look: gold frames, dark panels, teal for good rates. */
+
+.build-head { display: flex; align-items: center; flex-wrap: wrap; gap: 14px 22px; }
+.build-champion { display: flex; align-items: center; gap: 14px; min-width: 0; }
+.build-champion > img, .build-champion > .asset-blank {
+  width: 64px; height: 64px; flex: none;
+  border: 2px solid #c8aa6e; box-shadow: 0 0 0 1px #010a13, 0 0 14px #c8aa6e33;
+}
+.build-champion h2 { margin: 0 0 6px; font: 700 24px/1 Beaufort, WenKai, NotoCJK, serif; letter-spacing: .06em; text-transform: uppercase; color: #f0e6d2; }
+.build-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; font-size: 12px; color: #a09b8c; }
+.build-meta b { color: #f0e6d2; }
+.build-meta b.is-good, .build-body .is-good { color: #0ac8b9; }
+.build-meta b.is-bad, .build-body .is-bad { color: #e06d62; }
+.build-status { padding: 3px 8px; border: 1px solid #3c3c41; font: 700 10.5px/1 Beaufort, WenKai, NotoCJK, serif; letter-spacing: .1em; text-transform: uppercase; color: #a09b8c; }
+.build-status.is-live { border-color: #0ac8b966; color: #0ac8b9; background: #0ac8b912; }
+.build-tier { padding: 3px 8px; border: 1px solid #785a28; font: 700 10.5px/1 Beaufort, WenKai, NotoCJK, serif; letter-spacing: .08em; text-transform: uppercase; color: #f0e6d2; background: #c8aa6e14; }
+.build-tier.tier-1 { border-color: #c8aa6e; color: #f0e6d2; background: linear-gradient(180deg, #c8aa6e33, #c8aa6e0d); }
+
+.build-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-left: auto; }
+.build-lanes button { display: inline-flex; align-items: center; gap: 6px; }
+.build-lanes button.is-rare { opacity: .55; }
+.build-lanes .role-glyph { color: #a09b8c; }
+.build-lanes button[aria-pressed="true"] .role-glyph { color: #c8aa6e; }
+.build-search { position: relative; }
+.build-search .search { width: 210px; }
+.build-results {
+  position: absolute; z-index: 5; top: calc(100% + 4px); left: 0; right: 0;
+  list-style: none; margin: 0; padding: 4px; max-height: 320px; overflow-y: auto;
+  border: 1px solid #785a28; background: #010a13; box-shadow: 0 10px 30px #000a;
+}
+.build-results button { display: flex; align-items: center; gap: 10px; width: 100%; padding: 5px 8px; font-size: 12.5px; color: #cdbe91; text-align: left; }
+.build-results button:hover { background: #c8aa6e14; color: #f0e6d2; }
+.build-results img { width: 26px; height: 26px; border: 1px solid #463714; }
+
+.build-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 22px; margin-bottom: 16px; }
+.build-bar .btn-play { flex: none; width: auto; min-width: 180px; height: 34px; padding: 0 22px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+.build-toggle { padding: 0; gap: 10px; }
+.build-toggle .toggle-text strong { font: 12px/16px Spiegel, NotoCJK, sans-serif; letter-spacing: .025em; color: #a09b8c; font-weight: 400; }
+.build-source { margin-left: auto; font-size: 11px; color: #5b5a56; }
+.build-loading { padding: 30px 0; text-align: center; }
+
+.build-grid { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 18px; align-items: start; }
+.build-col { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+@media (max-width: 1100px) { .build-grid { grid-template-columns: minmax(0, 1fr); } }
+.btn-small { height: 28px; padding: 0 10px; display: inline-flex; align-items: center; gap: 6px; font-size: 11px; }
+
+.asset-blank { display: inline-block; background: #1e2328; border: 1px solid #1e282d; }
+.build-body img.is-missing { visibility: hidden; }
+
+/* Rune pages: options on top, the full trees below. */
+.rune-options { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; margin-bottom: 16px; }
+.rune-option {
+  display: flex; align-items: center; gap: 10px; padding: 8px 10px;
+  border: 1px solid #1e282d; background: #010a13; text-align: left;
+  transition: border-color 120ms, background 120ms;
+}
+.rune-option:hover { border-color: #785a28; }
+.rune-option.is-selected { border-color: #c8aa6e; background: linear-gradient(180deg, #c8aa6e1a, #010a13); box-shadow: inset 0 0 10px #c8aa6e1a; }
+.rune-option-icons { position: relative; display: flex; align-items: flex-end; }
+.rune-option-icons img:last-child { margin-left: -8px; }
+.rune-option-rates { display: flex; flex-direction: column; gap: 1px; }
+.rune-option-rates b { font: 700 14px/1.1 Beaufort, WenKai, NotoCJK, serif; color: #f0e6d2; }
+.rune-option-rates em { font-style: normal; font-size: 10.5px; color: #7d786c; }
+
+.rune-trees { display: grid; grid-template-columns: 1.2fr 1fr .8fr; gap: 14px; }
+.rune-tree { display: flex; flex-direction: column; gap: 10px; align-items: center; padding: 10px 6px; border: 1px solid #1e282d; background: #010a13; }
+.rune-tree-head { display: flex; align-items: center; gap: 8px; font: 700 11px/1 Beaufort, WenKai, NotoCJK, serif; letter-spacing: .1em; text-transform: uppercase; color: #c8aa6e; }
+.rune-row { display: flex; justify-content: center; gap: 10px; }
+.rune-row.is-keystones { padding-bottom: 8px; border-bottom: 1px solid #1e282d; }
+.rune { display: grid; place-items: center; border-radius: 50%; filter: grayscale(1) brightness(.55); opacity: .7; }
+.rune.is-chosen { filter: none; opacity: 1; box-shadow: 0 0 0 2px #c8aa6e, 0 0 10px #c8aa6e66; background: #1e2328; }
+.rune.is-shard.is-chosen { box-shadow: 0 0 0 1.5px #c8aa6e; }
+.rune img { display: block; border-radius: 50%; }
+
+.spell-options { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 8px; }
+.spell-option em, .spell-option b { white-space: nowrap; }
+.spell-option { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid #1e282d; background: #010a13; }
+.spell-option:hover { border-color: #785a28; }
+.spell-option.is-selected { border-color: #c8aa6e; background: linear-gradient(180deg, #c8aa6e1a, #010a13); }
+.spell-icons { display: flex; gap: 4px; }
+.spell-icons img, .item-icons img, .item-cell img { border: 1px solid #463714; }
+.spell-option b { font: 700 14px/1 Beaufort, WenKai, NotoCJK, serif; color: #f0e6d2; }
+.spell-option em { font-style: normal; font-size: 10.5px; color: #7d786c; }
+
+.item-block + .item-block { margin-top: 12px; }
+.item-set { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 0; border-top: 1px solid #1e282d; }
+.item-set:first-of-type { border-top: 0; }
+.item-icons { display: flex; align-items: center; gap: 4px; }
+.item-arrow { color: #785a28; font-size: 16px; padding: 0 2px; }
+.item-rates { display: flex; flex-direction: column; align-items: flex-end; gap: 1px; }
+.item-rates b { font: 700 13px/1 Beaufort, WenKai, NotoCJK, serif; color: #f0e6d2; }
+.item-rates em { font-style: normal; font-size: 10.5px; color: #7d786c; }
+.item-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+.item-cell { display: flex; flex-direction: column; align-items: center; gap: 3px; }
+.item-cell em { font-style: normal; font-size: 10.5px; color: #a09b8c; }
+
+.skill-priority { display: flex; align-items: center; gap: 6px; margin-bottom: 12px; }
+.skill-key {
+  display: grid; place-items: center; width: 30px; height: 30px;
+  border: 1px solid #c8aa6e; background: #1e2328;
+  font: 700 14px/1 Beaufort, WenKai, NotoCJK, serif; color: #f0e6d2;
+}
+.skill-grid { display: grid; grid-template-columns: 22px repeat(var(--levels), minmax(0, 1fr)); gap: 3px; }
+.skill-name { display: grid; place-items: center; font: 700 12px/1 Beaufort, WenKai, NotoCJK, serif; color: #c8aa6e; }
+.skill-cell { height: 22px; display: grid; place-items: center; background: #1e2328; font: 700 11px/1 Beaufort, WenKai, NotoCJK, serif; color: #010a13; }
+.skill-cell.is-on { background: linear-gradient(180deg, #c8aa6e, #785a28); color: #010a13; }
+.skill-cell.is-ult { background: linear-gradient(180deg, #0ac8b9, #0397ab); }
+.skill-level { text-align: center; font-size: 9.5px; color: #5b5a56; }
+
+.matchup-block + .matchup-block { margin-top: 12px; }
+.matchups { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+.matchup { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px 4px; border: 1px solid #1e282d; background: #010a13; }
+.matchup img { width: 40px; height: 40px; border: 1px solid #463714; }
+.matchup b { font-size: 12px; }
+
+/* Enemy team under the champion name. */
+.build-enemies { display: flex; align-items: center; gap: 6px; margin-top: 8px; font-size: 11px; color: #7d786c; }
+.build-enemies > span { font: 700 10.5px/1 Beaufort, WenKai, NotoCJK, serif; letter-spacing: .1em; text-transform: uppercase; color: #a09b8c; margin-right: 4px; }
+.build-enemies img { width: 26px; height: 26px; border: 1px solid #8f3a33; }
+.build-enemies em { font-style: normal; margin-left: 6px; }
+
+/* The build to follow: start, then six numbered items. */
+.plan { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 22px; align-items: start; }
+.plan-start .item-icons img { border-color: #785a28; }
+.plan-steps { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; }
+.plan-step { position: relative; display: grid; place-items: center; }
+.plan-step img { border: 1px solid #785a28; box-shadow: 0 0 0 1px #010a13; }
+.plan-step em {
+  position: absolute; left: -5px; top: -6px; display: grid; place-items: center; width: 16px; height: 16px;
+  border: 1px solid #785a28; background: #010a13;
+  font: 700 10px/1 Beaufort, WenKai, NotoCJK, serif; font-style: normal; color: #c8aa6e;
+}
+.plan-step.is-adapted img { border-color: #0ac8b9; box-shadow: 0 0 0 1px #010a13, 0 0 10px #0ac8b955; }
+.plan-step.is-adapted em { border-color: #0ac8b9; color: #0ac8b9; }
+.plan-adapted { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 14px 0 4px; font-size: 11.5px; color: #7d786c; }
+.plan-chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 8px 3px 4px; border: 1px solid #0ac8b955; background: #0ac8b90f; color: #a3c7c7; }
+.plan-chip img { border: 0; }
+.build-more { margin-top: 14px; border-top: 1px solid #1e282d; padding-top: 10px; }
+.build-more summary { cursor: pointer; font-size: 11.5px; color: #a09b8c; list-style: none; }
+.build-more summary::before { content: '›'; display: inline-block; margin-right: 6px; color: #785a28; transition: transform 120ms; }
+.build-more[open] summary::before { transform: rotate(90deg); }
+.build-more summary:hover { color: #f0e6d2; }
+.build-more[open] summary { margin-bottom: 10px; }
+
+/* Before the pick: strong champions for the lane. */
+.suggestions { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; }
+.suggestion { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid #1e282d; background: #010a13; text-align: left; transition: border-color 120ms; }
+.suggestion:hover { border-color: #c8aa6e; background: linear-gradient(180deg, #c8aa6e14, #010a13); }
+.suggestion img { width: 40px; height: 40px; border: 1px solid #463714; }
+.suggestion > span { display: flex; flex-direction: column; gap: 4px; }
+.suggestion b { font: 700 13px/1.1 Beaufort, WenKai, NotoCJK, serif; letter-spacing: .04em; color: #f0e6d2; }
+.suggestion em { font-style: normal; font-size: 11px; display: flex; align-items: center; gap: 6px; }
+
+/* Live game view: both teams, rank and live numbers. */
+.build-views button[aria-pressed="true"] { color: #0ac8b9; }
+.live-bar { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px 16px; margin-bottom: 14px; }
+.live-bar h3 { margin: 0; font: 700 15px/1 Beaufort, WenKai, NotoCJK, serif; letter-spacing: .12em; text-transform: uppercase; color: #f0e6d2; }
+.live-clock { font: 700 18px/1 Beaufort, WenKai, NotoCJK, serif; color: #c8aa6e; letter-spacing: .06em; }
+.live-teams { display: flex; flex-direction: column; gap: 16px; }
+.live-team { border-top: 2px solid #0397ab; }
+.live-team.side-red { border-top-color: #be1e37; }
+.live-team-head { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px 18px; margin-bottom: 8px; }
+.live-team-head h3 { margin: 0; display: flex; align-items: baseline; gap: 10px; }
+.live-team-head h3 em { font-style: normal; font: 700 10.5px/1 Beaufort, WenKai, NotoCJK, serif; letter-spacing: .1em; color: #5fb8d6; }
+.live-team.side-red .live-team-head h3 em { color: #e8848c; }
+.live-team.is-ally h3 { color: #0ac8b9; }
+.live-team.is-enemy h3 { color: #e06d62; }
+.live-team-stats { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-left: auto; font-size: 11.5px; color: #7d786c; }
+.live-team-stats b { color: #f0e6d2; font: 700 13px/1 Beaufort, WenKai, NotoCJK, serif; margin-left: 3px; }
+.live-comp { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; font-size: 11.5px; color: #a09b8c; }
+.live-comp-bar { position: relative; flex: 0 0 120px; height: 5px; background: linear-gradient(90deg, #c8aa6e, #785a28); }
+.live-comp-bar span { position: absolute; inset: 0 auto 0 0; width: calc(var(--p) * 100%); background: linear-gradient(90deg, #7fa4ff, #5fb8d6); }
+.live-table { display: flex; flex-direction: column; }
+.live-row {
+  display: grid; align-items: center; gap: 12px;
+  grid-template-columns: 44px minmax(150px, 1.4fr) 96px 44px 64px 52px minmax(176px, 1fr) 56px;
+  padding: 6px 8px; border-top: 1px solid #1e282d; font-size: 12px; color: #a09b8c;
+}
+.live-row.live-labels { border-top: 0; padding-top: 0; font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: #5b5a56; }
+.live-row.is-me { background: linear-gradient(90deg, #c8aa6e1a, transparent); box-shadow: inset 2px 0 0 #c8aa6e; }
+.live-row.is-dead { opacity: .55; }
+.live-row > span { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.live-row b { color: #f0e6d2; font-weight: 600; }
+.live-row small { font-size: 10.5px; color: #7d786c; }
+.live-champ { position: relative; }
+.live-champ img, .live-champ .asset-blank { width: 40px; height: 40px; border: 1px solid #463714; }
+.live-champ em { position: absolute; right: -2px; bottom: -2px; min-width: 16px; padding: 1px 3px; border: 1px solid #463714; background: #010a13; font: 700 10px/1 Beaufort, WenKai, NotoCJK, serif; font-style: normal; color: #cdbe91; text-align: center; }
+.live-who > b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.live-who > b small { margin-left: 3px; }
+.live-rank { display: flex; flex-direction: row; align-items: center; gap: 5px; font-size: 11px; white-space: nowrap; }
+.live-rank b { font: 700 11.5px/1 Beaufort, WenKai, NotoCJK, serif; color: #cdbe91 !important; }
+.live-rank em { font-style: normal; font-weight: 600; }
+.live-rank .emblem { --emblem-size: 16px; }
+.live-dead { color: #e06d62 !important; }
+.live-kda b i { font-style: normal; color: #e06d62; }
+.live-items { flex-direction: row !important; flex-wrap: nowrap; gap: 2px !important; }
+.live-items img { border: 1px solid #463714; }
+.live-gold { text-align: right; align-items: flex-end; font: 700 12px/1 Beaufort, WenKai, NotoCJK, serif; color: #c8aa6e; }
+@media (max-width: 1150px) {
+  .live-row { grid-template-columns: 44px minmax(130px, 1fr) 86px 40px 58px 44px 0 50px; }
+  .live-items { display: none !important; }
+}
+.build-head.is-live .build-controls > :not(.build-views):not(.profile-close) { display: none; }

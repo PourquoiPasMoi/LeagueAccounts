@@ -30,7 +30,7 @@ export async function revealApp(): Promise<void> {
 }
 
 export function failStartup(error: unknown): void {
-  console.error("League Accounts startup failed", error);
+  console.error("League Companion startup failed", error);
   document.body.setAttribute("aria-busy", "false");
   const loader = document.querySelector<HTMLElement>("#startup-loader");
   if (loader) {

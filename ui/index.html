@@ -3,15 +3,15 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>League Accounts</title>
+    <title>League Companion</title>
     <!-- Startup screen styles; must precede the app module. See startup.css. -->
     <link rel="stylesheet" href="/startup.css" />
   </head>
   <body aria-busy="true">
-    <div id="startup-loader" role="status" aria-label="Loading League Accounts">
+    <div id="startup-loader" role="status" aria-label="Loading League Companion">
       <div id="startup-animation" aria-hidden="true"></div>
       <div id="startup-error" hidden>
-        <p>League Accounts couldn't finish loading.</p>
+        <p>League Companion couldn't finish loading.</p>
         <button id="startup-retry" type="button">Try again</button>
       </div>
     </div>
@@ -20,7 +20,7 @@
     <header class="titlebar" data-tauri-drag-region>
       <div class="brand" data-tauri-drag-region>
         <img src="/icon.png" alt="" class="brand-icon" width="28" height="28" />
-        <span class="brand-name" data-tauri-drag-region>League Accounts</span>
+        <span class="brand-name" data-tauri-drag-region>League Companion</span>
       </div>
       <div class="mode-switch" role="tablist">
         <span class="mode-pill" aria-hidden="true"></span>
@@ -55,6 +55,7 @@
           </button>
           <!-- Two framed tiles side by side, like the client's footer buttons. -->
           <div class="side-tiles">
+            <button class="side-tile" id="builds-tile" data-action="builds" hidden><span data-icon="swords"></span><span data-i18n="side.builds"></span></button>
             <button class="side-tile" data-action="game-settings"><span data-icon="sliders"></span><span data-i18n="side.gameSettings"></span></button>
             <button class="side-tile" data-action="settings"><span data-icon="settings"></span><span data-i18n="side.settings"></span></button>
           </div>

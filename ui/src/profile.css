@@ -152,6 +152,8 @@
 .segmented button + button { border-left: 1px solid #463714; }
 .segmented button:hover { color: #f0e6d2; }
 .segmented button[aria-pressed="true"] { color: #f0e6d2; background: #c8aa6e1f; }
+.chart-tools { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.chart-zoom button { padding: 6px 9px; min-width: 34px; }
 
 /* ------------------------------------------------------------- chart */
 
@@ -534,7 +536,6 @@
 .match.is-win .match-result b { color: var(--win-light); }
 .match.is-loss .match-result b, .match-kda em { color: var(--loss-light); }
 .weekday-bar span { background: linear-gradient(0deg, #463714, #c8aa6e); }
-.weekday:hover .weekday-bar span { background: linear-gradient(0deg, #785a28, #f0e6d2); }
 .bar-list li:hover span:first-child, .champion-stats tbody tr:hover td:first-child { color: #f0e6d2; }
 
 /* ------------------------------------------------------------- chart hover */
@@ -557,10 +558,12 @@
 
 .stats-main { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
 .form-strip { display: grid; grid-template-columns: repeat(auto-fill, minmax(34px, 1fr)); gap: 5px; }
-.form-game { position: relative; display: block; aspect-ratio: 1; border: 1px solid; overflow: hidden; }
-.form-game img { display: block; width: 100%; height: 100%; opacity: .75; }
+.form-game { display: flex; flex-direction: column; border: 1px solid; overflow: hidden; transition: transform .12s, box-shadow .12s; }
+.form-icon { display: block; aspect-ratio: 1; background: #010a13; }
+.form-game img { display: block; width: 100%; height: 100%; opacity: .85; }
+/* The result sits under the portrait, never on it. */
 .form-game em {
-  position: absolute; right: 0; bottom: 0; padding: 0 3px;
+  display: block; text-align: center;
   font: 700 9px/13px Beaufort, WenKai, NotoCJK, serif; font-style: normal; color: #010a13;
 }
 .form-game.is-win { border-color: var(--win); }
@@ -569,7 +572,7 @@
 .form-game.is-loss em { background: var(--loss-light); }
 .form-game:hover img { opacity: 1; }
 
-.records { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 8px; }
+.records { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; }
 .records li {
   display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; align-items: center; gap: 10px;
   padding: 7px 10px; border: 1px solid #1e282d; background: linear-gradient(90deg, #c8aa6e0d, transparent);
@@ -704,3 +707,44 @@
 .metric-list b { color: #f0e6d2; text-align: right; }
 .metric-list .share-bar { grid-column: 1 / -1; }
 @media (max-width: 700px) { .metrics { grid-template-columns: minmax(0, 1fr); } }
+
+/* ------------------------------------------------------------- stats hover highlights */
+
+/* Champion performance: a fixed-height box that scrolls, header kept in view. */
+.table-scroll { max-height: 420px; overflow-y: auto; padding-right: 4px; }
+.table-scroll .champion-stats thead th { position: sticky; top: 0; z-index: 1; background: #010a13; }
+.champion-stats tbody tr:hover td { background: #c8aa6e14; }
+.champion-stats tbody tr:hover .rate-bar > span { filter: brightness(1.3); }
+
+/* Bars and rows: the one under the pointer lights up, its neighbours step back. */
+.weekday, .hour-list li, .share-list li, .class-list li, .coverage-list li, .metric-list li, .role-bar span, .role-box,
+.style-tile, .perf-item, .records li, .multi-list li, .form-game, .side-bar span { transition: opacity .12s, filter .12s, background-color .12s, border-color .12s, transform .12s, box-shadow .12s; }
+.weekday-chart:hover .weekday:not(:hover), .hour-list:hover li:not(:hover),
+.share-list:hover li:not(:hover), .class-list:hover li:not(:hover), .coverage-list:hover li:not(:hover),
+.role-bar:hover span:not(:hover), .role-boxes:hover .role-box:not(:hover), .side-bar:hover span:not(:hover) { opacity: .45; }
+.weekday:hover .weekday-bar span, .hour-list li:hover .hour-bar > span, .share-list li:hover .share-bar > span,
+.class-list li:hover .share-bar > span, .coverage-list li:hover .share-bar > span, .role-bar span:hover, .side-bar span:hover { filter: brightness(1.35); }
+.weekday:hover .weekday-bar { box-shadow: inset 0 0 0 1px #c8aa6e66; }
+.weekday:hover b, .weekday:hover em, .hour-list li:hover > span, .share-list li:hover > span:first-child,
+.class-list li:hover > span:first-child, .coverage-list li:hover .coverage-name b { color: #f0e6d2; }
+.hour-list li:hover .hour-bar, .share-list li:hover .share-bar, .class-list li:hover .share-bar, .coverage-list li:hover .share-bar { box-shadow: 0 0 0 1px #c8aa6e55; }
+.role-box:hover, .style-tile:hover, .perf-item:hover, .multi-list li:hover { border-color: #785a28; background: linear-gradient(180deg, #c8aa6e14, #010a13); }
+.perf-item:hover .perf-bar span { filter: brightness(1.3); }
+.form-game:hover { transform: translateY(-2px); box-shadow: 0 0 8px #c8aa6e55; }
+.form-game:hover img { opacity: 1; }
+
+/* Performance metrics: radar point, label and row light up together. */
+.radar-hit { fill: transparent; cursor: default; }
+.radar-dot, .radar-label { transition: r .12s, fill .12s; }
+.radar-dot.is-hot { r: 5.5; fill: #fff; stroke: #f0e6d2; filter: drop-shadow(0 0 4px #c8aa6e); }
+.radar-label.is-hot { fill: #f0e6d2; }
+.metrics.has-hot .metric-list li:not(.is-hot) { opacity: .45; }
+.metric-list li.is-hot { color: #f0e6d2; }
+.metric-list li.is-hot .share-bar > span { filter: brightness(1.35); }
+.metric-list li.is-hot .share-bar { box-shadow: 0 0 0 1px #c8aa6e55; }
+
+/* Trend and rank charts: the bar or dot of the point under the pointer. */
+.trend-chart rect { transition: opacity .1s; }
+.trend-chart.has-active rect:not(.is-active) { opacity: .25; }
+.trend-chart rect.is-active { opacity: 1; filter: brightness(1.6) saturate(1.3); }
+.rank-chart .chart-dot.is-active { r: 5; stroke: #f0e6d2; stroke-width: 1.5; }

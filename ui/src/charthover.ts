@@ -31,7 +31,15 @@ function pointsOf(svg: SVGSVGElement): HoverPoint[] {
 let tooltip: HTMLDivElement | null = null;
 let active: SVGSVGElement | null = null;
 
+/** Mark the bar or dot (`data-i`) of the point under the pointer; -1 clears. */
+function mark(svg: SVGSVGElement | null, index: number): void {
+  if (!svg) return;
+  svg.classList.toggle("has-active", index >= 0);
+  svg.querySelectorAll<SVGElement>("[data-i]").forEach((element) => element.classList.toggle("is-active", Number(element.dataset.i) === index));
+}
+
 function hide(): void {
+  mark(active, -1);
   active?.querySelector(".chart-hover")?.setAttribute("visibility", "hidden");
   active = null;
   tooltip?.remove();
@@ -46,6 +54,7 @@ function show(svg: SVGSVGElement, clientX: number): void {
   const point = points.reduce((best, candidate) => (Math.abs(candidate.x - x) < Math.abs(best.x - x) ? candidate : best));
   if (active && active !== svg) hide();
   active = svg;
+  mark(svg, points.indexOf(point));
 
   const box = svg.viewBox.baseVal;
   const guide = svg.querySelector<SVGGElement>(".chart-hover");

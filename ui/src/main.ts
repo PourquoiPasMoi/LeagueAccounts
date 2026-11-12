@@ -6,12 +6,14 @@ import "./client-controls.css";
 import "./glow.css";
 import "./profile.css";
 import "./gamesettings.css";
+import "./builds.css";
 
 import { ApiError, accountLabel, api, events, keyId, keyOf, parseAccountLine, type AccountView, type Ban, type Key, type LocaleOption, type Schedule, type Settings, type UpdateAccount } from "./api";
 import { openLoginOverlay, type LoginOverlay } from "./login";
 import { loginButton, openProfile, openSkinFinder, profileUpdated, refreshProfileHead } from "./profile";
 import { skinsValue } from "./prices";
 import { openGameSettings } from "./gamesettings";
+import { experimentalOn, initBuilds, openCurrentBuild, resumeChampSelect, setExperimental, trackGames } from "./builds";
 import type { SessionStatus, SkinOwner } from "./api";
 import { LANGUAGES, applyStatic, asLang, en, errorText, fromBrowser, lang, localeTag, localizeRank, needsLanguageChoice, setLang, t, tierName, useLang, type Lang, type MessageKey } from "./i18n";
 import { $, closeMenu, contextMenu, esc, fragment, leave, modal, reducedMotion, toast } from "./dom";
@@ -930,6 +932,7 @@ async function openSettings(): Promise<void> {
           <button type="button" class="btn btn-ghost" data-tool="shortcuts">${icon("keyboard", 14)}${esc(t("side.shortcuts"))}</button>
         </div>
       </section>
+
       </div>
       <div class="settings-col">
       <section class="settings-section">
@@ -953,6 +956,11 @@ async function openSettings(): Promise<void> {
         <h3>${esc(t("settings.value"))}</h3>
         <label class="field inline"><span class="toggle-text"><strong>${esc(t("settings.rpRate"))}</strong><span>${esc(t("settings.rpRateHint"))}</span></span>
           <span class="interval-input"><input name="rpPerEuro" type="number" min="50" max="500" step="1" value="${current.rpPerEuro}"/><span>RP</span></span></label>
+      </section>
+      <section class="settings-section">
+        <h3>${esc(t("settings.experimental"))}</h3>
+        ${toggle("companion", experimentalOn(), t("settings.companion"), t("settings.companionHint"))}
+        <p class="settings-note">${esc(t("settings.experimentalNote"))}</p>
       </section>
       </div>
       </div>`,
@@ -1009,6 +1017,8 @@ async function openSettings(): Promise<void> {
         "toast.settingsFailed",
       );
       if (!saved.ok) return false;
+      const companion = await guard(() => setExperimental(checked("companion")), "toast.settingsFailed");
+      if (!companion.ok) return false;
       state.settings = saved.value;
       render();
       const language = $<HTMLSelectElement>('[name="language"]', root).value as Lang;
@@ -1431,6 +1441,7 @@ function wire(): void {
       if (action === "shortcuts") showShortcuts();
       if (action === "settings") void openSettings();
       if (action === "game-settings") void openGameSettings();
+      if (action === "builds") openCurrentBuild();
     });
   });
 
@@ -1667,6 +1678,8 @@ async function wireEvents(): Promise<void> {
     profileUpdated(keyId(key));
     void loadValues();
   });
+  await initBuilds();
+  await trackGames();
   await events.onRefreshDone(({ error, exclusive }) => {
     if (error) toast("error", t("toast.ranksSaveFailed"), describe(new ApiError(error.code, error.detail)), 5000);
     // Only a full refresh ends the progress state; single-account refreshes
@@ -1730,6 +1743,8 @@ async function start(): Promise<void> {
   if (!(await launchUpdate(revealApp))) await revealApp();
   // First run: ask the user before anything else, in a language they chose.
   if (needsLanguageChoice()) await welcomeLanguage();
+  // Opened during champ select: show the build right away.
+  resumeChampSelect();
 }
 
 observeSelects();

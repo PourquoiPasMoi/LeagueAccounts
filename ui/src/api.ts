@@ -490,6 +490,19 @@ export const api = {
    * unless `force`). True when something new was stored. */
   syncOpggHistory: (key: Key, force = false) => call<boolean>("sync_opgg_history", { key, force }),
   skinIndex: () => call<SkinOwner[]>("skin_index"),
+  champSelectState: () => call<ChampSelect>("champ_select_state"),
+  buildPrefs: () => call<BuildPrefs>("build_prefs"),
+  setBuildPrefs: (prefs: BuildPrefs) => call<BuildPrefs>("set_build_prefs", { prefs }),
+  buildAssets: () => call<GameAssets>("build_assets"),
+  /** OP.GG's statistics plus one build to follow against these enemies. */
+  championBuild: (championId: number, mode: BuildMode, position: string, threats: Threats) =>
+    call<ChampionBuild>("champion_build", { championId, mode, position, threats }),
+  laneSuggestions: (position: string) => call<Suggestion[]>("lane_suggestions", { position }),
+  liveGameState: () => call<LiveGame | null>("live_game_state"),
+  /** Live numbers for everyone (local only); null before the match starts. */
+  liveStats: () => call<LiveStats | null>("live_stats"),
+  /** Puts the chosen parts of the build into the League client. */
+  applyBuild: (request: ApplyRequest) => call<ApplyResult>("apply_build", { request }),
   sessionStatus: () => call<SessionStatus>("session_status"),
   gameSettings: () => call<GameSettingsView>("game_settings"),
   /** Writes the values, then locks the file again when `lock` is set. */
@@ -498,6 +511,196 @@ export const api = {
   restoreGameSettings: () => call<GameSettingsView>("restore_game_settings"),
   openGameSettingsFolder: () => call<void>("open_game_settings_folder"),
 };
+
+// ---------------------------------------------------------------- champ select builds
+
+export type BuildMode = "ranked" | "aram";
+
+export interface ChampSelect {
+  active: boolean;
+  championId: number;
+  locked: boolean;
+  /** OP.GG lane (`top`, `jungle`, `mid`, `adc`, `support`) or empty. */
+  position: string;
+  /** Null for modes without OP.GG builds (Arena, rotating modes). */
+  mode: BuildMode | null;
+  queueId: number;
+  /** Enemy champions shown so far. */
+  enemies: number[];
+}
+
+/** The enemy team: how many deal magic or physical damage, tank, or heal. */
+export interface Threats {
+  magic: number;
+  physical: number;
+  tanks: number;
+  healers: number;
+}
+
+export interface Suggestion {
+  championId: number;
+  tier: number;
+  rank: number;
+  winRate: number;
+  pickRate: number;
+}
+
+/** One build to follow: start, six items in order, swaps. */
+export interface FinalBuild {
+  starter: number[];
+  order: number[];
+  swaps: number[];
+  adapted: { item: number; reason: "magicResist" | "armor" | "antiHeal" }[];
+}
+
+export interface BuildPrefs {
+  experimental: boolean;
+  openOnChampSelect: boolean;
+  autoApply: boolean;
+  autoRunes: boolean;
+  autoSpells: boolean;
+  autoItems: boolean;
+}
+
+export interface QueueRank {
+  tier: string;
+  division: string;
+  lp: number;
+  wins: number;
+  losses: number;
+}
+
+export interface LivePlayer {
+  gameName: string;
+  tagLine: string;
+  championId: number;
+  team: number;
+  isMe: boolean;
+  position: string;
+  solo: QueueRank | null;
+  flex: QueueRank | null;
+  previousTier: string;
+  recentGames: number;
+  recentWins: number;
+  championGames: number;
+  championWins: number;
+  unknown: boolean;
+}
+
+/** One player's live numbers from Riot's Live Client Data API. */
+export interface LiveStatsPlayer {
+  gameName: string;
+  tagLine: string;
+  champion: string;
+  /** 1 = blue side, 2 = red side. */
+  team: number;
+  position: string;
+  level: number;
+  kills: number;
+  deaths: number;
+  assists: number;
+  cs: number;
+  vision: number;
+  items: number[];
+  dead: boolean;
+  respawn: number;
+}
+
+export interface LiveStats {
+  gameTime: number;
+  players: LiveStatsPlayer[];
+  /** [blue, red] */
+  dragons: [number, number];
+  barons: [number, number];
+  heralds: [number, number];
+  towers: [number, number];
+  inhibitors: [number, number];
+}
+
+export interface LiveGame {
+  gameId: number;
+  queueId: number;
+  gameMode: string;
+  myTeam: number;
+  players: LivePlayer[];
+}
+
+export interface Rates {
+  games: number;
+  winRate: number;
+  pickRate: number;
+}
+
+export interface RunePage extends Rates {
+  primaryStyle: number;
+  subStyle: number;
+  perks: number[];
+}
+
+export interface IdSet extends Rates {
+  ids: number[];
+}
+
+export interface ChampionBuild {
+  championId: number;
+  mode: BuildMode;
+  position: string;
+  positions: { position: string; roleRate: number; winRate: number; games: number }[];
+  tier: number | null;
+  rank: number | null;
+  winRate: number;
+  pickRate: number;
+  banRate: number;
+  games: number;
+  runePages: RunePage[];
+  spells: IdSet[];
+  starterItems: IdSet[];
+  coreItems: IdSet[];
+  boots: IdSet[];
+  situational: IdSet[];
+  skills: (Rates & { order: string[]; priority: string[] }) | null;
+  weakAgainst: { championId: number; games: number; winRate: number }[];
+  strongAgainst: { championId: number; games: number; winRate: number }[];
+  plan: FinalBuild;
+}
+
+export interface Asset {
+  name: string;
+  icon: string;
+  /** Items only. */
+  price?: number;
+}
+
+export interface GameAssets {
+  perks: Record<string, Asset>;
+  styles: Record<string, Asset & { slots: number[][] }>;
+  items: Record<string, Asset>;
+  spells: Record<string, Asset>;
+}
+
+export interface ApplyRequest {
+  championId: number;
+  mode: BuildMode;
+  position: string;
+  runePage: number | null;
+  runeName: string;
+  spells: number | null;
+  itemSet: {
+    title: string;
+    starter: string;
+    core: string;
+    situational: string;
+    consumables: string;
+  } | null;
+  threats: Threats;
+}
+
+export interface ApplyResult {
+  runes: "saved" | "replacedCurrent" | null;
+  spells: boolean;
+  itemSet: boolean;
+  errors: string[];
+}
 
 export const events = {
   onLoginStep: (handler: (step: LoginStep) => void): Promise<UnlistenFn> =>
@@ -521,4 +724,10 @@ export const events = {
   /** A new profile snapshot was stored for this account. */
   onProfileUpdate: (handler: (key: Key) => void): Promise<UnlistenFn> =>
     listen<Key>("profile-update", (event) => handler(event.payload)),
+  /** Champ select started, ended, or the local player's champion or lane changed. */
+  onChampSelect: (handler: (state: ChampSelect) => void): Promise<UnlistenFn> =>
+    listen<ChampSelect>("champ-select", (event) => handler(event.payload)),
+  /** A game started (everyone's ranks are in) or ended (null). */
+  onLiveGame: (handler: (game: LiveGame | null) => void): Promise<UnlistenFn> =>
+    listen<LiveGame | null>("live-game", (event) => handler(event.payload)),
 };

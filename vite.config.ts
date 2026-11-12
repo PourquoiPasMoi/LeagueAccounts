@@ -9,5 +9,11 @@ export default defineConfig({
     outDir: "../dist",
     emptyOutDir: true,
     target: "es2022",
+    rollupOptions: {
+      input: {
+        // Relative to the project folder, where every npm script runs.
+        main: "ui/index.html",
+      },
+    },
   },
 });

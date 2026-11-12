@@ -822,6 +822,23 @@ impl LocalApi {
         session_state(self.get("/player-session-lifecycle/v1/session"))
     }
 
+    /// Any method with an optional JSON body; the status and JSON answer.
+    fn send(&self, method: reqwest::Method, path: &str, body: Option<&serde_json::Value>) -> Option<(u16, serde_json::Value)> {
+        let mut request = self
+            .client
+            .request(method, format!("{}{path}", self.base))
+            .basic_auth("riot", Some(&self.password));
+        if let Some(body) = body {
+            request = request
+                .header(reqwest::header::CONTENT_TYPE, "application/json")
+                .body(body.to_string());
+        }
+        let response = request.send().ok()?;
+        let status = response.status().as_u16();
+        let body = response.text().ok().unwrap_or_default();
+        Some((status, serde_json::from_str(&body).unwrap_or_default()))
+    }
+
     /// Ask the client to launch a product.
     fn launch(&self, game: Game) -> Launch {
         let response = self
@@ -1262,9 +1279,9 @@ fn riot_id_from_processes(processes: &[Process]) -> Option<String> {
     riot_id
 }
 
-/// Read-only access to the League client's local API (champions, skins,
-/// ranked stats, match history), handed out only while that client is signed
-/// in as one specific account.
+/// The League client's local API (champions, skins, ranked stats, match
+/// history, champ select, rune pages, item sets). The same API the client's
+/// own interface and Riot-approved companion apps use.
 pub struct LeagueApi(LocalApi);
 
 impl LeagueApi {
@@ -1273,6 +1290,27 @@ impl LeagueApi {
         let (status, body) = self.0.get(path)?;
         (status == 200).then_some(body)
     }
+
+    /// `POST`, `PUT`, `PATCH` or `DELETE` with an optional JSON body: the
+    /// status code and the JSON answer (`Null` when there is none).
+    pub fn send(&self, method: &str, path: &str, body: Option<&serde_json::Value>) -> Option<(u16, serde_json::Value)> {
+        let method = reqwest::Method::from_bytes(method.as_bytes()).ok()?;
+        self.0.send(method, path, body)
+    }
+}
+
+/// The running League client's API, whoever is signed in (champ select help
+/// works for every account, not only saved ones). Same lockfile checks as
+/// [`league_api_for`].
+pub fn league_client() -> Option<LeagueApi> {
+    let processes = running_processes();
+    let process = processes.iter().find(|process| process.name == "leagueclient.exe")?;
+    let executable = windows::process_path(process.pid)?;
+    let contents = std::fs::read_to_string(executable.parent()?.join("lockfile")).ok()?;
+    if contents.split(':').nth(1)?.parse::<u32>().ok()? != process.pid {
+        return None;
+    }
+    LocalApi::from_lockfile_with_timeout(&contents, Duration::from_secs(10)).map(LeagueApi)
 }
 
 /// The League client's API, only when every running game client confirms it
