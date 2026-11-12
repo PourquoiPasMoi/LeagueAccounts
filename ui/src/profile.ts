@@ -247,6 +247,11 @@ export function openProfile(context: ProfileContext): void {
       body.scrollTop = 0;
       return renderBody();
     }
+    const zoom = target.closest<HTMLElement>("[data-chart-zoom]")?.dataset.chartZoom;
+    if (zoom !== undefined) {
+      setChartZoom(Number(zoom));
+      return renderBody();
+    }
     const mode = target.closest<HTMLElement>("[data-chart-mode]")?.dataset.chartMode as Mode | undefined;
     if (mode && mode !== chartMode) {
       chartMode = mode;
@@ -270,6 +275,27 @@ export function openProfile(context: ProfileContext): void {
       return renderBody();
     }
   });
+  // Performance metrics: a radar point and its row light up together.
+  overlay.addEventListener("pointerover", (event) => {
+    const metric = (event.target as Element).closest?.("[data-metric]") as HTMLElement | SVGElement | null;
+    const box = metric?.closest(".metrics");
+    overlay.querySelectorAll(".metrics .is-hot").forEach((element) => element.classList.remove("is-hot"));
+    overlay.querySelectorAll(".metrics.has-hot").forEach((element) => element.classList.remove("has-hot"));
+    if (!metric || !box) return;
+    box.classList.add("has-hot");
+    box.querySelectorAll(`[data-metric="${metric.dataset.metric}"]`).forEach((element) => element.classList.add("is-hot"));
+  });
+  // Ctrl + mouse wheel on the rank chart zooms in or out (plain wheel scrolls the page).
+  overlay.addEventListener("wheel", (event) => {
+    if (!event.ctrlKey || !(event.target as Element).closest?.(".rank-chart")) return;
+    event.preventDefault();
+    const index = ZOOMS.indexOf(chartZoom);
+    const next = ZOOMS[Math.min(ZOOMS.length - 1, Math.max(0, index + (event.deltaY < 0 ? 1 : -1)))];
+    if (next !== chartZoom) {
+      setChartZoom(next);
+      renderBody();
+    }
+  }, { passive: false });
   overlay.addEventListener("input", (event) => {
     const target = event.target as HTMLInputElement;
     if (target.matches("[data-champion-search]")) {
@@ -378,9 +404,14 @@ function overviewHtml(account: AccountView, view: ProfileView, chartMode: Mode, 
     <section class="profile-panel">
       <header class="panel-head">
         <h3>${esc(t("profile.lpHistory"))}</h3>
+        <div class="chart-tools">
+        <div class="segmented chart-zoom" data-tooltip="${esc(t("profile.zoomHint"))}">
+          ${ZOOMS.map((days) => `<button data-chart-zoom="${days}" aria-pressed="${chartZoom === days}">${esc(zoomLabel(days))}</button>`).join("")}
+        </div>
         <div class="segmented">
           <button data-chart-mode="lol" aria-pressed="${chartMode === "lol"}">${esc(t("mode.lol"))}</button>
           <button data-chart-mode="tft" aria-pressed="${chartMode === "tft"}">${esc(t("mode.tft"))}</button>
+        </div>
         </div>
       </header>
       ${rankChart(view.history.filter((point) => point.mode === chartMode), chartMode)}
@@ -453,28 +484,66 @@ function tierAt(score: number): string {
   return LADDER[Math.max(0, Math.floor(score / 400))];
 }
 
+// ---------------------------------------------------------------- chart zoom
+
+/** Zoom levels: days shown up to now (0 = everything). */
+const ZOOMS = [0, 365, 180, 90, 30, 14, 7];
+const ZOOM_KEY = "rankChartZoom";
+let chartZoom = (() => {
+  try {
+    const saved = Number(localStorage.getItem(ZOOM_KEY));
+    return ZOOMS.includes(saved) ? saved : 0;
+  } catch {
+    return 0;
+  }
+})();
+
+function setChartZoom(days: number): void {
+  if (!ZOOMS.includes(days)) return;
+  chartZoom = days;
+  try {
+    localStorage.setItem(ZOOM_KEY, String(days));
+  } catch {
+    // Not saved; the zoom still applies until the app closes.
+  }
+}
+
+function zoomLabel(days: number): string {
+  if (!days) return t("profile.zoomAll");
+  if (days === 365) return t("profile.zoomYear");
+  if (days >= 30) return t("profile.zoomMonths", { n: days / 30 });
+  return t("profile.zoomWeeks", { n: days / 7 });
+}
+
 function rankChart(points: RankPoint[], mode: Mode): string {
-  const scored = points
+  const all = points
     .map((point) => ({ point, score: ladderScore(point) }))
     .filter((entry): entry is { point: RankPoint; score: number } => entry.score !== null);
-  if (!scored.length) {
+  if (!all.length) {
     return `<p class="chart-empty">${icon("chart-line", 18)}<span>${esc(t("profile.lpEmpty"))}</span></p>`;
   }
+  const now = Date.now();
+  // Zoomed in: only the window up to now; the standing held before it starts the line.
+  const from = chartZoom ? now - chartZoom * 86_400_000 : -Infinity;
+  const before = all.filter((entry) => entry.point.at < from).at(-1);
+  let scored = all.filter((entry) => entry.point.at >= from);
+  const anchor = before ? { point: { ...before.point, at: from }, score: before.score } : null;
+  if (!scored.length) scored = [anchor ?? all.at(-1)!];
   // The latest standing holds until now: draw it up to the present.
   const latest = scored.at(-1)!;
-  const now = Date.now();
-  const line_points = now - latest.point.at > 60_000 || scored.length === 1
-    ? [...scored, { point: { ...latest.point, at: Math.max(now, latest.point.at + 60_000) }, score: latest.score }]
-    : scored;
+  const head = anchor && scored[0] !== anchor ? [anchor, ...scored] : scored;
+  const line_points = now - latest.point.at > 60_000 || head.length === 1
+    ? [...head, { point: { ...latest.point, at: Math.max(now, latest.point.at + 60_000) }, score: latest.score }]
+    : head;
   const width = 760;
   const height = 210;
   const pad = { left: 74, right: 16, top: 14, bottom: 26 };
-  const scores = scored.map((entry) => entry.score);
+  const scores = line_points.map((entry) => entry.score);
   let low = Math.floor((Math.min(...scores) - 40) / 100) * 100;
   let high = Math.ceil((Math.max(...scores) + 40) / 100) * 100;
   if (high - low < 200) high = low + 200;
   low = Math.max(0, low);
-  const start = scored[0].point.at;
+  const start = line_points[0].point.at;
   const span = Math.max(1, line_points.at(-1)!.point.at - start);
   const x = (at: number) => pad.left + ((at - start) / span) * (width - pad.left - pad.right);
   const y = (score: number) => pad.top + (1 - (score - low) / (high - low)) * (height - pad.top - pad.bottom);
@@ -499,9 +568,15 @@ function rankChart(points: RankPoint[], mode: Mode): string {
       ${label ? `<text x="${pad.left - 8}" y="${(y(value) + 4).toFixed(1)}" text-anchor="end" style="fill:${palette(tier).base}">${esc(label)}</text>` : ""}`);
   }
   const dateFormat = new Intl.DateTimeFormat(localeTag(), { day: "numeric", month: "short" });
-  const dots = scored.map((entry) => {
+  // Dates under the chart: both ends plus three between.
+  const end = line_points.at(-1)!.point.at;
+  const ticks = [0.25, 0.5, 0.75].map((share) => {
+    const at = start + share * (end - start);
+    return `<text x="${x(at).toFixed(1)}" y="${height - 6}" text-anchor="middle" class="axis">${esc(dateFormat.format(at))}</text>`;
+  }).join("");
+  const dots = scored.map((entry, index) => {
     const tier = normalizeTier(entry.point.tier);
-    return `<circle cx="${x(entry.point.at).toFixed(1)}" cy="${y(entry.score).toFixed(1)}" r="3.2" style="fill:${palette(tier).base}"/>`;
+    return `<circle cx="${x(entry.point.at).toFixed(1)}" cy="${y(entry.score).toFixed(1)}" r="3.2" data-i="${index}" class="chart-dot" style="fill:${palette(tier).base}"/>`;
   }).join("");
   // Hover readout: rank, LP and the change since the previous point.
   const hover: HoverPoint[] = scored.map((entry, index) => {
@@ -535,6 +610,7 @@ function rankChart(points: RankPoint[], mode: Mode): string {
       ${dots}
       <g class="chart-hover" visibility="hidden"></g>
       <text x="${pad.left}" y="${height - 6}" class="axis">${esc(dateFormat.format(start))}</text>
+      ${end - start > 2 * 86_400_000 ? ticks : ""}
       <text x="${width - pad.right}" y="${height - 6}" text-anchor="end" class="axis">${esc(dateFormat.format(line_points.at(-1)!.point.at))}</text>
     </svg>`;
 }

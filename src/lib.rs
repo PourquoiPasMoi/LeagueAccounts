@@ -7,11 +7,13 @@
 
 pub mod account_manager;
 pub mod autotype;
+pub mod builds;
 pub mod clipboard;
 pub mod credentials;
 pub mod game_locale;
 pub mod game_settings;
 pub mod image_cache;
+pub mod livegame;
 pub mod profiles;
 pub mod locales;
 pub mod logging;

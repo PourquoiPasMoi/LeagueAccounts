@@ -149,13 +149,13 @@ export function statsHtml(all: MatchRecord[], profile: Profile | null, filters: 
     <div class="stats-columns">
       <div class="stats-main">
         ${championTable(games, profile)}
-        ${formPanel(games, profile)}
-        ${recordsPanel(games, profile)}
       </div>
       <div class="stats-side">
         ${streaksPanel(games)}
+        ${recordsPanel(games, profile)}
       </div>
-    </div>`;
+    </div>
+    ${formPanel(games, profile)}`;
 }
 
 // ---------------------------------------------------------------- trend chart
@@ -182,9 +182,9 @@ function trendChart(newestFirst: MatchRecord[], metric: TrendMetric, profile: Pr
   const ticks = [0, high / 2, high].map((value) => `
     <line x1="${pad.left}" x2="${width - pad.right}" y1="${y(value).toFixed(1)}" y2="${y(value).toFixed(1)}" class="rule"/>
     <text x="${pad.left - 6}" y="${(y(value) + 4).toFixed(1)}" text-anchor="end" class="axis">${esc(number(value, value < 10 ? 1 : 0))}</text>`).join("");
-  const bars = points.map((point) => {
+  const bars = points.map((point, order) => {
     const barWidth = Math.max(3, (width - pad.left - pad.right) / games.length - 3);
-    return `<rect x="${(x(point.index) - barWidth / 2).toFixed(1)}" y="${y(point.value).toFixed(1)}" width="${barWidth.toFixed(1)}" height="${(height - pad.bottom - y(point.value)).toFixed(1)}" class="${point.game.win ? "bar-win" : "bar-loss"}"/>`;
+    return `<rect x="${(x(point.index) - barWidth / 2).toFixed(1)}" y="${y(point.value).toFixed(1)}" width="${barWidth.toFixed(1)}" height="${(height - pad.bottom - y(point.value)).toFixed(1)}" data-i="${order}" class="${point.game.win ? "bar-win" : "bar-loss"}"/>`;
   }).join("");
   // Hover readout: the game's result, the metric, K/D/A and when it was played.
   const hover: HoverPoint[] = points.map((point, order) => {
@@ -238,7 +238,8 @@ function championTable(games: MatchRecord[], profile: Profile | null): string {
     .sort((left, right) => right.games - left.games || right.wins / right.games - left.wins / left.games);
   return `
     <section class="profile-panel">
-      <h3>${esc(t("stats.champions"))}</h3>
+      <header class="panel-head"><h3>${esc(t("stats.champions"))}</h3><span class="muted">${esc(t("stats.championsCount", { count: rows.length }))}</span></header>
+      <div class="table-scroll">
       <table class="champion-stats">
         <thead><tr>
           <th>${esc(t("profile.champions"))}</th><th>${esc(t("stats.games"))}</th><th>${esc(t("stats.winRate"))}</th>
@@ -255,6 +256,7 @@ function championTable(games: MatchRecord[], profile: Profile | null): string {
           </tr>`).join("")}
         </tbody>
       </table>
+      </div>
     </section>`;
 }
 
@@ -308,7 +310,7 @@ function formPanel(games: MatchRecord[], profile: Profile | null): string {
       </header>
       <div class="form-strip" style="--n:${Math.max(recent.length, 10)}">${recent.map((game) => `
         <span class="form-game ${game.win ? "is-win" : "is-loss"}" data-tooltip="${esc(`${championNameOf(game, profile)} · ${game.kills}/${game.deaths}/${game.assists} · ${t(queueKey(game))} · ${new Date(game.created).toLocaleDateString(localeTag())}`)}">
-          ${championIdOf(game, profile) ? `<img src="${esc(championIcon(championIdOf(game, profile)))}" alt="" loading="lazy" draggable="false" />` : ""}
+          <span class="form-icon">${championIdOf(game, profile) ? `<img src="${esc(championIcon(championIdOf(game, profile)))}" alt="" loading="lazy" draggable="false" />` : ""}</span>
           <em>${esc(t(game.win ? "stats.winShort" : "stats.lossShort"))}</em>
         </span>`).join("")}
       </div>
@@ -354,7 +356,7 @@ function recordsPanel(games: MatchRecord[], profile: Profile | null): string {
 
 // ---------------------------------------------------------------- OP.GG-style play style panels
 
-const META = championMeta as Record<string, { c: string; p: string[] }>;
+const META = championMeta as Record<string, { n: string; c: string; d: string; p: string[] }>;
 const TOTAL_CHAMPIONS = Object.keys(META).length;
 const CLASSES = ["Mage", "Fighter", "Tank", "Assassin", "Marksman", "Support"] as const;
 const CLASS_KEYS: Record<(typeof CLASSES)[number], MessageKey> = {
@@ -653,13 +655,13 @@ function metricsPanel(games: MatchRecord[]): string {
   const shape = known.map((metric, index) => point(index, Math.max(0.06, clamp(metric.value! / metric.reference)))).join(" ");
   const dots = known.map((metric, index) => {
     const [x, y] = point(index, Math.max(0.06, clamp(metric.value! / metric.reference))).split(",");
-    return `<circle cx="${x}" cy="${y}" r="3" class="radar-dot"/>`;
+    return `<circle cx="${x}" cy="${y}" r="3" class="radar-dot" data-metric="${index}"/><circle cx="${x}" cy="${y}" r="11" class="radar-hit" data-metric="${index}" data-tooltip="${esc(`${metric.label}: ${metric.format(metric.value!)}`)}"/>`;
   }).join("");
   const labels = known.map((metric, index) => {
     const x = center + Math.cos(angle(index)) * (radius + 20);
     const y = center + Math.sin(angle(index)) * (radius + 16) + 4;
     const anchor = Math.abs(Math.cos(angle(index))) < 0.2 ? "middle" : Math.cos(angle(index)) > 0 ? "start" : "end";
-    return `<text x="${x.toFixed(1)}" y="${y.toFixed(1)}" text-anchor="${anchor}" class="radar-label">${esc(metric.short)}</text>`;
+    return `<text x="${x.toFixed(1)}" y="${y.toFixed(1)}" text-anchor="${anchor}" class="radar-label" data-metric="${index}">${esc(metric.short)}</text>`;
   }).join("");
   const body = `
     <div class="metrics">
@@ -668,8 +670,8 @@ function metricsPanel(games: MatchRecord[]): string {
         <polygon points="${shape}" class="radar-shape"/>
         ${dots}${labels}
       </svg>
-      <ul class="metric-list">${known.map((metric) => `
-        <li>
+      <ul class="metric-list">${known.map((metric, index) => `
+        <li data-metric="${index}">
           <span>${esc(metric.label)}</span><b>${esc(metric.format(metric.value!))}</b>
           <span class="share-bar"><span style="--p:${clamp(metric.value! / metric.reference)}"></span></span>
         </li>`).join("")}

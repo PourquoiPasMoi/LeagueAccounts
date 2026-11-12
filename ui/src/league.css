@@ -253,6 +253,7 @@ button:focus-visible, a:focus-visible { color: #f0e6d2; }
    ("Window Size": 232px framed dropdown). */
 .settings-section h3 { font-family: Beaufort, WenKai, NotoCJK, serif; font-size: 14px; line-height: 18px; font-weight: 700; letter-spacing: .075em; text-transform: uppercase; color: #f0e6d2; }
 .settings-section .field.inline { display: flex; flex-direction: row; align-items: center; justify-content: space-between; gap: 12px; padding: 4px 0; }
+.settings-note { margin: 6px 0 0; padding: 8px 10px; border: 1px solid rgba(200, 170, 110, .35); background: rgba(1, 10, 19, .55); color: #a09b8c; font-size: 12px; line-height: 17px; }
 .settings-section .field.inline > span { font: 12px/16px Spiegel, NotoCJK, sans-serif; letter-spacing: .025em; color: #a09b8c; }
 .settings-section .field.inline .select-wrap { width: 180px; height: 32px; }
 .interval-row > span { font-size: 12px; font-weight: 400; letter-spacing: .1em; color: #a09b8c; }

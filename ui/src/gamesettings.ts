@@ -105,12 +105,35 @@ const HOTKEYS: [string, [string, string][]][] = [
     ["evtSelectAlly1", "Select ally 1"], ["evtSelectAlly2", "Select ally 2"], ["evtSelectAlly3", "Select ally 3"],
     ["evtSelectAlly4", "Select ally 4"], ["evtOnUIMouse4Pan", "Drag camera"],
   ]],
-  ["Communication and shop", [
-    ["evtOpenShop", "Open shop"], ["evtChatHistory", "Chat history"], ["evtPushToTalk", "Push to talk"],
+  ["Camera scrolling", [
+    ["evtScrollUp", "Scroll camera up"], ["evtScrollDown", "Scroll camera down"], ["evtScrollLeft", "Scroll camera left"],
+    ["evtScrollRight", "Scroll camera right"], ["evtDragScrollLock", "Drag scroll lock"], ["evtToggleMouseClip", "Lock mouse to window"],
+  ]],
+  ["Pings", [
     ["evntPlayerPing", "Ping"], ["evntPlayerPingCursor", "Ping at cursor"], ["evntPlayerPingDanger", "Caution ping"],
-    ["evtPlayerPingMIA", "Enemy missing ping"], ["evtPlayerPingOMW", "On my way ping"], ["evtPlayerPingAreaIsWarded", "Area warded ping"],
-    ["evtRadialEmoteInstantOpen", "Emote wheel"], ["evtEmoteDance", "Dance"], ["evtEmoteJoke", "Joke"],
-    ["evtEmoteLaugh", "Laugh"], ["evtEmoteTaunt", "Taunt"], ["evtEmoteToggle", "Toggle mastery emote"],
+    ["evntPlayerPingCursorDanger", "Caution ping at cursor"], ["evtPlayerPingRadialDanger", "Retreat ping"],
+    ["evtPlayerPingMIA", "Enemy missing ping"], ["evtPlayerPingOMW", "On my way ping"], ["evtPlayerPingComeHere", "Assist me ping"],
+    ["evtPlayerPingPush", "Push ping"], ["evtPlayerPingAllIn", "All in ping"], ["evtPlayerPingVisionNeeded", "Need vision ping"],
+    ["evtPlayerPingAreaIsWarded", "Area warded ping"],
+  ]],
+  ["Emotes", [
+    ["evtEmoteJoke", "Joke"], ["evtEmoteTaunt", "Taunt"], ["evtEmoteDance", "Dance"], ["evtEmoteLaugh", "Laugh"],
+    ["evtEmoteToggle", "Toggle"], ["evtChampMasteryDisplay", "Mastery emote"], ["evtReciprocityTrigger", "Fist bump"],
+    ["evtReciprocityMyBadTrigger", "My bad"], ["evtRadialEmoteOpen", "Open emote wheel"], ["evtRadialEmoteInstantOpen", "Open emote wheel (instant)"],
+    ["evtRadialEmotePlaySlot0", "Emote wheel: centre"], ["evtRadialEmotePlaySlot1", "Emote wheel: slot 1"], ["evtRadialEmotePlaySlot2", "Emote wheel: slot 2"],
+    ["evtRadialEmotePlaySlot3", "Emote wheel: slot 3"], ["evtRadialEmotePlaySlot4", "Emote wheel: slot 4"], ["evtRadialEmotePlaySlot5", "Emote wheel: slot 5"],
+    ["evtRadialEmotePlaySlot6", "Emote wheel: slot 6"], ["evtRadialEmotePlaySlot7", "Emote wheel: slot 7"], ["evtRadialEmotePlaySlot8", "Emote wheel: slot 8"],
+  ]],
+  ["Communication and shop", [
+    ["evtOpenShop", "Open shop"], ["evtShopFocusSearch", "Shop: search"], ["evtShopSwitchTabs", "Shop: switch tabs"],
+    ["evtChatHistory", "Chat history"], ["evtPushToTalk", "Push to talk"], ["evtPushToTalkTeam", "Push to talk (team)"],
+    ["evtShowVoicePanel", "Voice panel"],
+  ]],
+  ["Display", [
+    ["evtShowScoreBoard", "Scoreboard (toggle)"], ["evtHoldShowScoreBoard", "Scoreboard (hold)"], ["evtTogglePlayerStats", "Player stats"],
+    ["evtToggleFPSAndLatency", "FPS and latency"], ["evtShowHealthBars", "Health bars"], ["evtToggleMinionHealthBars", "Minion health bars"],
+    ["evtShowSummonerNames", "Summoner names"], ["evtDrawHud", "Show or hide HUD"], ["evtToggleDeathRecapShowcase", "Death recap"],
+    ["evtShowCharacterMenu", "Character menu"], ["evtSysMenu", "Game menu"],
   ]],
 ];
 
@@ -147,6 +170,17 @@ const TAGS: Record<string, string> = {
   evtPlayerPingMIA: "ss missing ping", evtPlayerPingOMW: "coming ping", evtPlayerPingAreaIsWarded: "ward ping vision",
   evtRadialEmoteInstantOpen: "emote wheel radial", evtEmoteDance: "emote", evtEmoteJoke: "emote", evtEmoteLaugh: "emote",
   evtEmoteTaunt: "emote", evtEmoteToggle: "emote mastery badge",
+  evtChampMasteryDisplay: "emote mastery badge", evtReciprocityTrigger: "emote fist bump reciprocity thanks gg",
+  evtReciprocityMyBadTrigger: "emote my bad sorry apology reciprocity", evtRadialEmoteOpen: "emote wheel radial",
+  evtPlayerPingRadialDanger: "ping retreat danger back", evtPlayerPingComeHere: "ping assist help come", evtPlayerPingPush: "ping push",
+  evtPlayerPingAllIn: "ping all in fight engage", evtPlayerPingVisionNeeded: "ping vision ward need", evntPlayerPingCursorDanger: "ping danger caution",
+  evtShowScoreBoard: "tab scoreboard score", evtHoldShowScoreBoard: "tab scoreboard score", evtTogglePlayerStats: "stats",
+  evtToggleFPSAndLatency: "fps ping latency frames", evtShowHealthBars: "hp health bar", evtToggleMinionHealthBars: "hp health bar minions creeps",
+  evtShowSummonerNames: "names nicknames", evtDrawHud: "hud interface ui hide", evtToggleDeathRecapShowcase: "death recap",
+  evtShopFocusSearch: "shop store search find", evtShopSwitchTabs: "shop store tabs", evtPushToTalkTeam: "voice mic microphone team",
+  evtShowVoicePanel: "voice mic microphone", evtScrollUp: "camera scroll pan", evtScrollDown: "camera scroll pan",
+  evtScrollLeft: "camera scroll pan", evtScrollRight: "camera scroll pan", evtToggleMouseClip: "mouse cursor lock confine",
+  evtSysMenu: "menu escape options", evtShowCharacterMenu: "menu character",
   Master: "volume sound audio overall", Music: "volume sound audio songs", Announcer: "volume sound audio voice over",
   Voice: "volume sound audio champion lines vo", Sfx: "volume sound audio effects sfx", Ambience: "volume sound audio background",
   Pings: "volume sound audio alerts", Notifications: "volume sound audio alerts",
@@ -401,8 +435,8 @@ export async function openGameSettings(): Promise<void> {
   };
 
   const hotkeyRow = (name: string, label: string, owners: Map<string, string[]>): string => {
-      const binding = value(I, "GameEvents", name);
-      if (binding === undefined) return "";
+      // A hotkey the game has not written yet (never bound) shows as unbound.
+      const binding = value(I, "GameEvents", name) ?? "";
       const slots = parseBinding(binding);
       while (slots.length < 2) slots.push([]);
       const changed = edits.has(key(I, "GameEvents", name)) ? " is-changed" : "";

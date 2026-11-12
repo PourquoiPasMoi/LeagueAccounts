@@ -61,6 +61,9 @@ pub enum Event {
     ProfileSyncFailed,
     ProfileSaveFailed,
     ImageCacheFailed,
+    BuildFetchFailed,
+    BuildApplied,
+    BuildApplyFailed,
 }
 
 impl Event {
@@ -108,6 +111,9 @@ impl Event {
             Self::ProfileSyncFailed => "profile_sync_failed",
             Self::ProfileSaveFailed => "profile_save_failed",
             Self::ImageCacheFailed => "image_cache_failed",
+            Self::BuildFetchFailed => "build_fetch_failed",
+            Self::BuildApplied => "build_applied",
+            Self::BuildApplyFailed => "build_apply_failed",
         }
     }
 
@@ -126,7 +132,8 @@ impl Event {
             | Self::UpdateDownloaded
             | Self::UpdateInstalled
             | Self::UpdateRestarted
-            | Self::ProfileSynced => "INFO",
+            | Self::ProfileSynced
+            | Self::BuildApplied => "INFO",
             _ => "ERROR",
         }
     }

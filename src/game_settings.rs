@@ -102,7 +102,40 @@ pub fn is_locked(path: &Path) -> bool {
 pub fn read(path: &Path) -> Result<Vec<SettingsFile>, SettingsError> {
     let text = std::fs::read_to_string(path)?;
     let json: Value = serde_json::from_str(text.trim_start_matches('\u{feff}')).map_err(|_| SettingsError::Unreadable)?;
-    let files: Vec<SettingsFile> = serde_json::from_value(json["files"].clone()).map_err(|_| SettingsError::Unreadable)?;
+    let mut files: Vec<SettingsFile> = serde_json::from_value(json["files"].clone()).map_err(|_| SettingsError::Unreadable)?;
+    // The game's input.ini lists every hotkey (bound or not); the persisted
+    // settings only those set from the options menu. Show both.
+    if let Some(ini) = path.parent().and_then(|config| std::fs::read_to_string(config.join("input.ini")).ok()) {
+        let mut section = String::new();
+        let mut extra: Vec<Setting> = Vec::new();
+        for line in ini.lines() {
+            let line = line.trim();
+            if line.starts_with('[') && line.ends_with(']') {
+                section = line[1..line.len() - 1].to_owned();
+            } else if section == "GameEvents" {
+                if let Some((name, value)) = line.split_once('=') {
+                    if name.starts_with("ev") {
+                        extra.push(Setting { name: name.to_owned(), value: value.to_owned() });
+                    }
+                }
+            }
+        }
+        if !files.iter().any(|file| file.name == "Input.ini") {
+            files.push(SettingsFile { name: "Input.ini".into(), sections: Vec::new() });
+        }
+        if let Some(input) = files.iter_mut().find(|file| file.name == "Input.ini") {
+            if !input.sections.iter().any(|section| section.name == "GameEvents") {
+                input.sections.push(Section { name: "GameEvents".into(), settings: Vec::new() });
+            }
+            if let Some(events) = input.sections.iter_mut().find(|section| section.name == "GameEvents") {
+                for setting in extra {
+                    if !events.settings.iter().any(|known| known.name == setting.name) {
+                        events.settings.push(setting);
+                    }
+                }
+            }
+        }
+    }
     Ok(files)
 }
 
@@ -183,7 +216,24 @@ pub fn apply(path: &Path, changes: &[Change], lock: bool) -> Result<(), Settings
     let mut json: Value = serde_json::from_str(text.trim_start_matches('\u{feff}')).map_err(|_| SettingsError::Unreadable)?;
     let files = json["files"].as_array_mut().ok_or(SettingsError::Unreadable)?;
     for change in changes {
-        // Only existing values are changed: League owns the list of settings.
+        // Existing values are changed. The one exception is a hotkey the game
+        // has not written yet (never bound, e.g. Fist Bump): it is added to
+        // the hotkey section, as the game does when it is bound in game.
+        let addable = change.file == "Input.ini" && change.section == "GameEvents" && change.name.starts_with("ev");
+        if addable {
+            let section = files
+                .iter_mut()
+                .find(|file| file["name"].as_str() == Some("Input.ini"))
+                .and_then(|file| file["sections"].as_array_mut())
+                .and_then(|sections| sections.iter_mut().find(|section| section["name"].as_str() == Some("GameEvents")))
+                .and_then(|section| section["settings"].as_array_mut());
+            if let Some(settings) = section {
+                if !settings.iter().any(|setting| setting["name"].as_str() == Some(change.name.as_str())) {
+                    settings.push(serde_json::json!({ "name": change.name, "value": change.value }));
+                    continue;
+                }
+            }
+        }
         let setting = files
             .iter_mut()
             .find(|file| file["name"].as_str() == Some(change.file.as_str()))
@@ -226,7 +276,8 @@ fn mirror(path: &Path, file: &str, changes: &[Change]) {
     let newline = if text.contains("\r\n") { "\r\n" } else { "\n" };
     let mut section = String::new();
     let mut changed = false;
-    let lines: Vec<String> = text
+    let mut seen: Vec<&str> = Vec::new();
+    let mut lines: Vec<String> = text
         .lines()
         .map(|line| {
             let trimmed = line.trim();
@@ -237,12 +288,26 @@ fn mirror(path: &Path, file: &str, changes: &[Change]) {
             if let Some((key, _)) = line.split_once('=') {
                 if let Some(change) = relevant.iter().find(|change| change.section == section && change.name == key) {
                     changed = true;
+                    seen.push(change.name.as_str());
                     return format!("{key}={}", change.value);
                 }
             }
             line.to_owned()
         })
         .collect();
+    // Hotkeys the file does not list yet go at the end of their section.
+    for change in relevant.iter().filter(|change| change.section == "GameEvents" && change.name.starts_with("ev") && !seen.contains(&change.name.as_str())) {
+        let header = format!("[{}]", change.section);
+        let Some(start) = lines.iter().position(|line| line.trim() == header) else { continue };
+        let end = lines[start + 1..].iter().position(|line| line.trim().starts_with('[')).map_or(lines.len(), |offset| start + 1 + offset);
+        // Before any blank lines that close the section.
+        let mut at = end;
+        while at > start + 1 && lines[at - 1].trim().is_empty() {
+            at -= 1;
+        }
+        lines.insert(at, format!("{}={}", change.name, change.value));
+        changed = true;
+    }
     if !changed {
         return;
     }

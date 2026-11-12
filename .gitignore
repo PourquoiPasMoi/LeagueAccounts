@@ -22,3 +22,4 @@ desktop.ini
 node_modules/
 dist/
 src-tauri/gen/
+/target-test

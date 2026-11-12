@@ -5,7 +5,9 @@
 //! Passwords never cross into the web view. The UI only receives account
 //! metadata; copy/login commands read the password on the Rust side.
 
+mod champselect;
 mod login_control;
+mod live;
 mod refresh;
 mod scale;
 mod updater;
@@ -1255,6 +1257,82 @@ fn run_update_watcher(exe: std::path::PathBuf, pid: u32) -> ! {
     std::process::exit(0);
 }
 
+fn show_main(app: &AppHandle) {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.unminimize();
+        let _ = window.show();
+        let _ = window.set_focus();
+    }
+}
+
+/// Tray menu labels in the interface language.
+fn tray_labels(language: &str) -> (&'static str, &'static str) {
+    match language {
+        "tr" => ("Aç", "Çık"),
+        "de" => ("Öffnen", "Beenden"),
+        "es" => ("Abrir", "Salir"),
+        "fr" => ("Ouvrir", "Quitter"),
+        "pt" => ("Abrir", "Sair"),
+        "zh" => ("打开", "退出"),
+        "zhTw" => ("開啟", "結束"),
+        _ => ("Open", "Quit"),
+    }
+}
+
+/// The notification-area icon: click to open the window, right-click for
+/// Open / Quit. Closing the window only hides it; Quit ends the app.
+fn create_tray(app: &tauri::App, language: &str) -> tauri::Result<()> {
+    use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
+    use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
+    let (open_label, quit_label) = tray_labels(language);
+    let open = MenuItem::with_id(app, "open", open_label, true, None::<&str>)?;
+    let separator = PredefinedMenuItem::separator(app)?;
+    let quit = MenuItem::with_id(app, "quit", quit_label, true, None::<&str>)?;
+    let menu = Menu::with_items(app, &[&open, &separator, &quit])?;
+    let mut tray = TrayIconBuilder::with_id("main")
+        .tooltip("League Companion")
+        .menu(&menu)
+        .show_menu_on_left_click(false)
+        .on_menu_event(|app, event| match event.id.as_ref() {
+            "open" => show_main(app),
+            "quit" => app.exit(0),
+            _ => {}
+        })
+        .on_tray_icon_event(|tray, event| {
+            if let TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, .. } = event {
+                show_main(tray.app_handle());
+            }
+        });
+    if let Some(icon) = app.default_window_icon() {
+        tray = tray.icon(icon.clone());
+    }
+    tray.build(app)?;
+    Ok(())
+}
+
+/// The app was called "League Accounts" before; its Windows startup entry is
+/// keyed by that name. Move it to the current name so the app starts once and
+/// the setting shows the right state.
+#[cfg(windows)]
+fn migrate_autostart(app: &AppHandle) {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    const RUN: &str = r"HKCU\Software\Microsoft\Windows\CurrentVersion\Run";
+    let reg = |args: &[&str]| {
+        std::process::Command::new("reg")
+            .args(args)
+            .creation_flags(CREATE_NO_WINDOW)
+            .output()
+            .is_ok_and(|output| output.status.success())
+    };
+    if reg(&["query", RUN, "/v", "League Accounts"]) && reg(&["delete", RUN, "/v", "League Accounts", "/f"]) {
+        let _ = app.autolaunch().enable();
+    }
+}
+
+#[cfg(not(windows))]
+fn migrate_autostart(_: &AppHandle) {}
+
 fn main() {
     let args: Vec<std::ffi::OsString> = std::env::args_os().collect();
     if let Some((exe, pid)) = leagueaccounts::self_update::watch_request(&args) {
@@ -1270,11 +1348,7 @@ fn main() {
             if args.iter().any(|arg| arg == AUTOSTART_FLAG) {
                 return;
             }
-            if let Some(window) = app.get_webview_window("main") {
-                let _ = window.unminimize();
-                let _ = window.show();
-                let _ = window.set_focus();
-            }
+            show_main(app);
         }))
         .plugin(tauri_plugin_autostart::init(
             MacosLauncher::LaunchAgent,
@@ -1318,9 +1392,27 @@ fn main() {
             lock_game_settings,
             restore_game_settings,
             open_game_settings_folder,
+            champselect::champ_select_state,
+            champselect::build_prefs,
+            champselect::set_build_prefs,
+            champselect::build_assets,
+            champselect::champion_build,
+            champselect::lane_suggestions,
+            champselect::apply_build,
+            live::live_game_state,
+            live::live_stats,
         ])
         // Champion and skin pictures: http://lacache.localhost/<game-data path>,
         // downloaded once from CommunityDragon and then served from disk.
+        // The close button hides the window to the tray; Quit in the tray menu exits.
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                if window.label() == "main" {
+                    api.prevent_close();
+                    let _ = window.hide();
+                }
+            }
+        })
         .register_asynchronous_uri_scheme_protocol("lacache", |_context, request, responder| {
             let path = request.uri().path().to_owned();
             thread::spawn(move || {
@@ -1365,6 +1457,7 @@ fn main() {
     }
     let updater = Updater::new(&settings);
     let ui_scale = settings.ui_scale;
+    let ui_language = settings.ui_language.clone();
     let start_minimized = (settings.start_minimized && std::env::args().any(|arg| arg == AUTOSTART_FLAG))
         || updater::start_minimized_after_restart();
 
@@ -1391,8 +1484,13 @@ fn main() {
                     let _ = window.set_focus();
                 }
             }
+            let _ = create_tray(app, &ui_language);
             spawn_scheduler(app.handle().clone(), Arc::clone(&shared));
             updater::spawn(app.handle().clone(), Arc::clone(&shared));
+            champselect::spawn_watcher(app.handle().clone());
+            live::spawn(app.handle().clone());
+            let handle = app.handle().clone();
+            thread::spawn(move || migrate_autostart(&handle));
             Ok(())
         })
         .build(tauri::generate_context!());
