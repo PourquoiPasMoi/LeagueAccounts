@@ -14,6 +14,7 @@ import { loginButton, openProfile, openSkinFinder, profileUpdated, refreshProfil
 import { skinsValue } from "./prices";
 import { openGameSettings } from "./gamesettings";
 import "./recordings.css";
+import "./gameinfo.css";
 import { openRecordings } from "./recordings";
 import type { RecorderPrefs, RecorderStatus } from "./api";
 import { experimentalOn, initBuilds, openCurrentBuild, resumeChampSelect, setExperimental, trackGames } from "./builds";
@@ -1023,6 +1024,13 @@ async function openSettings(): Promise<void> {
           <div>
             ${toggle("recGameAudio", recorder.gameAudio, t("settings.recGameAudio"), t("settings.recGameAudioHint"))}
             ${toggle("recMic", recorder.microphone, t("settings.recMic"), t("settings.recMicHint"))}
+            <div class="rec-mic" data-rec-mic>
+              <div class="select-wrap"><select name="recMicDevice" aria-label="${esc(t("settings.recMicDevice"))}"><option value="">${esc(t("settings.recMicDefault"))}</option></select></div>
+              <button type="button" class="btn btn-ghost" data-rec-mic-test>${esc(t("settings.recMicTest"))}</button>
+              <span class="rec-mic-meter"><span></span></span>
+              <span class="rec-mic-result" data-rec-mic-result></span>
+            </div>
+            ${toggle("recDiscord", recorder.discord, t("settings.recDiscord"), t("settings.recDiscordHint"))}
             <div class="rec-option">
               <span class="toggle-text"><strong>${esc(t("settings.recEncoder"))}</strong><span>${esc(t("settings.recEncoderHint"))}</span></span>
               ${segmented("encoder", recorder.encoder, [["auto", t("settings.recHardware")], ["software", t("settings.recSoftware")]])}
@@ -1046,6 +1054,36 @@ async function openSettings(): Promise<void> {
       { label: t("common.save"), value: "save", kind: "primary" },
     ],
     onOpen: (root) => {
+      // Microphones: Windows' list, the default named; Test listens for 2 s.
+      const micSelect = $<HTMLSelectElement>('[name="recMicDevice"]', root);
+      void api
+        .microphones()
+        .then((devices) => {
+          const fallback = devices.find((device) => device.communications) ?? devices.find((device) => device.console);
+          micSelect.innerHTML =
+            `<option value="">${esc(fallback ? t("settings.recMicDefaultNamed", { name: fallback.name }) : t("settings.recMicDefault"))}</option>` +
+            devices.map((device) => `<option value="${esc(device.id)}"${device.id === recorder.micDevice ? " selected" : ""}>${esc(device.name)}</option>`).join("");
+        })
+        .catch(() => undefined);
+      root.addEventListener("click", (event) => {
+        const test = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-rec-mic-test]");
+        if (!test) return;
+        const result = $("[data-rec-mic-result]", root);
+        const bar = $<HTMLElement>(".rec-mic-meter > span", root);
+        test.disabled = true;
+        bar.style.width = "0";
+        result.textContent = t("settings.recMicListening");
+        api
+          .microphoneLevel(micSelect.value)
+          .then((level) => {
+            const percent = Math.round(Math.min(1, level * 4) * 100);
+            bar.style.width = `${percent}%`;
+            result.textContent = level === 0 ? t("settings.recMicSilent") : level < 0.02 ? t("settings.recMicQuiet") : t("settings.recMicHeard");
+            result.classList.toggle("is-bad", level < 0.02);
+          })
+          .catch(() => (result.textContent = t("settings.recMicSilent")))
+          .finally(() => (test.disabled = false));
+      });
       const interval = $<HTMLInputElement>('[name="intervalMinutes"]', root);
       const autoRefresh = $<HTMLInputElement>('[name="autoRefresh"]', root);
       const launchGame = $<HTMLInputElement>('[name="launchGame"]', root);
@@ -1126,6 +1164,8 @@ async function openSettings(): Promise<void> {
         capture: recorderChoice(root, "capture") as RecorderPrefs["capture"],
         gameAudio: checked("recGameAudio"),
         microphone: checked("recMic"),
+        discord: checked("recDiscord"),
+        micDevice: $<HTMLSelectElement>('[name="recMicDevice"]', root).value,
         diskLimitGb: Math.min(100000, Math.max(0, Math.round(Number($<HTMLInputElement>('[name="recLimit"]', root).value) || 0))),
       };
       const recorderSaved = await guard(() => api.setRecorderPrefs(recorderPrefs), "toast.settingsFailed");

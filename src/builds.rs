@@ -565,6 +565,9 @@ pub struct Asset {
     /// Total gold cost (items only; 0 otherwise and then left out).
     #[serde(skip_serializing_if = "is_zero")]
     pub price: i64,
+    /// Runes: what the end-of-game screen shows ("Total Damage Dealt: @eogvar1@").
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub stats: Vec<String>,
 }
 
 fn is_zero(value: &i64) -> bool {
@@ -623,6 +626,7 @@ fn assets_from(perks: &Value, styles: &Value, items: &Value, spells: &Value) -> 
         name: entry["name"].as_str().unwrap_or_default().to_owned(),
         icon: icon_path(entry["iconPath"].as_str().unwrap_or_default()),
         price: entry["priceTotal"].as_i64().unwrap_or(0),
+        stats: entry["endOfGameStatDescs"].as_array().into_iter().flatten().filter_map(|text| text.as_str().map(str::to_owned)).collect(),
     };
     let by_id = |list: &Value| -> HashMap<i64, Asset> {
         list.as_array()

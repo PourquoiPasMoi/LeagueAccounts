@@ -806,6 +806,18 @@ impl LocalApi {
         Some(help["functions"].as_object()?.keys().cloned().collect())
     }
 
+    /// The raw body of a successful GET (pictures), at most `limit` bytes.
+    fn get_bytes(&self, path: &str, limit: u64) -> Option<Vec<u8>> {
+        use std::io::Read;
+        let response = self.client.get(format!("{}{path}", self.base)).basic_auth("riot", Some(&self.password)).send().ok()?;
+        if !response.status().is_success() {
+            return None;
+        }
+        let mut bytes = Vec::new();
+        response.take(limit).read_to_end(&mut bytes).ok()?;
+        (!bytes.is_empty()).then_some(bytes)
+    }
+
     fn get(&self, path: &str) -> Option<(u16, serde_json::Value)> {
         let response = self
             .client
@@ -1289,6 +1301,12 @@ impl LeagueApi {
     pub fn get_json(&self, path: &str) -> Option<serde_json::Value> {
         let (status, body) = self.0.get(path)?;
         (status == 200).then_some(body)
+    }
+
+    /// A game-data picture from the client itself (exactly the installed
+    /// patch, no download), e.g. `assets/items/icons2d/1018_….png`.
+    pub fn game_asset(&self, path: &str, limit: u64) -> Option<Vec<u8>> {
+        self.0.get_bytes(&format!("/lol-game-data/assets/{}", path.trim_start_matches('/')), limit)
     }
 
     /// `POST`, `PUT`, `PATCH` or `DELETE` with an optional JSON body: the

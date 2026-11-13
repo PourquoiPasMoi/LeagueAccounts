@@ -1414,6 +1414,10 @@ fn main() {
             recorder::delete_recording,
             recorder::open_recordings_folder,
             recorder::save_clip,
+            recorder::recording_game,
+            recorder::microphones,
+            recorder::microphone_level,
+            recorder::recording_sound_tracks,
         ])
         // Champion and skin pictures: http://lacache.localhost/<game-data path>,
         // downloaded once from CommunityDragon and then served from disk.
