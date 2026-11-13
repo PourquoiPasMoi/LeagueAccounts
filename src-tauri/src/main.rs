@@ -8,6 +8,7 @@
 mod champselect;
 mod login_control;
 mod live;
+mod recorder;
 mod refresh;
 mod scale;
 mod updater;
@@ -1295,7 +1296,11 @@ fn create_tray(app: &tauri::App, language: &str) -> tauri::Result<()> {
         .show_menu_on_left_click(false)
         .on_menu_event(|app, event| match event.id.as_ref() {
             "open" => show_main(app),
-            "quit" => app.exit(0),
+            "quit" => {
+                // A game being recorded is finished properly first.
+                recorder::stop_now();
+                app.exit(0)
+            }
             _ => {}
         })
         .on_tray_icon_event(|tray, event| {
@@ -1401,6 +1406,14 @@ fn main() {
             champselect::apply_build,
             live::live_game_state,
             live::live_stats,
+            recorder::recorder_prefs,
+            recorder::set_recorder_prefs,
+            recorder::pick_recordings_folder,
+            recorder::recorder_status,
+            recorder::recordings,
+            recorder::delete_recording,
+            recorder::open_recordings_folder,
+            recorder::save_clip,
         ])
         // Champion and skin pictures: http://lacache.localhost/<game-data path>,
         // downloaded once from CommunityDragon and then served from disk.
@@ -1412,6 +1425,12 @@ fn main() {
                     let _ = window.hide();
                 }
             }
+        })
+        // Recordings: http://larec.localhost/<relative path>, only inside the chosen folder.
+        .register_asynchronous_uri_scheme_protocol("larec", |_context, request, responder| {
+            let path = request.uri().path().to_owned();
+            let range = request.headers().get("range").and_then(|value| value.to_str().ok()).map(str::to_owned);
+            thread::spawn(move || responder.respond(recorder::serve(&path, range.as_deref())));
         })
         .register_asynchronous_uri_scheme_protocol("lacache", |_context, request, responder| {
             let path = request.uri().path().to_owned();
@@ -1489,6 +1508,7 @@ fn main() {
             updater::spawn(app.handle().clone(), Arc::clone(&shared));
             champselect::spawn_watcher(app.handle().clone());
             live::spawn(app.handle().clone());
+            recorder::spawn(app.handle().clone());
             let handle = app.handle().clone();
             thread::spawn(move || migrate_autostart(&handle));
             Ok(())

@@ -15,6 +15,8 @@ pub mod game_settings;
 pub mod image_cache;
 pub mod livegame;
 pub mod profiles;
+#[cfg(windows)]
+pub mod recorder;
 pub mod locales;
 pub mod logging;
 pub mod models;

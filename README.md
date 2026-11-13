@@ -80,6 +80,17 @@ Game settings in the sidebar does that for you. It shows your hotkeys as keycaps
   </tr>
 </table>
 
+### Game recorder
+
+Off by default. Turn it on in Settings › Recorder and every League game is recorded from the loading screen to the end, with nothing to press, like Medal.
+
+- Recordings are saved per account: `<folder>\<account>\Games\` for full games and `<folder>\<account>\Clips\` for clips, with readable names such as `2026-11-13 21-40 Ahri Ranked Solo Win.mp4`. The account is the saved account signed in when the game starts (`Unknown` when none matches).
+- Your key moments are marked on the timeline with their own icons: kills, deaths, assists, multikills, first blood, and the dragons, barons, heralds, grubs, towers and inhibitors you took part in, aces you finished, and the game end. Click one to jump there.
+- The Recordings page plays games and clips. Pick a start and an end, or add several parts and join them, and save a named clip: Fast (instant, no re-encode), Exact (frame-exact) or Discord (re-encoded to stay under 9.5 MB).
+- Quality presets (Light 1080p 30 fps by default, Balanced, High, Custom), game sound only (Windows 10 2004 or later) and an optional microphone, and a disk limit that deletes the oldest full games first and never touches clips.
+- Built for low-end PCs: the picture is captured and converted on the graphics card and encoded by its own video encoder (NVIDIA, Intel or AMD) through Windows Media Foundation, with a software fallback. Nothing extra to download.
+- Capture only, the way OBS and Medal work (Windows Graphics Capture of the game window, or the whole screen). The game process is never opened, hooked, read or drawn over. Key moments come from Riot's local live game data.
+
 ### Experimental: champ select and live game assistant
 
 Off by default. Turn it on in Settings › Experimental. It is still under development, so expect changes and rough edges; with it off, the app is the account manager and stats described above.
@@ -90,6 +101,7 @@ Off by default. Turn it on in Settings › Experimental. It is still under devel
 ### Smaller changes
 
 - Closing the window keeps the app in the system tray; quit from the tray icon's menu.
+- Settings opens on side tabs like the League client, and the sidebar lists Recordings, Game settings and Settings above the total value.
 - The account that is signed in right now gets a teal frame and a Connected or Playing badge, and its Log in button is disabled.
 - The selected card has an animated gold frame, and rank crests glow in their tier color.
 - Champion and skin pictures are downloaded the first time you see them and then load from disk.
@@ -161,6 +173,7 @@ To fill an account's profile, log in to it once through the app with "Launch the
 - The app contacts OP.GG for ranks and recent games, the Riot and League clients on `127.0.0.1`, CommunityDragon for champion and skin pictures, and GitHub for updates. There is no telemetry and no account server.
 - Accounts, settings, profiles, game history, cached pictures, game settings backups and logs live in `%APPDATA%\LeagueAccounts\`. Logs hold fixed event codes only, never account data.
 - Game settings only touches `PersistedSettings.json`, `game.cfg` and `input.ini` in League's Config folder, and backs the settings file up before every change.
+- Recordings stay in the folder you choose (default `Videos\League Companion`) and are never uploaded. The player only serves `.mp4` files from that folder.
 
 ## Troubleshooting
 

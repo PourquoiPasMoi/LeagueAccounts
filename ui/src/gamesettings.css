@@ -166,36 +166,37 @@
 .gs-find { flex: none; display: flex; align-items: center; margin: 0 14px 10px 0; height: 32px; min-height: 0; }
 .gs-find input { font-size: 12px; }
 
-/* Sidebar: total value sits right above two framed tiles (Game settings, Settings). */
-.side-bottom .side-value { margin: 0 0 10px; }
-.side-tiles { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 6px; }
+/* Sidebar: one full-width row per page, the total value below them. */
+.side-bottom .side-value { margin: 10px 0 0; }
+.side-tiles { display: flex; flex-direction: column; gap: 3px; }
 .side-tile[hidden] { display: none; }
 .side-tile {
   position: relative;
-  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
-  min-height: 62px; padding: 9px 6px 8px;
-  border: 1px solid #463714;
-  background: linear-gradient(180deg, #1e2328, #0a1015);
-  color: #cdbe91;
-  font: 700 10.5px/1.15 Beaufort, WenKai, NotoCJK, serif; letter-spacing: .08em; text-transform: uppercase; text-align: center;
-  transition: border-color 120ms, color 120ms, box-shadow 120ms;
+  display: flex; align-items: center; gap: 11px;
+  height: 36px; padding: 0 12px;
+  border: 1px solid #1e282d;
+  background: linear-gradient(90deg, #0f171c, #091014);
+  color: #a09b8c;
+  font: 700 11px/1 Beaufort, WenKai, NotoCJK, serif; letter-spacing: .1em; text-transform: uppercase; text-align: left;
+  transition: border-color 120ms, color 120ms, background 120ms;
 }
-.side-tile::after {
-  content: ''; position: absolute; left: 8px; right: 8px; bottom: -1px; height: 1px;
-  background: linear-gradient(90deg, transparent, #785a28, transparent);
+.side-tile::before {
+  content: ''; position: absolute; left: -1px; top: -1px; bottom: -1px; width: 2px;
+  background: linear-gradient(180deg, #c89b3c, #f0e6d2, #c89b3c);
+  opacity: 0; transition: opacity 120ms;
 }
-.side-tile > [data-icon] { display: grid; place-items: center; width: 22px; height: 22px; }
-.side-tile .icon { --icon-size: 20px; width: 18px; height: 18px; color: #c8aa6e; }
-.side-tile [data-icon='settings'] { --icon-mask-size: 21px; }
+.side-tile > [data-icon] { flex: none; display: grid; place-items: center; width: 18px; height: 18px; }
+.side-tile .icon { --icon-size: 17px; width: 16px; height: 16px; color: #785a28; transition: color 120ms; }
+.side-tile [data-icon='settings'] { --icon-mask-size: 18px; }
 .side-tile:is(:hover, :focus-visible) {
   outline: none;
-  border-color: #c8aa6e; color: #f0e6d2;
-  background: linear-gradient(180deg, #2a2a26, #12171a);
-  box-shadow: inset 0 0 12px #c8aa6e1f, 0 0 10px #c8aa6e1a;
+  border-color: #463714; color: #f0e6d2;
+  background: linear-gradient(90deg, #c8aa6e1f, #091014 85%);
 }
-.side-tile:is(:hover, :focus-visible) .icon { color: #f0e6d2; }
+.side-tile:is(:hover, :focus-visible)::before { opacity: 1; }
+.side-tile:is(:hover, :focus-visible) .icon { color: #c8aa6e; }
 .side-tile:active { border-color: #785a28; }
 @media (max-width: 800px) {
-  .side-tiles { grid-template-columns: 1fr; }
-  .side-tile { min-height: 40px; font-size: 0; gap: 0; }
+  .side-tile { justify-content: center; padding: 0; font-size: 0; gap: 0; }
 }
+

@@ -21,6 +21,9 @@ import {
   LayoutGrid,
   List,
   Upload,
+  Video,
+  Scissors,
+  Film,
   type IconNode,
 } from "lucide";
 
@@ -47,6 +50,9 @@ const ICONS: Record<string, IconNode> = {
   "layout-grid": LayoutGrid,
   list: List,
   upload: Upload,
+  video: Video,
+  scissors: Scissors,
+  film: Film,
 };
 
 const attrs = (values: Record<string, string | number | undefined>): string =>

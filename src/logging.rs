@@ -58,6 +58,11 @@ pub enum Event {
     HostsPatched,
     HostsRestored,
     ProfileSynced,
+    RecordingStarted,
+    RecordingSaved,
+    RecordingFailed,
+    ClipSaved,
+    ClipFailed,
     ProfileSyncFailed,
     ProfileSaveFailed,
     ImageCacheFailed,
@@ -108,6 +113,11 @@ impl Event {
             Self::HostsPatched => "hosts_patched",
             Self::HostsRestored => "hosts_restored",
             Self::ProfileSynced => "profile_synced",
+            Self::RecordingStarted => "recording_started",
+            Self::RecordingSaved => "recording_saved",
+            Self::RecordingFailed => "recording_failed",
+            Self::ClipSaved => "clip_saved",
+            Self::ClipFailed => "clip_failed",
             Self::ProfileSyncFailed => "profile_sync_failed",
             Self::ProfileSaveFailed => "profile_save_failed",
             Self::ImageCacheFailed => "image_cache_failed",
@@ -133,6 +143,9 @@ impl Event {
             | Self::UpdateInstalled
             | Self::UpdateRestarted
             | Self::ProfileSynced
+            | Self::RecordingStarted
+            | Self::RecordingSaved
+            | Self::ClipSaved
             | Self::BuildApplied => "INFO",
             _ => "ERROR",
         }

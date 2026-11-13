@@ -501,6 +501,16 @@ export const api = {
   liveGameState: () => call<LiveGame | null>("live_game_state"),
   /** Live numbers for everyone (local only); null before the match starts. */
   liveStats: () => call<LiveStats | null>("live_stats"),
+  recorderPrefs: () => call<RecorderPrefsView>("recorder_prefs"),
+  setRecorderPrefs: (prefs: RecorderPrefs) => call<RecorderPrefsView>("set_recorder_prefs", { prefs }),
+  pickRecordingsFolder: (title: string) => call<string | null>("pick_recordings_folder", { title }),
+  recorderStatus: () => call<RecorderStatus>("recorder_status"),
+  recordings: () => call<RecordingsView>("recordings"),
+  deleteRecording: (path: string) => call<void>("delete_recording", { path }),
+  openRecordingsFolder: (path: string | null) => call<void>("open_recordings_folder", { path }),
+  /** `parts`: [start, end] seconds, joined into one clip with plain cuts. */
+  /** `mode`: "fast" (stream copy), "exact" (re-encoded), "discord" (re-encoded under 9.5 MB). */
+  saveClip: (path: string, parts: [number, number][], mode: "fast" | "exact" | "discord", name: string) => call<Recording>("save_clip", { path, parts, mode, name }),
   /** Puts the chosen parts of the build into the League client. */
   applyBuild: (request: ApplyRequest) => call<ApplyResult>("apply_build", { request }),
   sessionStatus: () => call<SessionStatus>("session_status"),
@@ -702,6 +712,92 @@ export interface ApplyResult {
   errors: string[];
 }
 
+// ---------------------------------------------------------------- recorder
+
+export type RecorderPreset = "light" | "balanced" | "high" | "custom";
+
+export interface RecorderPrefs {
+  enabled: boolean;
+  /** Empty = the default folder (Videos\League Companion). */
+  folder: string;
+  preset: RecorderPreset;
+  /** Custom quality: largest height (0 = window size), frames per second, Mbps. */
+  height: number;
+  fps: number;
+  bitrate: number;
+  encoder: "auto" | "software";
+  capture: "window" | "screen";
+  gameAudio: boolean;
+  microphone: boolean;
+  /** 0 = no limit. */
+  diskLimitGb: number;
+}
+
+export interface RecorderPrefsView extends RecorderPrefs {
+  /** The folder actually used. */
+  root: string;
+}
+
+export interface RecorderStatus {
+  enabled: boolean;
+  recording: boolean;
+  account: string;
+  startedAt: number;
+  path: string;
+  error: string;
+}
+
+export interface Moment {
+  kind: string;
+  /** Seconds into the video. */
+  time: number;
+  gameTime: number;
+  detail: string;
+  ally: boolean | null;
+  /** The player took part; missing on both teams' objectives in older recordings. */
+  mine?: boolean;
+}
+
+export interface RecordingMeta {
+  kind: "game" | "clip";
+  account: string;
+  riotId: string;
+  champion: string;
+  queue: string;
+  result: string;
+  startedAt: number;
+  duration: number;
+  gameStart: number | null;
+  width: number;
+  height: number;
+  fps: number;
+  encoder: string;
+  capture: string;
+  audio: boolean;
+  audioSource: string;
+  moments: Moment[];
+  source: string;
+  clipStart: number;
+}
+
+export interface Recording {
+  /** Relative to the recordings folder, with "/". */
+  path: string;
+  name: string;
+  account: string;
+  kind: "game" | "clip";
+  size: number;
+  modified: number;
+  meta: RecordingMeta | null;
+}
+
+export interface RecordingsView {
+  root: string;
+  totalBytes: number;
+  limitBytes: number;
+  entries: Recording[];
+}
+
 export const events = {
   onLoginStep: (handler: (step: LoginStep) => void): Promise<UnlistenFn> =>
     listen<LoginStep>("login-step", (event) => handler(event.payload)),
@@ -730,4 +826,9 @@ export const events = {
   /** A game started (everyone's ranks are in) or ended (null). */
   onLiveGame: (handler: (game: LiveGame | null) => void): Promise<UnlistenFn> =>
     listen<LiveGame | null>("live-game", (event) => handler(event.payload)),
+  /** The recorder started or stopped recording, or its settings changed. */
+  onRecorderStatus: (handler: (status: RecorderStatus) => void): Promise<UnlistenFn> =>
+    listen<RecorderStatus>("recorder-status", (event) => handler(event.payload)),
+  /** A recording or clip was saved or deleted. */
+  onRecordingsChanged: (handler: () => void): Promise<UnlistenFn> => listen("recordings-changed", () => handler()),
 };
