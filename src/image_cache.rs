@@ -66,7 +66,7 @@ pub fn load(path: &str) -> Option<(Vec<u8>, &'static str)> {
     }
     // The running League client has every picture of its patch locally (no
     // bandwidth); CommunityDragon otherwise (it sometimes times out, 522).
-    let bytes = match crate::riot_client::league_client().and_then(|client| client.game_asset(path, MAX_BYTES)) {
+    let bytes = match crate::riot_client::league_client().and_then(|client| client.game_asset(&client_path(&client, path), MAX_BYTES)) {
         Some(bytes) => bytes,
         None => download(path)?,
     };
@@ -99,4 +99,21 @@ fn download(path: &str) -> Option<Vec<u8>> {
         }
     }
     None
+}
+
+/// The client's own file for a picture. `v1/champion-tiles/<champion>/<skin>.jpg`
+/// is a CommunityDragon shortcut the client does not serve: the real path is the
+/// skin's `tilePath` in the champion's data.
+fn client_path(client: &crate::riot_client::LeagueApi, path: &str) -> String {
+    let mut parts = path.trim_start_matches('/').split('/');
+    if let (Some("v1"), Some("champion-tiles"), Some(champion), Some(file)) = (parts.next(), parts.next(), parts.next(), parts.next()) {
+        let skin = file.trim_end_matches(".jpg");
+        if let Some(data) = client.get_json(&format!("/lol-game-data/assets/v1/champions/{champion}.json")) {
+            let tile = data["skins"].as_array().into_iter().flatten().find(|entry| entry["id"].as_i64().is_some_and(|id| id.to_string() == skin)).and_then(|entry| entry["tilePath"].as_str());
+            if let Some(tile) = tile {
+                return tile.trim_start_matches("/lol-game-data/assets/").to_ascii_lowercase();
+            }
+        }
+    }
+    path.to_owned()
 }

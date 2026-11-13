@@ -780,6 +780,8 @@ export interface RecordingMeta {
   riotId: string;
   champion: string;
   queue: string;
+  /** Riot's queue id (0 when unknown). */
+  queueId?: number;
   result: string;
   startedAt: number;
   duration: number;

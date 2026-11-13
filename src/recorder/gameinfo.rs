@@ -91,6 +91,10 @@ pub fn fetch(video: &Path, meta: &RecordingMeta) -> Result<Value, &'static str> 
     }
     let timeline = client.get_json(&format!("/lol-match-history/v1/game-timelines/{id}")).map(|timeline| compact_timeline(&timeline)).unwrap_or(Value::Null);
     let details = json!({ "puuid": puuid, "game": game, "timeline": timeline });
+    // The recording may have been deleted meanwhile: never leave details alone.
+    if !video.is_file() {
+        return Err("recording_missing");
+    }
     std::fs::write(path(video), details.to_string()).map_err(|_| "file_write")?;
     Ok(details)
 }

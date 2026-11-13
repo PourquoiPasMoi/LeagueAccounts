@@ -50,7 +50,7 @@
 .rec-list { display: flex; flex-direction: column; min-height: 0; }
 .rec-kind { align-self: flex-start; margin: 14px 16px 10px; }
 .rec-kind button { display: inline-flex; align-items: center; gap: 6px; font: 700 11px/1 Beaufort, WenKai, NotoCJK, serif; letter-spacing: .08em; text-transform: uppercase; }
-.rec-rows { flex: 1; overflow-y: auto; padding: 0 24px 16px 16px; display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); align-content: start; gap: 8px; }
+.rec-rows { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); align-content: start; gap: 8px; }
 .rec-row {
   position: relative;
   padding: 9px 36px 9px 12px;
@@ -302,3 +302,44 @@
 .rec-mic-meter > span { position: absolute; inset: 0 auto 0 0; width: 0; background: #0ac8b9; transition: width 200ms linear; }
 .rec-mic-result { flex-basis: 100%; font-size: 12px; color: #a09b8c; }
 .rec-mic-result.is-bad { color: #e06d62; }
+
+/* Library: big Games / Clips tabs, order, game modes, grouped cards with champion banners. */
+.rec-lib-bar { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 10px 20px; margin: 12px 24px 0 16px; border-bottom: 1px solid #c8aa6e26; }
+.rec-kind-tabs { display: flex; gap: 2px; }
+.rec-kind-tab {
+  display: inline-flex; align-items: center; gap: 9px; height: 44px; padding: 0 22px;
+  border: 1px solid transparent; border-bottom: 0; margin-bottom: -1px;
+  font: 700 14px/1 Beaufort, WenKai, NotoCJK, serif; letter-spacing: .12em; text-transform: uppercase; color: #7d786c;
+}
+.rec-kind-tab em { font: 11px/1 Spiegel, NotoCJK, sans-serif; font-style: normal; padding: 3px 6px; background: #1e282d; color: #a09b8c; }
+.rec-kind-tab:hover { color: #f0e6d2; }
+.rec-kind-tab[aria-selected="true"] { color: #f0e6d2; border-color: #463714; background: linear-gradient(180deg, #1e2328, #010a13); box-shadow: inset 0 2px 0 #c8aa6e; }
+.rec-kind-tab.is-clip[aria-selected="true"] { box-shadow: inset 0 2px 0 #0ac8b9; }
+.rec-kind-tab[aria-selected="true"] em { background: #c8aa6e; color: #010a13; }
+.rec-kind-tab.is-clip[aria-selected="true"] em { background: #0ac8b9; }
+.rec-order { margin-bottom: 8px; }
+.rec-modes { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 24px 4px 16px; }
+.rec-modes button { display: inline-flex; align-items: center; gap: 7px; padding: 6px 11px; border: 1px solid #1e282d; font-size: 12px; color: #a09b8c; }
+.rec-modes button em { font-style: normal; font-size: 10.5px; color: #5b5a56; }
+.rec-modes button:hover { color: #f0e6d2; border-color: #463714; }
+.rec-modes button[aria-pressed="true"] { color: #f0e6d2; border-color: #785a28; background: #c8aa6e1f; }
+.rec-modes button[aria-pressed="true"] em { color: #c8aa6e; }
+.rec-library { flex: 1; min-height: 0; overflow-y: auto; padding: 10px 24px 16px 16px; }
+.rec-group + .rec-group { margin-top: 18px; }
+.rec-group h4 { display: flex; align-items: center; gap: 10px; margin: 0 0 8px; font: 700 12px/1 Beaufort, WenKai, NotoCJK, serif; letter-spacing: .12em; text-transform: uppercase; color: #c8aa6e; }
+.rec-group h4::after { content: ""; flex: 1; height: 1px; background: linear-gradient(90deg, #463714, transparent); }
+.rec-group h4 em { font: 11px/1 Spiegel, NotoCJK, sans-serif; font-style: normal; color: #5b5a56; }
+.rec-row { overflow: hidden; min-height: 70px; }
+.rec-row.is-game { border-left: 2px solid #785a28; }
+.rec-row.is-clip { border-left: 2px solid #0397ab; }
+.rec-row > :not(.rec-row-banner) { position: relative; }
+.rec-row-banner {
+  position: absolute; top: 0; right: 0; height: 100%; width: 46%; object-fit: cover; object-position: 50% 22%;
+  opacity: .55; pointer-events: none;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 70%); mask-image: linear-gradient(90deg, transparent, #000 70%);
+}
+.rec-row:hover .rec-row-banner, .rec-row.is-selected .rec-row-banner { opacity: .8; }
+.rec-row-tags { margin-top: 4px; display: flex; gap: 6px; }
+.rec-mode-tag, .rec-clip-tag { display: inline-flex; align-items: center; gap: 4px; padding: 2px 6px; font: 700 10px/1.2 Beaufort, WenKai, NotoCJK, serif; letter-spacing: .08em; text-transform: uppercase; }
+.rec-mode-tag { color: #c8aa6e; background: #010a13cc; border: 1px solid #463714; }
+.rec-clip-tag { color: #0ac8b9; background: #010a13cc; border: 1px solid #0397ab; }
