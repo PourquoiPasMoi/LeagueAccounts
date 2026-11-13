@@ -125,7 +125,7 @@ static LIVE_CLIENT: LazyLock<Option<reqwest::blocking::Client>> = LazyLock::new(
         .ok()
 });
 
-fn live_client(path: &str) -> Option<Value> {
+pub(crate) fn live_client(path: &str) -> Option<Value> {
     let response = LIVE_CLIENT.as_ref()?.get(format!("https://127.0.0.1:2999{path}")).send().ok()?;
     if !response.status().is_success() {
         return None;

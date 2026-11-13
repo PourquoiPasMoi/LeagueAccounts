@@ -48,17 +48,18 @@
         </section>
 
         <section class="side-section side-bottom">
+          <!-- One full-width row per page, like the client's navigation; the total value below. -->
+          <nav class="side-tiles">
+            <button class="side-tile" id="builds-tile" data-action="builds" hidden><span data-icon="swords"></span><span data-i18n="side.builds"></span></button>
+            <button class="side-tile" id="recordings-tile" data-action="recordings"><span data-icon="video"></span><span data-i18n="side.recordings"></span></button>
+            <button class="side-tile" data-action="game-settings"><span data-icon="sliders"></span><span data-i18n="side.gameSettings"></span></button>
+            <button class="side-tile" data-action="settings"><span data-icon="settings"></span><span data-i18n="side.settings"></span></button>
+          </nav>
           <button id="total-value" class="side-value" hidden data-i18n-title="finder.title">
             <span class="side-value-label"><span data-icon="gem"></span><span data-i18n="value.total"></span></span>
             <span class="side-value-amount"></span>
             <span class="side-value-detail"></span>
           </button>
-          <!-- Two framed tiles side by side, like the client's footer buttons. -->
-          <div class="side-tiles">
-            <button class="side-tile" id="builds-tile" data-action="builds" hidden><span data-icon="swords"></span><span data-i18n="side.builds"></span></button>
-            <button class="side-tile" data-action="game-settings"><span data-icon="sliders"></span><span data-i18n="side.gameSettings"></span></button>
-            <button class="side-tile" data-action="settings"><span data-icon="settings"></span><span data-i18n="side.settings"></span></button>
-          </div>
           <div class="version" id="version"></div>
         </section>
       </aside>

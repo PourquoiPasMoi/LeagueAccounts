@@ -182,3 +182,46 @@
   font-size: 12.5px;
   color: var(--muted);
 }
+
+/* ------------------------------------------------------------------ settings tabs (client style) */
+
+.settings-modal { width: min(960px, 100%); }
+.settings-modal .modal-body { padding: 0 0 30px; gap: 0; }
+.settings-layout {
+  display: grid; grid-template-columns: 210px minmax(0, 1fr);
+  height: min(600px, calc(100dvh - var(--titlebar) - 210px));
+  border-top: 1px solid #c8aa6e1f;
+}
+.settings-nav { display: flex; flex-direction: column; padding: 14px 0 14px 24px; border-right: 1px solid #c8aa6e1f; overflow-y: auto; }
+.settings-nav-group { padding: 16px 14px 6px; font: 12px/1.2 Spiegel, NotoCJK, sans-serif; letter-spacing: .03em; color: #a09b8c; }
+.settings-nav-group:first-child { padding-top: 4px; }
+.settings-nav button {
+  position: relative;
+  padding: 9px 14px;
+  font: 700 12px/1.2 Beaufort, WenKai, NotoCJK, serif; letter-spacing: .08em; text-transform: uppercase;
+  color: #cdbe91; text-align: left;
+  transition: color 120ms, background 120ms;
+}
+.settings-nav button::before {
+  content: ''; position: absolute; left: 0; top: 4px; bottom: 4px; width: 3px;
+  background: linear-gradient(180deg, #c89b3c, #f0e6d2, #c89b3c);
+  opacity: 0; transition: opacity 120ms;
+}
+.settings-nav button:hover { color: #f0e6d2; }
+.settings-nav button[aria-selected="true"] { color: #f0e6d2; background: linear-gradient(90deg, #c8aa6e17, transparent); }
+.settings-nav button[aria-selected="true"]::before { opacity: 1; }
+.settings-pages { overflow-y: auto; padding: 18px 34px 12px 30px; }
+.settings-page { display: flex; flex-direction: column; gap: 4px; animation: client-fade 160ms linear both; }
+.settings-page[hidden] { display: none; }
+.settings-page-title {
+  margin: 0 0 10px; padding-bottom: 10px;
+  font: 700 15px/1.2 Beaufort, WenKai, NotoCJK, serif; letter-spacing: .1em; text-transform: uppercase; color: #f0e6d2;
+  border-bottom: 1px solid #c8aa6e26;
+}
+.settings-page .rec-settings-grid { grid-template-columns: minmax(0, 1fr); gap: 0; }
+.settings-page .settings-tools { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+@media (max-width: 760px) {
+  .settings-layout { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
+  .settings-nav { flex-direction: row; flex-wrap: wrap; padding: 8px 16px; border-right: 0; border-bottom: 1px solid #c8aa6e1f; }
+  .settings-nav-group { display: none; }
+}

@@ -13,6 +13,9 @@ import { openLoginOverlay, type LoginOverlay } from "./login";
 import { loginButton, openProfile, openSkinFinder, profileUpdated, refreshProfileHead } from "./profile";
 import { skinsValue } from "./prices";
 import { openGameSettings } from "./gamesettings";
+import "./recordings.css";
+import { openRecordings } from "./recordings";
+import type { RecorderPrefs, RecorderStatus } from "./api";
 import { experimentalOn, initBuilds, openCurrentBuild, resumeChampSelect, setExperimental, trackGames } from "./builds";
 import type { SessionStatus, SkinOwner } from "./api";
 import { LANGUAGES, applyStatic, asLang, en, errorText, fromBrowser, lang, localeTag, localizeRank, needsLanguageChoice, setLang, t, tierName, useLang, type Lang, type MessageKey } from "./i18n";
@@ -880,10 +883,39 @@ function renderSchedule(): void {
 /** Interface size presets in percent; the backend zooms the window and resizes it with them. */
 const UI_SCALES = [80, 90, 100, 110, 125, 150, 175, 200];
 
+/** The Settings tab shown last, opened again next time. */
+let settingsTab = "general";
+
+/** The pressed option of a segmented control in Settings › Recorder. */
+const recorderChoice = (root: HTMLElement, group: string): string =>
+  root.querySelector<HTMLElement>(`[data-rec-group="${group}"] [aria-pressed="true"]`)?.dataset.recOption ?? "";
+
+/** The sidebar tile shows when a game is being recorded. */
+function showRecorderStatus(status: RecorderStatus): void {
+  const tile = document.querySelector<HTMLElement>("#recordings-tile");
+  if (!tile) return;
+  tile.classList.toggle("is-recording", status.recording);
+  tile.dataset.tooltip = status.recording ? t("rec.recordingNow", { account: status.account === "Unknown" ? t("rec.unknown") : status.account }) : "";
+}
+
 async function openSettings(): Promise<void> {
   const loaded = await guard(() => api.getSettings(), "toast.settingsFailed");
   if (!loaded.ok) return;
   const current = loaded.value;
+  const recorderLoaded = await guard(() => api.recorderPrefs(), "toast.settingsFailed");
+  if (!recorderLoaded.ok) return;
+  const recorder = recorderLoaded.value;
+  let recorderFolder = recorder.folder;
+  const heightOptions = [0, 2160, 1440, 1080, 720]
+    .map((height) => `<option value="${height}"${height === recorder.height ? " selected" : ""}>${esc(height ? `${height}p` : t("settings.recWindowSize"))}</option>`)
+    .join("");
+  const fpsOptions = [30, 60, 120]
+    .map((fps) => `<option value="${fps}"${fps === recorder.fps ? " selected" : ""}>${fps} fps</option>`)
+    .join("");
+  const segmented = (name: string, value: string, options: [string, string][]) => `
+    <div class="segmented" data-rec-group="${name}">${options
+      .map(([option, label]) => `<button type="button" data-rec-option="${option}" aria-pressed="${option === value}">${esc(label)}</button>`)
+      .join("")}</div>`;
   const languageOptions = LANGUAGES.map(
     (language) => `<option value="${language.code}"${language.code === lang() ? " selected" : ""}>${esc(language.name)}</option>`,
   ).join("");
@@ -902,67 +934,112 @@ async function openSettings(): Promise<void> {
   await modal({
     title: t("settings.title"),
     wide: true,
+    className: "settings-modal",
     body: `
-      <div class="settings-grid">
-      <div class="settings-col">
-      <section class="settings-section">
-        <h3>${esc(t("settings.general"))}</h3>
+      <div class="settings-layout">
+        <nav class="settings-nav" role="tablist">
+          <span class="settings-nav-group">${esc(t("settings.groupApp"))}</span>
+          <button type="button" role="tab" data-settings-tab="general" aria-selected="${settingsTab === "general"}">${esc(t("settings.general"))}</button>
+          <button type="button" role="tab" data-settings-tab="updates" aria-selected="${settingsTab === "updates"}">${esc(t("settings.updates"))}</button>
+          <button type="button" role="tab" data-settings-tab="login" aria-selected="${settingsTab === "login"}">${esc(t("settings.login"))}</button>
+          <button type="button" role="tab" data-settings-tab="refresh" aria-selected="${settingsTab === "refresh"}">${esc(t("settings.refresh"))}</button>
+          <button type="button" role="tab" data-settings-tab="value" aria-selected="${settingsTab === "value"}">${esc(t("settings.value"))}</button>
+          <button type="button" role="tab" data-settings-tab="tools" aria-selected="${settingsTab === "tools"}">${esc(t("settings.tools"))}</button>
+          <span class="settings-nav-group">${esc(t("settings.groupFeatures"))}</span>
+          <button type="button" role="tab" data-settings-tab="recorder" aria-selected="${settingsTab === "recorder"}">${esc(t("settings.recorder"))}</button>
+          <button type="button" role="tab" data-settings-tab="experimental" aria-selected="${settingsTab === "experimental"}">${esc(t("settings.experimental"))}</button>
+        </nav>
+        <div class="settings-pages">
+        <section class="settings-page" data-settings-page="general" ${settingsTab === "general" ? "" : "hidden"}>
+          <h3 class="settings-page-title">${esc(t("settings.general"))}</h3>
         <label class="field inline"><span>${esc(t("settings.language"))}</span>
           <div class="select-wrap"><select name="language">${languageOptions}</select></div></label>
         <label class="field inline"><span>${esc(t("settings.scale"))}</span>
           <div class="select-wrap"><select name="uiScale">${scaleOptions}</select></div></label>
         ${toggle("launchAtStartup", current.launchAtStartup, t("settings.startup"))}
         ${toggle("startMinimized", current.startMinimized, t("settings.minimized"), t("settings.minimizedHint"))}
-      </section>
-      <section class="settings-section">
-        <h3>${esc(t("settings.updates"))}</h3>
+        </section>
+        <section class="settings-page" data-settings-page="updates" ${settingsTab === "updates" ? "" : "hidden"}>
+          <h3 class="settings-page-title">${esc(t("settings.updates"))}</h3>
         ${toggle("autoUpdate", current.autoUpdate, t("settings.autoUpdate"), t("settings.autoUpdateHint"))}
         <div class="update-row">
           <span>${esc(t("settings.version", { version: $("#version").textContent?.replace(/^v/, "") ?? "" }))}</span>
           <span class="update-result"></span>
           <button type="button" class="btn btn-ghost" data-check-update>${icon("refresh-cw", 14)}${esc(t("settings.checkNow"))}</button>
         </div>
-      </section>
-      <section class="settings-section">
-        <h3>${esc(t("settings.tools"))}</h3>
-        <div class="settings-tools">
-          <button type="button" class="btn btn-ghost" data-tool="import">${icon("download", 14)}${esc(t("side.import"))}</button>
-          <button type="button" class="btn btn-ghost" data-tool="export">${icon("upload", 14)}${esc(t("side.export"))}</button>
-          <button type="button" class="btn btn-ghost" data-tool="logs">${icon("folder-open", 14)}${esc(t("side.logs"))}</button>
-          <button type="button" class="btn btn-ghost" data-tool="shortcuts">${icon("keyboard", 14)}${esc(t("side.shortcuts"))}</button>
-        </div>
-      </section>
-
-      </div>
-      <div class="settings-col">
-      <section class="settings-section">
-        <h3>${esc(t("settings.refresh"))}</h3>
+        </section>
+        <section class="settings-page" data-settings-page="login" ${settingsTab === "login" ? "" : "hidden"}>
+          <h3 class="settings-page-title">${esc(t("settings.login"))}</h3>
+        <label class="radio-row"><input type="radio" name="loginMethod" value="riot" ${current.loginMethod === "riot" ? "checked" : ""}/>
+          <span class="toggle-text"><strong>${esc(t("settings.methodRiot"))}</strong><span>${esc(current.riotClientFound ? t("settings.methodRiotHint") : t("settings.clientMissing"))}</span></span></label>
+        <label class="radio-row"><input type="radio" name="loginMethod" value="previous" ${current.loginMethod === "previous" ? "checked" : ""}/>
+          <span class="toggle-text"><strong>${esc(t("settings.methodPrevious"))}</strong><span>${esc(t("settings.methodPreviousHint"))}</span></span></label>
+        ${toggle("launchGame", current.launchGame, t("settings.launchGame"), t("settings.launchGameHint"))}
+        </section>
+        <section class="settings-page" data-settings-page="refresh" ${settingsTab === "refresh" ? "" : "hidden"}>
+          <h3 class="settings-page-title">${esc(t("settings.refresh"))}</h3>
         ${toggle("autoRefresh", current.autoRefresh, t("settings.autoRefresh"))}
         <div class="interval-row">
           <span>${esc(t("settings.interval"))}</span>
           <div class="interval-presets">${[5, 15, 30, 60, 120].map((value) => `<button type="button" data-interval="${value}">${value}</button>`).join("")}</div>
           <label class="interval-input"><input name="intervalMinutes" type="number" min="5" max="1440" step="5" value="${current.intervalMinutes}"/><span>${esc(t("settings.minutes"))}</span></label>
         </div>
-      </section>
-      <section class="settings-section">
-        <h3>${esc(t("settings.login"))}</h3>
-        <label class="radio-row"><input type="radio" name="loginMethod" value="riot" ${current.loginMethod === "riot" ? "checked" : ""}/>
-          <span class="toggle-text"><strong>${esc(t("settings.methodRiot"))}</strong><span>${esc(current.riotClientFound ? t("settings.methodRiotHint") : t("settings.clientMissing"))}</span></span></label>
-        <label class="radio-row"><input type="radio" name="loginMethod" value="previous" ${current.loginMethod === "previous" ? "checked" : ""}/>
-          <span class="toggle-text"><strong>${esc(t("settings.methodPrevious"))}</strong><span>${esc(t("settings.methodPreviousHint"))}</span></span></label>
-        ${toggle("launchGame", current.launchGame, t("settings.launchGame"), t("settings.launchGameHint"))}
-      </section>
-      <section class="settings-section">
-        <h3>${esc(t("settings.value"))}</h3>
+        </section>
+        <section class="settings-page" data-settings-page="value" ${settingsTab === "value" ? "" : "hidden"}>
+          <h3 class="settings-page-title">${esc(t("settings.value"))}</h3>
         <label class="field inline"><span class="toggle-text"><strong>${esc(t("settings.rpRate"))}</strong><span>${esc(t("settings.rpRateHint"))}</span></span>
           <span class="interval-input"><input name="rpPerEuro" type="number" min="50" max="500" step="1" value="${current.rpPerEuro}"/><span>RP</span></span></label>
-      </section>
-      <section class="settings-section">
-        <h3>${esc(t("settings.experimental"))}</h3>
+        </section>
+        <section class="settings-page" data-settings-page="tools" ${settingsTab === "tools" ? "" : "hidden"}>
+          <h3 class="settings-page-title">${esc(t("settings.tools"))}</h3>
+        <div class="settings-tools">
+          <button type="button" class="btn btn-ghost" data-tool="import">${icon("download", 14)}${esc(t("side.import"))}</button>
+          <button type="button" class="btn btn-ghost" data-tool="export">${icon("upload", 14)}${esc(t("side.export"))}</button>
+          <button type="button" class="btn btn-ghost" data-tool="logs">${icon("folder-open", 14)}${esc(t("side.logs"))}</button>
+          <button type="button" class="btn btn-ghost" data-tool="shortcuts">${icon("keyboard", 14)}${esc(t("side.shortcuts"))}</button>
+        </div>
+        </section>
+        <section class="settings-page" data-settings-page="recorder" ${settingsTab === "recorder" ? "" : "hidden"}>
+          <h3 class="settings-page-title">${esc(t("settings.recorder"))}</h3>
+        <div class="rec-settings-grid">
+          <div>
+            ${toggle("recEnabled", recorder.enabled, t("settings.recOn"), t("settings.recOnHint"))}
+            <div class="rec-folder">
+              <span class="toggle-text"><strong>${esc(t("settings.recFolder"))}</strong><span data-rec-folder>${esc(recorder.root)}</span></span>
+              <button type="button" class="btn btn-ghost" data-rec-browse>${icon("folder-open", 14)}${esc(t("settings.recBrowse"))}</button>
+            </div>
+            <div class="rec-option">
+              <span class="toggle-text"><strong>${esc(t("settings.recQuality"))}</strong><span>${esc(t("settings.recQualityHint"))}</span></span>
+              ${segmented("preset", recorder.preset, [["light", t("settings.recLight")], ["balanced", t("settings.recBalanced")], ["high", t("settings.recHigh")], ["custom", t("settings.recCustom")]])}
+            </div>
+            <div class="rec-custom" data-rec-custom ${recorder.preset === "custom" ? "" : "hidden"}>
+              <label class="field inline"><span>${esc(t("settings.recHeight"))}</span><div class="select-wrap"><select name="recHeight">${heightOptions}</select></div></label>
+              <label class="field inline"><span>${esc(t("settings.recFps"))}</span><div class="select-wrap"><select name="recFps">${fpsOptions}</select></div></label>
+              <label class="field inline"><span>${esc(t("settings.recBitrate"))}</span><span class="interval-input"><input name="recBitrate" type="number" min="1" max="100" step="1" value="${recorder.bitrate}"/><span>Mbps</span></span></label>
+            </div>
+            <label class="field inline"><span class="toggle-text"><strong>${esc(t("settings.recLimit"))}</strong><span>${esc(t("settings.recLimitHint"))}</span></span>
+              <span class="interval-input"><input name="recLimit" type="number" min="0" max="100000" step="10" value="${recorder.diskLimitGb}"/><span>GB</span></span></label>
+          </div>
+          <div>
+            ${toggle("recGameAudio", recorder.gameAudio, t("settings.recGameAudio"), t("settings.recGameAudioHint"))}
+            ${toggle("recMic", recorder.microphone, t("settings.recMic"), t("settings.recMicHint"))}
+            <div class="rec-option">
+              <span class="toggle-text"><strong>${esc(t("settings.recEncoder"))}</strong><span>${esc(t("settings.recEncoderHint"))}</span></span>
+              ${segmented("encoder", recorder.encoder, [["auto", t("settings.recHardware")], ["software", t("settings.recSoftware")]])}
+            </div>
+            <div class="rec-option">
+              <span class="toggle-text"><strong>${esc(t("settings.recCapture"))}</strong><span>${esc(t("settings.recCaptureHint"))}</span></span>
+              ${segmented("capture", recorder.capture, [["window", t("settings.recWindow")], ["screen", t("settings.recScreen")]])}
+            </div>
+          </div>
+        </div>
+        </section>
+        <section class="settings-page" data-settings-page="experimental" ${settingsTab === "experimental" ? "" : "hidden"}>
+          <h3 class="settings-page-title">${esc(t("settings.experimental"))}</h3>
         ${toggle("companion", experimentalOn(), t("settings.companion"), t("settings.companionHint"))}
         <p class="settings-note">${esc(t("settings.experimentalNote"))}</p>
-      </section>
-      </div>
+        </section>
+        </div>
       </div>`,
     actions: [
       { label: t("common.cancel"), value: "cancel" },
@@ -980,6 +1057,13 @@ async function openSettings(): Promise<void> {
         launchGame.closest(".toggle-row")?.classList.toggle("disabled", !riot);
       };
       root.addEventListener("click", (event) => {
+        const tab = (event.target as HTMLElement).closest<HTMLElement>("[data-settings-tab]")?.dataset.settingsTab;
+        if (tab) {
+          settingsTab = tab;
+          root.querySelectorAll<HTMLElement>("[data-settings-tab]").forEach((button) => button.setAttribute("aria-selected", String(button.dataset.settingsTab === tab)));
+          root.querySelectorAll<HTMLElement>("[data-settings-page]").forEach((page) => (page.hidden = page.dataset.settingsPage !== tab));
+          root.querySelector<HTMLElement>(".settings-pages")!.scrollTop = 0;
+        }
         const check = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-check-update]");
         if (check) void checkUpdateNow(check, $(".update-result", root));
         const tool = (event.target as HTMLElement).closest<HTMLElement>("[data-tool]")?.dataset.tool;
@@ -987,6 +1071,18 @@ async function openSettings(): Promise<void> {
         if (tool === "export") void exportData();
         if (tool === "logs") void guard(() => api.openLogsFolder(), "toast.logsFailed");
         if (tool === "shortcuts") showShortcuts();
+        const option = (event.target as HTMLElement).closest<HTMLElement>("[data-rec-option]");
+        if (option) {
+          option.parentElement?.querySelectorAll<HTMLElement>("[data-rec-option]").forEach((button) => button.setAttribute("aria-pressed", String(button === option)));
+          root.querySelector<HTMLElement>("[data-rec-custom]")!.hidden = recorderChoice(root, "preset") !== "custom";
+        }
+        if ((event.target as HTMLElement).closest("[data-rec-browse]")) {
+          void api.pickRecordingsFolder(t("settings.recFolder")).then((folder) => {
+            if (!folder) return;
+            recorderFolder = folder;
+            $("[data-rec-folder]", root).textContent = folder;
+          }).catch((error) => toast("error", t("toast.openFailed"), String(error)));
+        }
         const preset = (event.target as HTMLElement).closest<HTMLElement>("[data-interval]");
         if (preset) {
           interval.value = preset.dataset.interval ?? "30";
@@ -1019,6 +1115,21 @@ async function openSettings(): Promise<void> {
       if (!saved.ok) return false;
       const companion = await guard(() => setExperimental(checked("companion")), "toast.settingsFailed");
       if (!companion.ok) return false;
+      const recorderPrefs: RecorderPrefs = {
+        enabled: checked("recEnabled"),
+        folder: recorderFolder,
+        preset: recorderChoice(root, "preset") as RecorderPrefs["preset"],
+        height: Number($<HTMLSelectElement>('[name="recHeight"]', root).value),
+        fps: Number($<HTMLSelectElement>('[name="recFps"]', root).value),
+        bitrate: Math.min(100, Math.max(1, Math.round(Number($<HTMLInputElement>('[name="recBitrate"]', root).value) || 6))),
+        encoder: recorderChoice(root, "encoder") as RecorderPrefs["encoder"],
+        capture: recorderChoice(root, "capture") as RecorderPrefs["capture"],
+        gameAudio: checked("recGameAudio"),
+        microphone: checked("recMic"),
+        diskLimitGb: Math.min(100000, Math.max(0, Math.round(Number($<HTMLInputElement>('[name="recLimit"]', root).value) || 0))),
+      };
+      const recorderSaved = await guard(() => api.setRecorderPrefs(recorderPrefs), "toast.settingsFailed");
+      if (!recorderSaved.ok) return false;
       state.settings = saved.value;
       render();
       const language = $<HTMLSelectElement>('[name="language"]', root).value as Lang;
@@ -1441,6 +1552,7 @@ function wire(): void {
       if (action === "shortcuts") showShortcuts();
       if (action === "settings") void openSettings();
       if (action === "game-settings") void openGameSettings();
+      if (action === "recordings") void openRecordings();
       if (action === "builds") openCurrentBuild();
     });
   });
@@ -1679,6 +1791,8 @@ async function wireEvents(): Promise<void> {
     void loadValues();
   });
   await initBuilds();
+  void api.recorderStatus().then(showRecorderStatus).catch(() => undefined);
+  void events.onRecorderStatus(showRecorderStatus);
   await trackGames();
   await events.onRefreshDone(({ error, exclusive }) => {
     if (error) toast("error", t("toast.ranksSaveFailed"), describe(new ApiError(error.code, error.detail)), 5000);

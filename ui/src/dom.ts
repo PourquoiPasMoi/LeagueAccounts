@@ -90,6 +90,8 @@ export function modal(options: {
   body: string;
   actions: ModalAction[];
   wide?: boolean;
+  /// Extra class on the dialog, for dialogs with their own layout.
+  className?: string;
   /// Stack the footer actions vertically; for dialogs whose labels are long
   /// enough that a single row would overflow the modal width.
   stacked?: boolean;
@@ -99,7 +101,7 @@ export function modal(options: {
   return new Promise((resolve) => {
     const overlay = fragment(`
       <div class="overlay">
-        <div class="modal${options.wide ? " modal-wide" : ""}" role="dialog" aria-modal="true" aria-label="${esc(options.title)}">
+        <div class="modal${options.wide ? " modal-wide" : ""}${options.className ? ` ${options.className}` : ""}" role="dialog" aria-modal="true" aria-label="${esc(options.title)}">
           <header class="modal-head">
             <h2>${esc(options.title)}</h2>
           </header>
