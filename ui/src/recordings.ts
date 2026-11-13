@@ -171,6 +171,9 @@ export async function openRecordings(): Promise<void> {
   };
   let mode_ = stored("recMode", "");
   let order: "new" | "old" = stored("recOrder", "new") === "old" ? "old" : "new";
+  /** Select mode: cards are ticked instead of opened, then deleted together. */
+  let selecting = false;
+  const picked = new Set<string>();
   let selected: Recording | null = null;
   let range: { start: number; end: number } | null = null;
   /** Parts added for a multi-part clip, in time order, never overlapping. */
@@ -292,24 +295,29 @@ export async function openRecordings(): Promise<void> {
     const score = entry.kind === "game" ? kda(entry) : "";
     const tag = entry.kind === "clip" ? `<span class="rec-clip-tag">${icon("scissors", 11)}${esc(t("rec.clip"))}</span>` : `<span class="rec-mode-tag">${esc(modeOf(entry))}</span>`;
     return `
-      <div class="rec-row is-${entry.kind}${selected?.path === entry.path ? " is-selected" : ""}" role="button" tabindex="0" data-rec-path="${esc(entry.path)}">
+      <div class="rec-row is-${entry.kind}${selected?.path === entry.path ? " is-selected" : ""}${picked.has(entry.path) ? " is-picked" : ""}" role="button" tabindex="0" data-rec-path="${esc(entry.path)}"${selecting ? ` aria-pressed="${picked.has(entry.path)}"` : ""}>
         ${banner(entry)}
+        ${selecting ? `<span class="rec-pick" aria-hidden="true"></span>` : ""}
         <div class="rec-row-main"><strong>${esc(entry.kind === "game" && meta?.champion ? meta.champion : title(entry))}</strong>${score ? `<span class="rec-kda">${esc(score)}</span>` : ""}${result}${live}</div>
         <div class="rec-row-tags">${tag}</div>
         <div class="rec-row-sub">${esc(details)}</div>
-        <button class="icon-btn rec-row-delete" data-rec="delete" data-tooltip="${esc(t("menu.delete"))}" aria-label="${esc(t("menu.delete"))}">${icon("trash", 14)}</button>
+        ${selecting ? "" : `<button class="rec-row-delete" data-rec="delete" data-tooltip="${esc(t("menu.delete"))}" aria-label="${esc(t("menu.delete"))}">${icon("trash", 13)}</button>`}
       </div>`;
   };
 
   const renderList = () => {
     const inKind = (wanted: "game" | "clip") => view.entries.filter((entry) => entry.kind === wanted && (!account || entry.account === account));
     const entries = shown().sort((a, b) => (order === "new" ? started(b) - started(a) : started(a) - started(b)));
+    // Ticks only for what is on screen (another tab or account keeps nothing ticked).
+    const onScreen = new Set(entries.map((entry) => entry.path));
+    [...picked].forEach((path) => onScreen.has(path) || picked.delete(path));
     // Modes present here, newest (or oldest) first.
     const modes = [...new Set(entries.map(modeOf))];
     if (mode_ && !modes.includes(mode_)) mode_ = "";
     const visible = mode_ ? entries.filter((entry) => modeOf(entry) === mode_) : entries;
     const empty = `<p class="rec-empty">${esc(t(kind === "game" ? "rec.empty" : "rec.emptyClips"))}</p>`;
     const grouped = !mode_ && modes.length > 1;
+    list.classList.toggle("is-selecting", selecting);
     const body = !visible.length
       ? empty
       : grouped
@@ -325,9 +333,19 @@ export async function openRecordings(): Promise<void> {
     list.innerHTML = `
       <div class="rec-lib-bar">
         <div class="rec-kind-tabs" role="tablist">${tab("game", "film", t("rec.games"))}${tab("clip", "scissors", t("rec.clips"))}</div>
-        <div class="segmented rec-order" role="group" aria-label="${esc(t("rec.order"))}">
-          <button data-rec-order="new" aria-pressed="${order === "new"}">${esc(t("rec.newest"))}</button>
-          <button data-rec-order="old" aria-pressed="${order === "old"}">${esc(t("rec.oldest"))}</button>
+        <div class="rec-lib-actions">
+          ${
+            selecting
+              ? `<span class="rec-picked-count">${esc(t("rec.selectedCount", { count: picked.size }))}</span>
+                 <button class="btn btn-ghost" data-rec="select-all">${esc(t(picked.size === entries.length && entries.length ? "rec.selectNone" : "rec.selectAll"))}</button>
+                 <button class="btn btn-ghost rec-delete-many" data-rec="delete-picked"${picked.size ? "" : " disabled"}>${icon("trash", 13)}<span>${esc(t("rec.deleteSelected", { count: picked.size }))}</span></button>
+                 <button class="btn btn-ghost" data-rec="select-done">${esc(t("common.cancel"))}</button>`
+              : `<button class="btn btn-ghost" data-rec="select"${entries.length ? "" : " disabled"}>${esc(t("rec.select"))}</button>`
+          }
+          <div class="segmented rec-order" role="group" aria-label="${esc(t("rec.order"))}">
+            <button data-rec-order="new" aria-pressed="${order === "new"}">${esc(t("rec.newest"))}</button>
+            <button data-rec-order="old" aria-pressed="${order === "old"}">${esc(t("rec.oldest"))}</button>
+          </div>
         </div>
       </div>
       ${modes.length > 1 ? `<div class="rec-modes" role="group" aria-label="${esc(t("rec.modes"))}">
@@ -851,6 +869,32 @@ export async function openRecordings(): Promise<void> {
     viewer.querySelector<HTMLElement>("[data-rec='back']")?.focus();
   };
 
+  /** Delete every ticked recording after one confirmation. */
+  const removeMany = async () => {
+    const paths = [...picked];
+    if (!paths.length) return;
+    const answer = await modal({
+      title: t("rec.deleteManyTitle", { count: paths.length }),
+      body: `<p class="hint">${esc(t("rec.deleteManyText", { count: paths.length }))}</p>`,
+      actions: [{ label: t("common.cancel"), value: "cancel" }, { label: t("menu.delete"), value: "delete", kind: "danger" }],
+    });
+    if (answer !== "delete") return;
+    if (selected && picked.has(selected.path)) closeViewer();
+    let failed = 0;
+    for (const path of paths) {
+      try {
+        await api.deleteRecording(path);
+      } catch {
+        failed += 1;
+      }
+    }
+    picked.clear();
+    selecting = false;
+    if (failed) toast("error", t("rec.deleteFailed"), t("rec.deleteManyFailed", { count: failed }));
+    else toast("success", t("rec.deletedMany", { count: paths.length }));
+    await reload();
+  };
+
   const remove = async (path: string) => {
     const entry = view.entries.find((item) => item.path === path);
     if (!entry) return;
@@ -955,6 +999,23 @@ export async function openRecordings(): Promise<void> {
     if (action === "folder") return void api.openRecordingsFolder(null).catch((error) => toast("error", t("toast.openFailed"), describe(error)));
     if (action === "reveal" && selected) return void api.openRecordingsFolder(selected.path).catch((error) => toast("error", t("toast.openFailed"), describe(error)));
     if (action === "delete" && row) return void remove(row.dataset.recPath!);
+    if (action === "select" || action === "select-done") {
+      selecting = action === "select";
+      picked.clear();
+      return renderList();
+    }
+    if (action === "select-all") {
+      const paths = [...list.querySelectorAll<HTMLElement>("[data-rec-path]")].map((card) => card.dataset.recPath!);
+      const all = paths.length > 0 && paths.every((path) => picked.has(path));
+      paths.forEach((path) => (all ? picked.delete(path) : picked.add(path)));
+      return renderList();
+    }
+    if (action === "delete-picked") return void removeMany();
+    if (selecting && row) {
+      const path = row.dataset.recPath!;
+      picked.has(path) ? picked.delete(path) : picked.add(path);
+      return renderList();
+    }
     if (action === "play") return togglePlay();
     if (action === "game-info") {
       setGameShown(true);
@@ -1142,6 +1203,11 @@ export async function openRecordings(): Promise<void> {
       if (mixerOpen) {
         mixerOpen = false;
         return renderMixer();
+      }
+      if (selecting && viewer.hidden) {
+        selecting = false;
+        picked.clear();
+        return renderList();
       }
       return viewer.hidden ? close() : closeViewer();
     }

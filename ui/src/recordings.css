@@ -65,8 +65,14 @@
 .rec-row-main { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .rec-row-main strong { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 700 13px/1.3 Beaufort, WenKai, NotoCJK, serif; letter-spacing: .04em; color: #f0e6d2; }
 .rec-row-sub { margin-top: 3px; font-size: 11.5px; color: #7d786c; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.rec-row-delete { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); opacity: 0; transition: opacity 120ms; }
-.rec-row:hover .rec-row-delete, .rec-row:focus-within .rec-row-delete, .rec-row.is-selected .rec-row-delete { opacity: 1; }
+/* Delete: a small framed button in the bottom-right corner, on hover. */
+.rec-row-delete {
+  position: absolute !important; right: 6px; bottom: 6px; z-index: 1; width: 26px; height: 26px;
+  display: grid; place-items: center; padding: 0; border: 1px solid #463714; background: #010a13e6; color: #a09b8c;
+  opacity: 0; transition: opacity 120ms linear, color 120ms linear, border-color 120ms linear;
+}
+.rec-row-delete:hover, .rec-row-delete:focus-visible { color: #e06d62; border-color: #be1e37; background: linear-gradient(180deg, #2a0d12, #010a13); }
+.rec-row:hover .rec-row-delete, .rec-row:focus-within .rec-row-delete { opacity: 1; }
 .rec-result { flex: none; font: 700 10.5px/1 Beaufort, WenKai, NotoCJK, serif; letter-spacing: .1em; text-transform: uppercase; }
 .rec-result.is-win { color: #0ac8b9; }
 .rec-result.is-loss { color: #e06d62; }
@@ -343,3 +349,20 @@
 .rec-mode-tag, .rec-clip-tag { display: inline-flex; align-items: center; gap: 4px; padding: 2px 6px; font: 700 10px/1.2 Beaufort, WenKai, NotoCJK, serif; letter-spacing: .08em; text-transform: uppercase; }
 .rec-mode-tag { color: #c8aa6e; background: #010a13cc; border: 1px solid #463714; }
 .rec-clip-tag { color: #0ac8b9; background: #010a13cc; border: 1px solid #0397ab; }
+
+/* Select mode: League checkbox on each card, ticked cards framed in gold. */
+.rec-lib-actions { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.rec-lib-actions .btn { height: 30px; padding: 0 12px; display: inline-flex; align-items: center; gap: 6px; font-size: 11px; }
+.rec-lib-actions .rec-order { margin-bottom: 0; }
+.rec-picked-count { font-size: 12px; color: #c8aa6e; padding-right: 4px; }
+.rec-delete-many:not(:disabled) { color: #e06d62; border-color: #be1e37; }
+.rec-delete-many:not(:disabled):hover { color: #f0e6d2; background: linear-gradient(180deg, #5c1a24, #2a0d12); }
+.rec-pick {
+  position: absolute !important; right: 8px; bottom: 8px; z-index: 1; width: 14px; height: 14px;
+  background: url('/league/controls/checkbox-spritesheet.png') 0 0 no-repeat;
+}
+.rec-row:hover .rec-pick { background-position-y: -14px; }
+.rec-row.is-picked .rec-pick { background-position-y: -28px; }
+.rec-row.is-picked:hover .rec-pick { background-position-y: -42px; }
+.is-selecting .rec-row { cursor: pointer; }
+.rec-row.is-picked { border-color: #c8aa6e; box-shadow: inset 0 0 0 1px #c8aa6e55; background: linear-gradient(180deg, #1e2328, #0f171c); }
