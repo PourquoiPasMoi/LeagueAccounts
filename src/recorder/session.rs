@@ -321,6 +321,7 @@ fn record(request: &RecordRequest, window: HWND, path: &Path, stop: &AtomicBool,
         moments: facts.moments,
         source: String::new(),
         clip_start: 0.0,
+        discord: false,
     };
     let _ = library::write_meta(&final_path, &meta);
     let size = std::fs::metadata(&final_path).map(|metadata| metadata.len()).unwrap_or(0);

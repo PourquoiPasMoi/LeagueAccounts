@@ -510,7 +510,8 @@ export const api = {
   microphoneLevel: (id: string) => call<number>("microphone_level", { id }),
   recordings: () => call<RecordingsView>("recordings"),
   deleteRecording: (path: string) => call<void>("delete_recording", { path }),
-  openRecordingsFolder: (path: string | null) => call<void>("open_recordings_folder", { path }),
+  /** `folder`: a folder inside the recordings folder (e.g. "Share Lock#EUW/Clips"), when no `path`. */
+  openRecordingsFolder: (path: string | null, folder: string | null = null) => call<void>("open_recordings_folder", { path, folder }),
   /** `parts`: [start, end] seconds, joined into one clip with plain cuts. */
   /** `mode`: "fast" (stream copy), "exact" (re-encoded), "discord" (re-encoded under 9.5 MB). */
   /** `sounds`: the sources to keep ("game", "pc", "mic", "discord"); undefined = all. */
@@ -798,6 +799,8 @@ export interface RecordingMeta {
   moments: Moment[];
   source: string;
   clipStart: number;
+  /** Clips made small enough for Discord. */
+  discord?: boolean;
 }
 
 export interface Recording {

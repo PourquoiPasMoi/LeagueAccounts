@@ -30,7 +30,8 @@
 /* ------------------------------------------------------------- layout */
 
 .rec-layout { flex: 1; min-height: 0; display: grid; grid-template-columns: 210px minmax(0, 1fr); }
-.rec-nav { display: flex; flex-direction: column; padding: 14px 0 14px 16px; border-right: 1px solid #c8aa6e1f; overflow-y: auto; }
+.rec-nav { display: flex; flex-direction: column; padding: 14px 0 14px 16px; border-right: 1px solid #c8aa6e1f; overflow-y: auto; overflow-x: hidden; scrollbar-width: none; }
+.rec-nav::-webkit-scrollbar { display: none; }
 .rec-nav button {
   position: relative;
   display: flex; align-items: center; justify-content: space-between; gap: 8px;
@@ -336,8 +337,10 @@
 .rec-group h4::after { content: ""; flex: 1; height: 1px; background: linear-gradient(90deg, #463714, transparent); }
 .rec-group h4 em { font: 11px/1 Spiegel, NotoCJK, sans-serif; font-style: normal; color: #5b5a56; }
 .rec-row { overflow: hidden; min-height: 70px; }
-.rec-row.is-game { border-left: 2px solid #785a28; }
-.rec-row.is-clip { border-left: 2px solid #0397ab; }
+/* Left edge: the game's result (win teal like the WIN label, loss red), gold when unknown. */
+.rec-row { border-left: 2px solid #785a28; }
+.rec-row.is-win { border-left-color: #0ac8b9; }
+.rec-row.is-loss { border-left-color: #e06d62; }
 .rec-row > :not(.rec-row-banner) { position: relative; }
 .rec-row-banner {
   position: absolute; top: 0; right: 0; height: 100%; width: 46%; object-fit: cover; object-position: 50% 22%;
@@ -366,3 +369,8 @@
 .rec-row.is-picked:hover .rec-pick { background-position-y: -42px; }
 .is-selecting .rec-row { cursor: pointer; }
 .rec-row.is-picked { border-color: #c8aa6e; box-shadow: inset 0 0 0 1px #c8aa6e55; background: linear-gradient(180deg, #1e2328, #0f171c); }
+
+.rec-discord-tag { display: inline-flex; align-items: center; padding: 2px 6px; font: 700 10px/1.2 Beaufort, WenKai, NotoCJK, serif; letter-spacing: .08em; text-transform: uppercase; color: #f0e6d2; background: #5865f2cc; border: 1px solid #7983f5; }
+.rec-select-group button[disabled] { opacity: .45; cursor: default; }
+.rec-select-group .rec-delete-many:not([disabled]) { color: #e06d62; }
+.rec-select-group .rec-delete-many:not([disabled]):hover { color: #f0e6d2; background: #be1e3755; }

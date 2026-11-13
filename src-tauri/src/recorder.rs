@@ -298,15 +298,26 @@ fn in_game_phase() -> Option<bool> {
 /// Game details left without their recording are removed.
 fn relabel_old_recordings(root: &std::path::Path) -> bool {
     let mut changed = false;
-    for entry in library::list(root).into_iter().filter(|entry| entry.kind == "game") {
+    for entry in library::list(root) {
         let Some(path) = library::resolve(root, &entry.path) else { continue };
         let Some(mut meta) = entry.meta.clone() else { continue };
         if meta.queue_id > 0 || is_being_recorded(&path) {
             continue;
         }
-        let Some(details) = leagueaccounts::recorder::gameinfo::load(&path) else { continue };
-        let id = details["game"]["queueId"].as_i64().unwrap_or(0);
-        let Some(label) = leagueaccounts::recorder::queues::label(id, details["game"]["gameMode"].as_str().unwrap_or_default()) else { continue };
+        // Games: the queue id in their saved details. Clips (and games without
+        // details): an internal mode name such as "Kiwi" read as a game mode.
+        let (id, label) = match leagueaccounts::recorder::gameinfo::load(&path) {
+            Some(details) => {
+                let id = details["game"]["queueId"].as_i64().unwrap_or(0);
+                (id, leagueaccounts::recorder::queues::label(id, details["game"]["gameMode"].as_str().unwrap_or_default()))
+            }
+            None if !meta.queue.contains(' ') && !meta.queue.is_empty() => (0, leagueaccounts::recorder::queues::label(-1, &meta.queue)),
+            None => (0, None),
+        };
+        let Some(label) = label else { continue };
+        if id == 0 && meta.queue == label {
+            continue;
+        }
         let old = meta.queue.clone();
         meta.queue = label.to_owned();
         meta.queue_id = id;
@@ -548,11 +559,16 @@ pub async fn delete_recording(app: AppHandle, path: String) -> CommandResult<()>
     Ok(())
 }
 
-/// Explorer on the recording (selected), or on the main folder.
+/// Explorer on the recording (selected), on a folder inside the recordings
+/// folder (`folder`, e.g. `Share Lock#EUW/Clips`), or on the main folder.
 #[tauri::command]
-pub async fn open_recordings_folder(path: Option<String>) -> CommandResult<()> {
+pub async fn open_recordings_folder(path: Option<String>, folder: Option<String>) -> CommandResult<()> {
     let root = prefs().root();
     let file = path.and_then(|path| library::resolve(&root, &path));
+    let inside = folder
+        .filter(|folder| !folder.contains("..") && !folder.contains(':'))
+        .map(|folder| root.join(folder.replace('/', "\\")))
+        .filter(|directory| directory.is_dir());
     let mut command = std::process::Command::new("explorer.exe");
     match file {
         // Explorer reads `/select,"C:\a b\c.mp4"` itself; Rust's quoting of the
@@ -561,10 +577,13 @@ pub async fn open_recordings_folder(path: Option<String>) -> CommandResult<()> {
             use std::os::windows::process::CommandExt;
             command.raw_arg(format!("/select,\"{}\"", file.display()))
         }
-        None => {
-            let _ = std::fs::create_dir_all(&root);
-            command.arg(&root)
-        }
+        None => match inside {
+            Some(directory) => command.arg(directory),
+            None => {
+                let _ = std::fs::create_dir_all(&root);
+                command.arg(&root)
+            }
+        },
     };
     command.spawn().map(|_| ()).map_err(|_| fail("browser"))
 }
