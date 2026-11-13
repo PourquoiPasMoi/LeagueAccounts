@@ -138,8 +138,13 @@ td.gi-items > * { display: inline-block; margin-right: 2px; vertical-align: midd
 .gi-bar { position: relative; display: flex; align-items: center; min-height: 36px; }
 .gi-bar > .gi-portrait { position: absolute; left: -44px; }
 .gi-bar-set { position: relative; flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 2px; }
-.gi-bar-fill { display: block; height: calc(30px / var(--bars) - 2px); min-height: 4px; max-height: 14px; transition: filter 120ms linear; }
-.gi-bar-fill:hover { filter: brightness(1.45); }
+.gi-bar-row { display: flex; align-items: center; gap: 8px; height: calc(30px / var(--bars) - 2px); min-height: 4px; max-height: 14px; }
+.gi-bar-fill { flex: none; display: block; height: 100%; transition: filter 120ms linear; }
+.gi-bar-row:hover .gi-bar-fill { filter: brightness(1.45); }
+/* Hovering the chart shows everyone's numbers, like the client. */
+.gi-bar-value { font-style: normal; font-size: 12px; line-height: 1; color: #f0e6d2; font-variant-numeric: tabular-nums; white-space: nowrap; opacity: 0; transition: opacity 120ms linear; }
+.gi-chart:hover .gi-bar-value { opacity: 1; }
+.gi-gold, .gi-strip i, .gi-map .gi-kill { cursor: pointer; }
 .gi-bar.is-blue .shade-0 { background: #0ac8b9; } .gi-bar.is-blue .shade-1 { background: #0397ab; }
 .gi-bar.is-blue .shade-2 { background: #06647a; } .gi-bar.is-blue .shade-3 { background: #0a4c5c; }
 .gi-bar.is-red .shade-0 { background: #e84057; } .gi-bar.is-red .shade-1 { background: #be1e37; }
@@ -179,3 +184,4 @@ td.gi-items > * { display: inline-block; margin-right: 2px; vertical-align: midd
   .gi-objectives { border-left: 0; padding-left: 0; }
 }
 .gi-items img, .gi-rune-head .gi-items img { background: #0a1015; outline: 1px solid #1e282d; }
+#client-tooltip { white-space: pre-line; }

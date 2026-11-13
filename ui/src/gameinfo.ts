@@ -263,12 +263,13 @@ function goldGraph(details: GameDetails, all: Player[]): string {
         diff === 0 ? t("gi.even") : t(diff > 0 ? "gi.yourLead" : "gi.enemyLead", { gold: count(Math.abs(diff)) }),
         `${t("gi.team1")}: ${count(ours)} ${t("gi.goldShort")}`,
         `${t("gi.team2")}: ${count(theirs)} ${t("gi.goldShort")}`,
+        t("gi.clickToWatch"),
       ],
       color: diff >= 0 ? "#0ac8b9" : "#e06d62",
     };
   });
   return `
-    <svg class="gi-gold" viewBox="0 0 ${width} ${height}" role="img" aria-label="${esc(t("gi.goldAdvantage"))}" data-points="${pointsAttribute(hover)}">
+    <svg class="gi-gold" viewBox="0 0 ${width} ${height}" role="img" aria-label="${esc(t("gi.goldAdvantage"))}" data-points="${pointsAttribute(hover)}" data-times="${esc(JSON.stringify(frames.map((frame) => Math.round(frame.t / 1000))))}">
       <defs>
         <clipPath id="gi-above"><rect x="0" y="0" width="${width}" height="${y(0)}"/></clipPath>
         <clipPath id="gi-below"><rect x="0" y="${y(0)}" width="${width}" height="${height}"/></clipPath>
@@ -305,7 +306,8 @@ function eventStrip(details: GameDetails, all: Player[]): string {
       (team) => `
       <div class="gi-strip ${teamClass(team)}"><span>${esc(t("gi.objectivesKills"))}</span><div>${events
         .filter((event) => credited(event) === team)
-        .map((event) => `<i class="${event.type === "CHAMPION_KILL" ? "" : "is-big"}" style="left:${((Number(event.t) / end) * 100).toFixed(2)}%" data-tooltip="${esc(`${clock(Number(event.t))}  ${label(event)}`)}"></i>`)
+        .map((event) => `<i class="${event.type === "CHAMPION_KILL" ? "" : "is-big"}" style="left:${((Number(event.t) / end) * 100).toFixed(2)}%" data-gi-time="${Math.round(Number(event.t) / 1000)}" data-tooltip="${esc(`${clock(Number(event.t))}  ${label(event)}
+${t("gi.clickToWatch")}`)}"></i>`)
         .join("")}</div></div>`,
     )
     .join("");
@@ -322,7 +324,8 @@ function killMap(details: GameDetails, all: Player[]): string {
       const killer = all.find((player) => player.id === event.killer);
       const victim = all.find((player) => player.id === event.victim);
       const tip = `${clock(Number(event.t))}  ${killer ? championName(killer.champion) : "?"} > ${victim ? championName(victim.champion) : "?"}`;
-      return `<circle cx="${at(event.x).toFixed(1)}" cy="${(size - at(event.y)).toFixed(1)}" r="5" class="gi-kill ${teamOf.get(event.killer) === ally ? "is-blue" : "is-red"}" data-tooltip="${esc(tip)}"/>`;
+      return `<circle cx="${at(event.x).toFixed(1)}" cy="${(size - at(event.y)).toFixed(1)}" r="5" class="gi-kill ${teamOf.get(event.killer) === ally ? "is-blue" : "is-red"}" data-gi-time="${Math.round(Number(event.t) / 1000)}" data-tooltip="${esc(`${tip}
+${t("gi.clickToWatch")}`)}"/>`;
     })
     .join("");
   const portraits = sides()
@@ -393,7 +396,7 @@ function graphs(all: Player[]): string {
         .map((stat, order) => {
           const value = Number(stat.value(player.s)) || 0;
           const tip = `${player.name} (${championName(player.champion)}): ${t(stat.label)} ${count(value)}`;
-          return `<span class="gi-bar-fill shade-${Math.min(order, 3)}" style="width:${((value / top) * 100).toFixed(2)}%" data-tooltip="${esc(tip)}"></span>`;
+          return `<span class="gi-bar-row" data-tooltip="${esc(tip)}"><span class="gi-bar-fill shade-${Math.min(order, 3)}" style="width:${((value / top) * 100).toFixed(2)}%"></span><em class="gi-bar-value">${count(value)}</em></span>`;
         })
         .join("");
       return `${index === 5 ? `<div class="gi-bar-gap"></div>` : ""}<div class="gi-bar ${teamClass(player.team)}${player.me ? " is-me" : ""}">${champImage(player, 34)}<div class="gi-bar-set" style="--bars:${chosen.length}">${bars}</div></div>`;
@@ -491,7 +494,21 @@ export function renderGameInfo(root: HTMLElement, details: GameDetails): void {
       if (rune) runePlayer = Number(rune);
       const map = target.closest<HTMLElement>("[data-gi-map]")?.dataset.giMap;
       if (map) mapPlayer = mapPlayer === Number(map) ? 0 : Number(map);
-      if (chosenTab || group || rune || map) rerender();
+      if (chosenTab || group || rune || map) return rerender();
+      // Overview: a time on the graph, the strips or the map plays the video there.
+      let seconds = Number(target.closest<HTMLElement | SVGElement>("[data-gi-time]")?.dataset.giTime ?? NaN);
+      const gold = target.closest<SVGSVGElement>("svg.gi-gold");
+      if (Number.isNaN(seconds) && gold) {
+        const matrix = gold.getScreenCTM();
+        const points = JSON.parse(gold.dataset.points ?? "[]") as HoverPoint[];
+        const times = JSON.parse(gold.dataset.times ?? "[]") as number[];
+        if (matrix && points.length) {
+          const x = ((event as MouseEvent).clientX - matrix.e) / matrix.a;
+          const nearest = points.reduce((best, point, index) => (Math.abs(point.x - x) < Math.abs(points[best].x - x) ? index : best), 0);
+          seconds = times[nearest] ?? NaN;
+        }
+      }
+      if (!Number.isNaN(seconds)) root.dispatchEvent(new CustomEvent("gi-seek", { detail: seconds, bubbles: true }));
     });
     root.addEventListener("change", (event) => {
       const input = event.target as HTMLInputElement;
