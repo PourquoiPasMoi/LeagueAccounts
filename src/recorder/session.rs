@@ -29,7 +29,11 @@ pub struct RecordSettings {
     /// Desktop Duplication instead of window capture.
     pub screen: bool,
     pub game_audio: bool,
+    /// Discord's sound only (voice chat), as its own track.
+    pub discord: bool,
     pub microphone: bool,
+    /// Windows endpoint id of the microphone; empty = the default communication device.
+    pub microphone_device: String,
 }
 
 #[derive(Clone, Debug)]
@@ -146,12 +150,20 @@ fn record(request: &RecordRequest, window: HWND, path: &Path, stop: &AtomicBool,
         }
     }
     if settings.microphone {
-        if let Ok(source) = audio::microphone() {
+        if let Ok(source) = audio::microphone(&settings.microphone_device) {
             sources.push(source);
             audio_source.push("mic");
         }
     }
+    if settings.discord {
+        // Only when Discord runs as the game starts.
+        if let Ok(source) = audio::discord_sound() {
+            sources.push(source);
+            audio_source.push("discord");
+        }
+    }
     let mut mixer = AudioMixer::new(sources);
+    let audio_tracks = mixer.tracks();
     let fps = settings.fps.clamp(10, 120);
     let (width, height) = output_size(capture.size(), settings.max_height);
     let encoder_settings = EncoderSettings {
@@ -163,7 +175,7 @@ fn record(request: &RecordRequest, window: HWND, path: &Path, stop: &AtomicBool,
         // A normal MP4: the index is written once at the end and players open it at once.
         // (Fragmented MP4 made the player read the whole file before showing anything.)
         fragmented: false,
-        audio: !mixer.is_empty(),
+        audio_tracks: mixer.tracks().len(),
     };
     let Ok(mut encoder) = VideoEncoder::new(&gpu, path, encoder_settings) else { return Outcome::Failed("recorder_encoder") };
 
@@ -243,8 +255,10 @@ fn record(request: &RecordRequest, window: HWND, path: &Path, stop: &AtomicBool,
             failed = true;
             break;
         }
-        if let Some((samples, audio_time)) = mixer.take() {
-            let _ = encoder.write_audio(&samples, audio_time);
+        if let Some((tracks, audio_time)) = mixer.take() {
+            for (track, samples) in tracks.iter().enumerate() {
+                let _ = encoder.write_audio(track, samples, audio_time);
+            }
         }
         tick += 1;
         // Running late (the PC was busy): skip ticks instead of piling up.
@@ -301,6 +315,7 @@ fn record(request: &RecordRequest, window: HWND, path: &Path, stop: &AtomicBool,
         capture: if screen { "screen".into() } else { "window".into() },
         audio: has_audio,
         audio_source: audio_source.join("+"),
+        audio_tracks: audio_tracks.iter().map(|track| (*track).to_owned()).collect(),
         moments: facts.moments,
         source: String::new(),
         clip_start: 0.0,

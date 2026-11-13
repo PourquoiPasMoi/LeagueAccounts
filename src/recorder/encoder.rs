@@ -28,8 +28,8 @@ pub struct EncoderSettings {
     pub hardware: bool,
     /// Fragmented MP4: the file stays playable if the app or PC stops mid-game.
     pub fragmented: bool,
-    /// Add an AAC track (48 kHz stereo, fed with `write_audio`).
-    pub audio: bool,
+    /// AAC tracks to add (48 kHz stereo, fed with `write_audio`); 0 = no sound.
+    pub audio_tracks: usize,
 }
 
 /// Audio format of `write_audio`: 16-bit stereo PCM at 48 kHz.
@@ -58,7 +58,7 @@ pub struct VideoEncoder {
     video_context: ID3D11VideoContext,
     writer: IMFSinkWriter,
     stream: u32,
-    audio_stream: Option<u32>,
+    audio_streams: Vec<u32>,
     _manager: Option<IMFDXGIDeviceManager>,
     settings: EncoderSettings,
     input: Option<Input>,
@@ -185,7 +185,10 @@ impl VideoEncoder {
             }
             stream
         };
-        let audio_stream = if settings.audio { Some(unsafe { add_audio(&writer)? }) } else { None };
+        let mut audio_streams = Vec::with_capacity(settings.audio_tracks);
+        for _ in 0..settings.audio_tracks {
+            audio_streams.push(unsafe { add_audio(&writer)? });
+        }
         unsafe { writer.BeginWriting()? };
         let (name, uses_hardware) = encoder_info(&writer, stream);
 
@@ -203,7 +206,7 @@ impl VideoEncoder {
             video_context,
             writer,
             stream,
-            audio_stream,
+            audio_streams,
             _manager: manager,
             settings: settings.clone(),
             input: None,
@@ -364,9 +367,10 @@ impl VideoEncoder {
         }
     }
 
-    /// Write interleaved 16-bit stereo samples starting at `time` (100 ns units).
-    pub fn write_audio(&mut self, samples: &[i16], time: i64) -> Result<()> {
-        let Some(stream) = self.audio_stream else { return Ok(()) };
+    /// Write interleaved 16-bit stereo samples of audio track `track` starting
+    /// at `time` (100 ns units).
+    pub fn write_audio(&mut self, track: usize, samples: &[i16], time: i64) -> Result<()> {
+        let Some(&stream) = self.audio_streams.get(track) else { return Ok(()) };
         if samples.is_empty() {
             return Ok(());
         }
@@ -389,7 +393,7 @@ impl VideoEncoder {
     }
 
     pub fn has_audio(&self) -> bool {
-        self.audio_stream.is_some()
+        !self.audio_streams.is_empty()
     }
 
     /// Finish the file (writes the index so players can seek).

@@ -505,12 +505,22 @@ export const api = {
   setRecorderPrefs: (prefs: RecorderPrefs) => call<RecorderPrefsView>("set_recorder_prefs", { prefs }),
   pickRecordingsFolder: (title: string) => call<string | null>("pick_recordings_folder", { title }),
   recorderStatus: () => call<RecorderStatus>("recorder_status"),
+  microphones: () => call<{ id: string; name: string; console: boolean; communications: boolean }[]>("microphones"),
+  /** Loudest level (0..1) the microphone hears in 2 s. */
+  microphoneLevel: (id: string) => call<number>("microphone_level", { id }),
   recordings: () => call<RecordingsView>("recordings"),
   deleteRecording: (path: string) => call<void>("delete_recording", { path }),
   openRecordingsFolder: (path: string | null) => call<void>("open_recordings_folder", { path }),
   /** `parts`: [start, end] seconds, joined into one clip with plain cuts. */
   /** `mode`: "fast" (stream copy), "exact" (re-encoded), "discord" (re-encoded under 9.5 MB). */
-  saveClip: (path: string, parts: [number, number][], mode: "fast" | "exact" | "discord", name: string) => call<Recording>("save_clip", { path, parts, mode, name }),
+  /** `sounds`: the sources to keep ("game", "pc", "mic", "discord"); undefined = all. */
+  /** `gains`: level per source (1 = as recorded, up to 3). */
+  saveClip: (path: string, parts: [number, number][], mode: "fast" | "exact" | "discord", name: string, sounds?: string[], gains?: Record<string, number>) =>
+    call<Recording>("save_clip", { path, parts, mode, name, sounds: sounds ?? null, gains: gains ?? null }),
+  /** Each sound source of a recording as its own file (split the first time). */
+  /** End-of-game details saved with a game recording; read from the League client first when `fetch`. */
+  recordingGame: (path: string, fetch: boolean) => call<import("./gameinfo").GameDetails | null>("recording_game", { path, fetch }),
+  recordingSoundTracks: (path: string) => call<{ label: string; path: string }[]>("recording_sound_tracks", { path }),
   /** Puts the chosen parts of the build into the League client. */
   applyBuild: (request: ApplyRequest) => call<ApplyResult>("apply_build", { request }),
   sessionStatus: () => call<SessionStatus>("session_status"),
@@ -679,6 +689,8 @@ export interface Asset {
   icon: string;
   /** Items only. */
   price?: number;
+  /** Runes: end-of-game lines ("Total Damage Dealt: @eogvar1@"). */
+  stats?: string[];
 }
 
 export interface GameAssets {
@@ -729,6 +741,10 @@ export interface RecorderPrefs {
   capture: "window" | "screen";
   gameAudio: boolean;
   microphone: boolean;
+  /** Discord's sound only (voice chat), as its own track. */
+  discord: boolean;
+  /** Windows endpoint id of the microphone; "" = Windows' default communication device. */
+  micDevice: string;
   /** 0 = no limit. */
   diskLimitGb: number;
 }
@@ -775,6 +791,8 @@ export interface RecordingMeta {
   capture: string;
   audio: boolean;
   audioSource: string;
+  /** Audio tracks in order: one source, or "mix" then each source; empty in older files. */
+  audioTracks: string[];
   moments: Moment[];
   source: string;
   clipStart: number;
@@ -831,4 +849,6 @@ export const events = {
     listen<RecorderStatus>("recorder-status", (event) => handler(event.payload)),
   /** A recording or clip was saved or deleted. */
   onRecordingsChanged: (handler: () => void): Promise<UnlistenFn> => listen("recordings-changed", () => handler()),
+  /** A game recording's end-of-game details were saved (its path). */
+  onRecordingGame: (handler: (path: string) => void): Promise<UnlistenFn> => listen<string>("recording-game", (event) => handler(event.payload)),
 };

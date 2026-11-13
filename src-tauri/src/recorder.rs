@@ -38,6 +38,10 @@ pub struct RecorderPrefs {
     pub capture: String,
     pub game_audio: bool,
     pub microphone: bool,
+    /// Discord's sound only (voice chat), as its own track. Off by default.
+    pub discord: bool,
+    /// Windows endpoint id of the microphone; empty = Windows' default communication device.
+    pub mic_device: String,
     /// Gigabytes for all recordings; 0 = no limit.
     pub disk_limit_gb: u32,
 }
@@ -55,6 +59,8 @@ impl Default for RecorderPrefs {
             capture: "window".into(),
             game_audio: true,
             microphone: false,
+            discord: false,
+            mic_device: String::new(),
             disk_limit_gb: 100,
         }
     }
@@ -221,6 +227,8 @@ fn start_recording(app: &AppHandle, window: leagueaccounts::recorder::capture::W
             screen: prefs.capture == "screen",
             game_audio: prefs.game_audio,
             microphone: prefs.microphone,
+            discord: prefs.discord,
+            microphone_device: prefs.mic_device.clone(),
         },
     };
     match session::start(request, window) {
@@ -243,9 +251,11 @@ fn start_recording(app: &AppHandle, window: leagueaccounts::recorder::capture::W
 fn finish(app: &AppHandle, active: Active) {
     let outcome = active.recording.wait();
     let prefs = prefs();
+    let mut saved = None;
     let error = match outcome {
-        Outcome::Saved(_) => {
+        Outcome::Saved(entry) => {
             logging::record(Event::RecordingSaved, Reason::None);
+            saved = Some(entry.path);
             String::new()
         }
         Outcome::Failed(code) => {
@@ -256,6 +266,33 @@ fn finish(app: &AppHandle, active: Active) {
     library::enforce_limit(&prefs.root(), u64::from(prefs.disk_limit_gb) * 1_000_000_000, None);
     set_status(app, RecorderStatus { enabled: prefs.enabled, error, ..RecorderStatus::default() });
     let _ = app.emit("recordings-changed", ());
+    // Each sound source as its own file now (disk reading only), so the
+    // player's volume per source is ready when the game is watched; then the
+    // end-of-game details from the client's match history (it lists a game a
+    // little after it ends: a few tries, 30 s apart).
+    if let Some(path) = saved {
+        let root = prefs.root();
+        let app = app.clone();
+        thread::spawn(move || {
+            let _ = leagueaccounts::recorder::sound_tracks(&root, &path);
+            let Some(file) = library::resolve(&root, &path) else { return };
+            let meta = library::read_meta(&file).unwrap_or_default();
+            if meta.kind != "game" {
+                return;
+            }
+            for _ in 0..10 {
+                thread::sleep(Duration::from_secs(30));
+                match leagueaccounts::recorder::gameinfo::fetch(&file, &meta) {
+                    Ok(_) => {
+                        let _ = app.emit("recording-game", path.clone());
+                        return;
+                    }
+                    Err("game_not_found") => continue,
+                    Err(_) => return,
+                }
+            }
+        });
+    }
 }
 
 fn in_game_phase() -> Option<bool> {
@@ -392,6 +429,33 @@ pub async fn pick_recordings_folder(title: String) -> CommandResult<Option<Strin
     .map_err(|_| fail("dialog_failed"))
 }
 
+/// The PC's microphones with Windows' default roles.
+#[tauri::command]
+pub async fn microphones() -> CommandResult<Vec<leagueaccounts::recorder::audio::CaptureDevice>> {
+    tauri::async_runtime::spawn_blocking(|| {
+        let _ = leagueaccounts::recorder::startup();
+        let devices = leagueaccounts::recorder::audio::capture_devices();
+        leagueaccounts::recorder::shutdown();
+        devices
+    })
+    .await
+    .map_err(|_| fail("operation_failed"))
+}
+
+/// Loudest level (0..1) the microphone hears in 2 seconds; nothing is kept.
+#[tauri::command]
+pub async fn microphone_level(id: String) -> CommandResult<f32> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let _ = leagueaccounts::recorder::startup();
+        let level = leagueaccounts::recorder::audio::probe_level(&id, 2.0);
+        leagueaccounts::recorder::shutdown();
+        level
+    })
+    .await
+    .map_err(|_| fail("operation_failed"))?
+    .ok_or_else(|| fail("microphone_failed"))
+}
+
 #[tauri::command]
 pub async fn recorder_status() -> CommandResult<RecorderStatus> {
     Ok(status())
@@ -461,7 +525,17 @@ pub async fn open_recordings_folder(path: Option<String>) -> CommandResult<()> {
 #[tauri::command]
 /// `parts`: [start, end] seconds, joined into one clip with plain cuts.
 /// `mode`: "fast" (stream copy), "exact" (re-encoded) or "discord" (re-encoded under 9.5 MB).
-pub async fn save_clip(app: AppHandle, path: String, parts: Vec<[f64; 2]>, mode: String, name: Option<String>) -> CommandResult<Entry> {
+/// `sounds`: the audio sources to keep ("game", "pc", "mic", "discord"); absent = all.
+/// `gains`: level per source (1.0 = as recorded, up to 3.0); absent = as recorded.
+pub async fn save_clip(
+    app: AppHandle,
+    path: String,
+    parts: Vec<[f64; 2]>,
+    mode: String,
+    name: Option<String>,
+    sounds: Option<Vec<String>>,
+    gains: Option<std::collections::HashMap<String, f32>>,
+) -> CommandResult<Entry> {
     use leagueaccounts::recorder::ClipMode;
     let mode = match mode.as_str() {
         "exact" => ClipMode::Exact,
@@ -470,7 +544,8 @@ pub async fn save_clip(app: AppHandle, path: String, parts: Vec<[f64; 2]>, mode:
     };
     let parts: Vec<(f64, f64)> = parts.iter().map(|part| (part[0], part[1])).collect();
     let root = prefs().root();
-    let result = tauri::async_runtime::spawn_blocking(move || leagueaccounts::recorder::save_clip(&root, &path, &parts, mode, name.as_deref()))
+    let gains = gains.unwrap_or_default();
+    let result = tauri::async_runtime::spawn_blocking(move || leagueaccounts::recorder::save_clip(&root, &path, &parts, mode, name.as_deref(), sounds.as_deref(), &gains))
         .await
         .map_err(|_| fail("operation_failed"))?;
     match result {
@@ -484,6 +559,50 @@ pub async fn save_clip(app: AppHandle, path: String, parts: Vec<[f64; 2]>, mode:
             Err(fail(code))
         }
     }
+}
+
+#[derive(Serialize)]
+pub struct SoundTrack {
+    label: String,
+    /// Relative to the recordings folder (played through `larec`).
+    path: String,
+}
+
+/// The recording's sound sources as separate files for the player's volume
+/// per source (copied out of the recording the first time, a few seconds).
+#[tauri::command]
+pub async fn recording_sound_tracks(path: String) -> CommandResult<Vec<SoundTrack>> {
+    let root = prefs().root();
+    let file = library::resolve(&root, &path).ok_or_else(|| fail("recording_missing"))?;
+    if is_being_recorded(&file) {
+        return Err(fail("recording_busy"));
+    }
+    tauri::async_runtime::spawn_blocking(move || leagueaccounts::recorder::sound_tracks(&root, &path))
+        .await
+        .map_err(|_| fail("operation_failed"))?
+        .map(|tracks| tracks.into_iter().map(|(label, path)| SoundTrack { label, path }).collect())
+        .map_err(fail)
+}
+
+/// A game recording's end-of-game details (saved next to it), read from the
+/// League client the first time when `fetch` is set. `None`: not saved yet.
+#[tauri::command]
+pub async fn recording_game(path: String, fetch: bool) -> CommandResult<Option<Value>> {
+    let root = prefs().root();
+    tauri::async_runtime::spawn_blocking(move || {
+        let file = library::resolve(&root, &path).ok_or("recording_missing")?;
+        if let Some(details) = leagueaccounts::recorder::gameinfo::load(&file) {
+            return Ok(Some(details));
+        }
+        if !fetch {
+            return Ok(None);
+        }
+        let meta = library::read_meta(&file).unwrap_or_default();
+        leagueaccounts::recorder::gameinfo::fetch(&file, &meta).map(Some)
+    })
+    .await
+    .map_err(|_| fail("operation_failed"))?
+    .map_err(fail)
 }
 
 // ---------------------------------------------------------------- larec scheme
@@ -513,6 +632,7 @@ pub fn serve(path: &str, range: Option<&str>) -> tauri::http::Response<Vec<u8>> 
     if start >= total {
         return tauri::http::Response::builder()
             .status(416)
+            .header("Access-Control-Allow-Origin", "*")
             .header("Content-Range", format!("bytes */{total}"))
             .body(Vec::new())
             .unwrap_or_default();
@@ -525,6 +645,9 @@ pub fn serve(path: &str, range: Option<&str>) -> tauri::http::Response<Vec<u8>> 
     tauri::http::Response::builder()
         .status(206)
         .header("Content-Type", "video/mp4")
+        // The player routes the sound through Web Audio (volume above 100 %),
+        // which needs the app's page to be allowed to read it.
+        .header("Access-Control-Allow-Origin", "*")
         .header("Accept-Ranges", "bytes")
         .header("Content-Range", format!("bytes {start}-{end}/{total}"))
         .header("Content-Length", body.len().to_string())

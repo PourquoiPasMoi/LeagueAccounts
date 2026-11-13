@@ -41,6 +41,9 @@ pub struct RecordingMeta {
     pub audio: bool,
     /// "game" (game sound only), "pc" (all PC sound), plus "+mic".
     pub audio_source: String,
+    /// Audio tracks in order: one source ("game", "pc", "mic", "discord"), or
+    /// "mix" followed by each source. Empty in older files: one mixed track.
+    pub audio_tracks: Vec<String>,
     pub moments: Vec<Moment>,
     /// Clips: the game recording they come from (file name) and where they start in it.
     pub source: String,
@@ -198,10 +201,26 @@ pub fn is_fragmented(path: &Path) -> bool {
     false
 }
 
-/// Delete a recording and its moments file.
+/// Hidden folder next to the games with each sound source of a recording as
+/// its own audio-only MP4 (made when the recording is first played).
+pub const TRACKS: &str = ".tracks";
+/// Sound sources that can have their own track.
+pub const SOURCES: [&str; 4] = ["game", "pc", "mic", "discord"];
+
+/// `<folder>/.tracks/<name>.<source>.mp4`.
+pub fn track_file(video: &Path, source: &str) -> PathBuf {
+    let stem = video.file_stem().map(|stem| stem.to_string_lossy().into_owned()).unwrap_or_default();
+    video.parent().unwrap_or(Path::new(".")).join(TRACKS).join(format!("{stem}.{source}.mp4"))
+}
+
+/// Delete a recording, its moments file and its sound track files.
 pub fn delete(path: &Path) -> std::io::Result<()> {
     std::fs::remove_file(path)?;
     let _ = std::fs::remove_file(meta_path(path));
+    let _ = std::fs::remove_file(path.with_extension("game.json"));
+    for source in SOURCES {
+        let _ = std::fs::remove_file(track_file(path, source));
+    }
     Ok(())
 }
 

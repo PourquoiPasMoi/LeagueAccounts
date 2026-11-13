@@ -64,20 +64,12 @@ pub fn load(path: &str) -> Option<(Vec<u8>, &'static str)> {
             return Some((bytes, mime));
         }
     }
-    let response = CLIENT.as_ref()?.get(format!("{ORIGIN}{path}")).send();
-    let response = match response {
-        Ok(response) if response.status().is_success() => response,
-        Ok(_) => return None,
-        Err(error) => {
-            logging::record(Event::ImageCacheFailed, Reason::from_request(&error));
-            return None;
-        }
+    // The running League client has every picture of its patch locally (no
+    // bandwidth); CommunityDragon otherwise (it sometimes times out, 522).
+    let bytes = match crate::riot_client::league_client().and_then(|client| client.game_asset(path, MAX_BYTES)) {
+        Some(bytes) => bytes,
+        None => download(path)?,
     };
-    let mut bytes = Vec::new();
-    response.take(MAX_BYTES).read_to_end(&mut bytes).ok()?;
-    if bytes.is_empty() {
-        return None;
-    }
     // A failed write only means the next view downloads it again.
     if let Ok(mut temporary) = tempfile::NamedTempFile::new_in(file.parent()?) {
         use std::io::Write;
@@ -86,4 +78,25 @@ pub fn load(path: &str) -> Option<(Vec<u8>, &'static str)> {
         }
     }
     Some((bytes, mime))
+}
+
+/// One picture from CommunityDragon, tried twice (it sometimes answers 522).
+fn download(path: &str) -> Option<Vec<u8>> {
+    for attempt in 0..2 {
+        let response = CLIENT.as_ref()?.get(format!("{ORIGIN}{path}")).send();
+        match response {
+            Ok(response) if response.status().is_success() => {
+                let mut bytes = Vec::new();
+                response.take(MAX_BYTES).read_to_end(&mut bytes).ok()?;
+                return (!bytes.is_empty()).then_some(bytes);
+            }
+            Ok(response) if response.status().is_server_error() && attempt == 0 => std::thread::sleep(Duration::from_millis(800)),
+            Ok(_) => return None,
+            Err(error) => {
+                logging::record(Event::ImageCacheFailed, Reason::from_request(&error));
+                return None;
+            }
+        }
+    }
+    None
 }
