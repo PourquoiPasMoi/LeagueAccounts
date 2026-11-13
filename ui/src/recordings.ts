@@ -446,6 +446,18 @@ export async function openRecordings(): Promise<void> {
     gamePanel.innerHTML = `${bar}<div class="rec-game-missing"><p>${esc(message)}</p>${gameState === "error" ? `<button class="btn btn-ghost" data-rec="game-load">${esc(t("gi.load"))}</button>` : ""}</div>`;
   };
 
+  // A time picked in the game stats (game clock seconds): watch it in the video.
+  gamePanel.addEventListener("gi-seek", (event) => {
+    const gameSeconds = Number((event as CustomEvent<number>).detail);
+    const meta = selected?.meta;
+    const moment = meta?.moments.find((entry) => Number.isFinite(entry.gameTime));
+    const offset = meta?.gameStart ?? (moment ? moment.time - moment.gameTime : null);
+    if (!video || offset == null || !Number.isFinite(gameSeconds)) return;
+    seek(gameSeconds + offset - LEAD);
+    scroller.scrollTo({ top: 0, behavior: "smooth" });
+    if (video.paused) void video.play().catch(() => undefined);
+  });
+
   const loadGame = async (entry: Recording, fetch: boolean) => {
     if (entry.kind !== "game") return;
     gameState = "loading";
