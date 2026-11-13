@@ -279,7 +279,11 @@ export async function openRecordings(): Promise<void> {
       .join("");
   };
 
-  const modeOf = (entry: Recording) => entry.meta?.queue || t("rec.otherMode");
+  /** A Discord version (saved with Discord mode, or named so before that was recorded). */
+  const isDiscord = (entry: Recording) => entry.kind === "clip" && (entry.meta?.discord === true || /\(discord\)/i.test(entry.name));
+  /** Games group by game mode; clips into Discord versions and the others. */
+  const modeOf = (entry: Recording) =>
+    entry.kind === "clip" ? t(isDiscord(entry) ? "rec.discordClips" : "rec.otherClips") : entry.meta?.queue || t("rec.otherMode");
   const started = (entry: Recording) => entry.meta?.startedAt || entry.modified;
   const banner = (entry: Recording) => {
     const id = (championIds as Record<string, number>)[entry.meta?.champion ?? ""];
@@ -293,9 +297,13 @@ export async function openRecordings(): Promise<void> {
     const live = isRecording(entry) ? `<span class="rec-result is-live">${esc(t("rec.inProgress"))}</span>` : "";
     const details = [date, meta?.duration ? clock(meta.duration) : "", bytes(entry.size), account ? "" : accountLabel(entry.account)].filter(Boolean).join(" · ");
     const score = entry.kind === "game" ? kda(entry) : "";
-    const tag = entry.kind === "clip" ? `<span class="rec-clip-tag">${icon("scissors", 11)}${esc(t("rec.clip"))}</span>` : `<span class="rec-mode-tag">${esc(modeOf(entry))}</span>`;
+    const tag =
+      entry.kind === "clip"
+        ? `<span class="rec-clip-tag">${icon("scissors", 11)}${esc(t("rec.clip"))}</span>${isDiscord(entry) ? `<span class="rec-discord-tag">${esc(t("rec.discord"))}</span>` : ""}${meta?.queue ? `<span class="rec-mode-tag">${esc(meta.queue)}</span>` : ""}`
+        : `<span class="rec-mode-tag">${esc(modeOf(entry))}</span>`;
+    const outcome = meta?.result === "Win" ? " is-win" : meta?.result === "Loss" ? " is-loss" : "";
     return `
-      <div class="rec-row is-${entry.kind}${selected?.path === entry.path ? " is-selected" : ""}${picked.has(entry.path) ? " is-picked" : ""}" role="button" tabindex="0" data-rec-path="${esc(entry.path)}"${selecting ? ` aria-pressed="${picked.has(entry.path)}"` : ""}>
+      <div class="rec-row is-${entry.kind}${outcome}${selected?.path === entry.path ? " is-selected" : ""}${picked.has(entry.path) ? " is-picked" : ""}" role="button" tabindex="0" data-rec-path="${esc(entry.path)}"${selecting ? ` aria-pressed="${picked.has(entry.path)}"` : ""}>
         ${banner(entry)}
         ${selecting ? `<span class="rec-pick" aria-hidden="true"></span>` : ""}
         <div class="rec-row-main"><strong>${esc(entry.kind === "game" && meta?.champion ? meta.champion : title(entry))}</strong>${score ? `<span class="rec-kda">${esc(score)}</span>` : ""}${result}${live}</div>
@@ -337,10 +345,12 @@ export async function openRecordings(): Promise<void> {
           ${
             selecting
               ? `<span class="rec-picked-count">${esc(t("rec.selectedCount", { count: picked.size }))}</span>
-                 <button class="btn btn-ghost" data-rec="select-all">${esc(t(picked.size === entries.length && entries.length ? "rec.selectNone" : "rec.selectAll"))}</button>
-                 <button class="btn btn-ghost rec-delete-many" data-rec="delete-picked"${picked.size ? "" : " disabled"}>${icon("trash", 13)}<span>${esc(t("rec.deleteSelected", { count: picked.size }))}</span></button>
-                 <button class="btn btn-ghost" data-rec="select-done">${esc(t("common.cancel"))}</button>`
-              : `<button class="btn btn-ghost" data-rec="select"${entries.length ? "" : " disabled"}>${esc(t("rec.select"))}</button>`
+                 <div class="segmented rec-select-group">
+                   <button data-rec="select-all" aria-pressed="false">${esc(t(picked.size === entries.length && entries.length ? "rec.selectNone" : "rec.selectAll"))}</button>
+                   <button class="rec-delete-many" data-rec="delete-picked" aria-pressed="false"${picked.size ? "" : " disabled"}>${esc(t("rec.deleteSelected", { count: picked.size }))}</button>
+                   <button data-rec="select-done" aria-pressed="true">${esc(t("common.cancel"))}</button>
+                 </div>`
+              : `<div class="segmented rec-select-group"><button data-rec="select" aria-pressed="false"${entries.length ? "" : " disabled"}>${esc(t("rec.select"))}</button></div>`
           }
           <div class="segmented rec-order" role="group" aria-label="${esc(t("rec.order"))}">
             <button data-rec-order="new" aria-pressed="${order === "new"}">${esc(t("rec.newest"))}</button>
@@ -349,7 +359,7 @@ export async function openRecordings(): Promise<void> {
         </div>
       </div>
       ${modes.length > 1 ? `<div class="rec-modes" role="group" aria-label="${esc(t("rec.modes"))}">
-        <button data-rec-mode-filter="" aria-pressed="${!mode_}">${esc(t("rec.allModes"))}<em>${entries.length}</em></button>
+        <button data-rec-mode-filter="" aria-pressed="${!mode_}">${esc(t(kind === "clip" ? "rec.allClips" : "rec.allModes"))}<em>${entries.length}</em></button>
         ${modes.map((name) => `<button data-rec-mode-filter="${esc(name)}" aria-pressed="${mode_ === name}">${esc(name)}<em>${entries.filter((entry) => modeOf(entry) === name).length}</em></button>`).join("")}
       </div>` : ""}
       <div class="rec-library">${body}</div>`;
@@ -429,6 +439,7 @@ export async function openRecordings(): Promise<void> {
         <span class="rec-viewer-sub">${esc([date, meta?.duration ? clock(meta.duration) : "", accountLabel(entry.account), bytes(entry.size)].filter(Boolean).join(" · "))}</span>
       </div>
       ${entry.kind === "game" ? `<button class="btn btn-ghost" data-rec="game-info" aria-pressed="${gameShown()}">${icon("chart-line", 14)}<span>${esc(t("gi.title"))}</span></button>` : ""}
+      ${entry.kind === "clip" && !isDiscord(entry) ? `<button class="btn btn-ghost" data-rec="discord-version" data-tooltip="${esc(t("rec.discordVersionHint"))}">${icon("upload", 14)}<span>${esc(t("rec.discordVersion"))}</span></button>` : ""}
       <button class="btn btn-ghost" data-rec="reveal">${icon("folder-open", 14)}<span>${esc(t("rec.showFile"))}</span></button>
       <button class="btn btn-ghost" data-rec="delete-current">${icon("trash", 14)}<span>${esc(t("menu.delete"))}</span></button>`;
     if (isRecording(entry)) {
@@ -869,6 +880,27 @@ export async function openRecordings(): Promise<void> {
     viewer.querySelector<HTMLElement>("[data-rec='back']")?.focus();
   };
 
+  /** The whole clip again, re-encoded under Discord's 9.5 MB, saved next to it. */
+  let makingDiscord = false;
+  const makeDiscordVersion = async (entry: Recording) => {
+    if (makingDiscord) return;
+    const length = entry.meta?.duration || duration();
+    if (!length) return;
+    makingDiscord = true;
+    const button = viewerHead.querySelector<HTMLButtonElement>('[data-rec="discord-version"]');
+    if (button) button.disabled = true;
+    toast("info", t("rec.discordMaking"));
+    try {
+      const clip = await api.saveClip(entry.path, [[0, length + 1]], "discord", `${entry.name} (Discord)`);
+      toast("success", t("rec.clipSaved"), clip.name);
+    } catch (error) {
+      toast("error", t("rec.clipFailed"), describe(error), 6000);
+    }
+    makingDiscord = false;
+    if (button?.isConnected) button.disabled = false;
+    await reload();
+  };
+
   /** Delete every ticked recording after one confirmation. */
   const removeMany = async () => {
     const paths = [...picked];
@@ -996,7 +1028,14 @@ export async function openRecordings(): Promise<void> {
       filter = chosenFilter;
       return renderMoments();
     }
-    if (action === "folder") return void api.openRecordingsFolder(null).catch((error) => toast("error", t("toast.openFailed"), describe(error)));
+    if (action === "folder") {
+      // The Games or Clips folder of the account shown (or of the only account).
+      const names = accounts();
+      const owner = account || (names.length === 1 ? names[0] : "");
+      const folder = owner ? `${owner}/${kind === "clip" ? "Clips" : "Games"}` : null;
+      return void api.openRecordingsFolder(null, folder).catch((error) => toast("error", t("toast.openFailed"), describe(error)));
+    }
+    if (action === "discord-version" && selected) return void makeDiscordVersion(selected);
     if (action === "reveal" && selected) return void api.openRecordingsFolder(selected.path).catch((error) => toast("error", t("toast.openFailed"), describe(error)));
     if (action === "delete" && row) return void remove(row.dataset.recPath!);
     if (action === "select" || action === "select-done") {

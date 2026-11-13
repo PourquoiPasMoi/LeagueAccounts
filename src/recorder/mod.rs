@@ -216,6 +216,7 @@ pub fn save_clip(root: &Path, relative: &str, parts: &[(f64, f64)], mode: ClipMo
             .collect(),
         source: format!("{stem}.mp4"),
         clip_start,
+        discord: mode == ClipMode::Discord,
         audio: !kept.is_empty(),
         audio_source: kept.join("+"),
         // One track in a clip.

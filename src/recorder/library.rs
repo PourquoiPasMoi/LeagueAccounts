@@ -50,6 +50,8 @@ pub struct RecordingMeta {
     /// Clips: the game recording they come from (file name) and where they start in it.
     pub source: String,
     pub clip_start: f64,
+    /// Clips: made small enough for Discord.
+    pub discord: bool,
 }
 
 #[derive(Clone, Debug, Serialize)]
