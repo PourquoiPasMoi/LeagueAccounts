@@ -175,35 +175,22 @@ fn account_folder(app: &AppHandle, game_name: &str, tag_line: &str) -> (String, 
     }
 }
 
-fn queue_name(session: &Value) -> String {
+/// The queue's id and readable name: our table, else the client's own
+/// description of the queue (new modes), else the game mode.
+fn queue_name(session: &Value) -> (i64, String) {
     let queue = &session["gameData"]["queue"];
     let id = queue["id"].as_i64().unwrap_or(-1);
-    let name = match id {
-        420 => "Ranked Solo",
-        440 => "Ranked Flex",
-        400 => "Normal Draft",
-        430 => "Normal Blind",
-        480 | 490 => "Quickplay",
-        450 => "ARAM",
-        900 | 1010 | 1900 => "URF",
-        1700 | 1710 => "Arena",
-        830 | 840 | 850 | 870 | 880 | 890 => "Co-op vs AI",
-        0 => "Custom",
-        _ => "",
-    };
-    if !name.is_empty() {
-        return name.to_owned();
+    let mode = queue["gameMode"].as_str().or_else(|| session["map"]["gameMode"].as_str()).unwrap_or_default();
+    if let Some(name) = leagueaccounts::recorder::queues::label(id, mode) {
+        return (id.max(0), name.to_owned());
     }
-    let mode = session["gameData"]["queue"]["gameMode"].as_str().or_else(|| session["map"]["gameMode"].as_str()).unwrap_or_default();
-    match mode {
-        "PRACTICETOOL" => "Practice Tool".into(),
-        "" => String::new(),
-        other => {
-            let lower = other.to_lowercase();
-            let mut chars = lower.chars();
-            chars.next().map(|first| first.to_uppercase().collect::<String>() + chars.as_str()).unwrap_or_default()
-        }
-    }
+    let described = [&queue["description"], &queue["name"], &queue["shortName"]].into_iter().filter_map(Value::as_str).find(|text| !text.trim().is_empty());
+    let name = described.map(str::to_owned).unwrap_or_else(|| {
+        let lower = mode.to_lowercase();
+        let mut chars = lower.chars();
+        chars.next().map(|first| first.to_uppercase().collect::<String>() + chars.as_str()).unwrap_or_default()
+    });
+    (id.max(0), name)
 }
 
 fn start_recording(app: &AppHandle, window: leagueaccounts::recorder::capture::WindowHandle, prefs: &RecorderPrefs) {
@@ -213,12 +200,14 @@ fn start_recording(app: &AppHandle, window: leagueaccounts::recorder::capture::W
     let text = |value: &Value| value.as_str().unwrap_or_default().to_owned();
     let (account, riot_id) = account_folder(app, &text(&summoner["gameName"]), &text(&summoner["tagLine"]));
     let (max_height, fps, mbps) = prefs.quality();
+    let queue = queue_name(&session_info);
     let request = RecordRequest {
         root: prefs.root(),
         account: account.clone(),
         riot_id,
         puuid: text(&summoner["puuid"]),
-        queue: queue_name(&session_info),
+        queue: queue.1,
+        queue_id: queue.0,
         settings: RecordSettings {
             max_height,
             fps,
@@ -304,8 +293,61 @@ fn in_game_phase() -> Option<bool> {
 /// Checks every 2 seconds while the recorder is on (nothing at all when off).
 /// Recordings made as fragmented MP4 (before this version) are rewritten once
 /// as normal MP4, one at a time in the background, so they open at once.
+/// Older recordings got internal mode names ("Kiwi" for ARAM: Mayhem): name
+/// them again from the queue id in their saved game details, file name too.
+/// Game details left without their recording are removed.
+fn relabel_old_recordings(root: &std::path::Path) -> bool {
+    let mut changed = false;
+    for entry in library::list(root).into_iter().filter(|entry| entry.kind == "game") {
+        let Some(path) = library::resolve(root, &entry.path) else { continue };
+        let Some(mut meta) = entry.meta.clone() else { continue };
+        if meta.queue_id > 0 || is_being_recorded(&path) {
+            continue;
+        }
+        let Some(details) = leagueaccounts::recorder::gameinfo::load(&path) else { continue };
+        let id = details["game"]["queueId"].as_i64().unwrap_or(0);
+        let Some(label) = leagueaccounts::recorder::queues::label(id, details["game"]["gameMode"].as_str().unwrap_or_default()) else { continue };
+        let old = meta.queue.clone();
+        meta.queue = label.to_owned();
+        meta.queue_id = id;
+        let mut current = path.clone();
+        if !old.is_empty() && old != label {
+            let stem = path.file_stem().map(|stem| stem.to_string_lossy().into_owned()).unwrap_or_default();
+            let old_part = format!(" {} ", library::safe_name(&old));
+            let padded = format!("{stem} ");
+            if padded.contains(&old_part) {
+                let renamed = padded.replacen(&old_part, &format!(" {} ", library::safe_name(label)), 1);
+                if let Ok(target) = library::rename(&path, renamed.trim_end()) {
+                    current = target;
+                }
+            }
+        }
+        if library::write_meta(&current, &meta).is_ok() {
+            changed = true;
+        }
+    }
+    // Details whose recording is gone.
+    if let Ok(accounts) = std::fs::read_dir(root) {
+        for folder in accounts.flatten().map(|account| account.path().join(library::GAMES)) {
+            let Ok(files) = std::fs::read_dir(&folder) else { continue };
+            for file in files.flatten().map(|file| file.path()) {
+                let name = file.file_name().map(|name| name.to_string_lossy().into_owned()).unwrap_or_default();
+                if let Some(stem) = name.strip_suffix(".game.json") {
+                    if !folder.join(format!("{stem}.mp4")).exists() {
+                        let _ = std::fs::remove_file(&file);
+                    }
+                }
+            }
+        }
+    }
+    changed
+}
+
 fn convert_old_recordings(app: &AppHandle) {
     let root = prefs().root();
+    if relabel_old_recordings(&root) {
+        let _ = app.emit("recordings-changed", ());
+    }
     for entry in library::list(&root).into_iter().filter(|entry| entry.kind == "game") {
         let Some(path) = library::resolve(&root, &entry.path) else { continue };
         if is_being_recorded(&path) || !library::is_fragmented(&path) {
@@ -513,7 +555,12 @@ pub async fn open_recordings_folder(path: Option<String>) -> CommandResult<()> {
     let file = path.and_then(|path| library::resolve(&root, &path));
     let mut command = std::process::Command::new("explorer.exe");
     match file {
-        Some(file) => command.arg(format!("/select,{}", file.display())),
+        // Explorer reads `/select,"C:\a b\c.mp4"` itself; Rust's quoting of the
+        // whole argument made it ignore it and open Documents.
+        Some(file) => {
+            use std::os::windows::process::CommandExt;
+            command.raw_arg(format!("/select,\"{}\"", file.display()))
+        }
         None => {
             let _ = std::fs::create_dir_all(&root);
             command.arg(&root)

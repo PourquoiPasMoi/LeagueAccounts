@@ -1,12 +1,13 @@
 // Recordings page: full games and clips per account, a player whose timeline
 // shows the key moments (click one to jump there), and a start/end range that
 // is saved as a clip in the account's Clips folder.
-import { ApiError, api, events, type Moment, type RecorderStatus, type Recording, type RecordingsView } from "./api";
+import { ApiError, api, events, gameImage, type Moment, type RecorderStatus, type Recording, type RecordingsView } from "./api";
 import { errorText, localeTag, t, type MessageKey } from "./i18n";
 import { $, esc, fragment, leave, modal, toast } from "./dom";
 import { icon } from "./icons";
 import { momentIcon } from "./momenticons";
 import { renderGameInfo, type GameDetails } from "./gameinfo";
+import championIds from "./data/champion-ids.json";
 
 const UNKNOWN = "Unknown";
 const OBJECTIVES = new Set(["dragon", "baron", "herald", "grubs", "tower", "inhibitor", "ace"]);
@@ -44,7 +45,7 @@ let open = false;
 
 /** Player volume per sound source and for everything, in percent (kept between sessions). */
 const LEVELS_KEY = "recSoundLevels";
-const MAX_LEVEL = 300;
+const MAX_LEVEL = 500;
 const MAX_MASTER = 200;
 let levels: Record<string, number> = (() => {
   try {
@@ -153,6 +154,23 @@ export async function openRecordings(): Promise<void> {
   let status: RecorderStatus = { enabled: false, recording: false, account: "", startedAt: 0, path: "", error: "" };
   let account = "";
   let kind: "game" | "clip" = "game";
+  /** Library: game mode shown ("" = all, grouped by mode) and order, kept between visits. */
+  const stored = (key: string, fallback: string) => {
+    try {
+      return localStorage.getItem(key) ?? fallback;
+    } catch {
+      return fallback;
+    }
+  };
+  const store = (key: string, value: string) => {
+    try {
+      localStorage.setItem(key, value);
+    } catch {
+      // Not kept: fine.
+    }
+  };
+  let mode_ = stored("recMode", "");
+  let order: "new" | "old" = stored("recOrder", "new") === "old" ? "old" : "new";
   let selected: Recording | null = null;
   let range: { start: number; end: number } | null = null;
   /** Parts added for a multi-part clip, in time order, never overlapping. */
@@ -201,6 +219,8 @@ export async function openRecordings(): Promise<void> {
   const previousFocus = document.activeElement as HTMLElement | null;
   $("#modal-root").append(overlay);
   const head = $(".rec-head", overlay);
+  // A champion banner that cannot load is left out rather than shown broken.
+  overlay.addEventListener("error", (event) => (event.target as HTMLElement).classList?.contains("rec-row-banner") && (event.target as HTMLElement).remove(), true);
   const nav = $(".rec-nav", overlay);
   const list = $(".rec-list", overlay);
   const viewer = $(".rec-viewer", overlay);
@@ -256,28 +276,65 @@ export async function openRecordings(): Promise<void> {
       .join("");
   };
 
+  const modeOf = (entry: Recording) => entry.meta?.queue || t("rec.otherMode");
+  const started = (entry: Recording) => entry.meta?.startedAt || entry.modified;
+  const banner = (entry: Recording) => {
+    const id = (championIds as Record<string, number>)[entry.meta?.champion ?? ""];
+    return id ? `<img class="rec-row-banner" src="${esc(gameImage(`v1/champion-tiles/${id}/${id}000.jpg`))}" alt="" loading="lazy" draggable="false"/>` : "";
+  };
+
+  const card = (entry: Recording) => {
+    const meta = entry.meta;
+    const date = new Date(started(entry)).toLocaleString(localeTag(), { dateStyle: "medium", timeStyle: "short" });
+    const result = meta?.result === "Win" ? `<span class="rec-result is-win">${esc(t("rec.win"))}</span>` : meta?.result === "Loss" ? `<span class="rec-result is-loss">${esc(t("rec.loss"))}</span>` : "";
+    const live = isRecording(entry) ? `<span class="rec-result is-live">${esc(t("rec.inProgress"))}</span>` : "";
+    const details = [date, meta?.duration ? clock(meta.duration) : "", bytes(entry.size), account ? "" : accountLabel(entry.account)].filter(Boolean).join(" · ");
+    const score = entry.kind === "game" ? kda(entry) : "";
+    const tag = entry.kind === "clip" ? `<span class="rec-clip-tag">${icon("scissors", 11)}${esc(t("rec.clip"))}</span>` : `<span class="rec-mode-tag">${esc(modeOf(entry))}</span>`;
+    return `
+      <div class="rec-row is-${entry.kind}${selected?.path === entry.path ? " is-selected" : ""}" role="button" tabindex="0" data-rec-path="${esc(entry.path)}">
+        ${banner(entry)}
+        <div class="rec-row-main"><strong>${esc(entry.kind === "game" && meta?.champion ? meta.champion : title(entry))}</strong>${score ? `<span class="rec-kda">${esc(score)}</span>` : ""}${result}${live}</div>
+        <div class="rec-row-tags">${tag}</div>
+        <div class="rec-row-sub">${esc(details)}</div>
+        <button class="icon-btn rec-row-delete" data-rec="delete" data-tooltip="${esc(t("menu.delete"))}" aria-label="${esc(t("menu.delete"))}">${icon("trash", 14)}</button>
+      </div>`;
+  };
+
   const renderList = () => {
-    const entries = shown();
-    const rows = entries.map((entry) => {
-      const meta = entry.meta;
-      const date = new Date(meta?.startedAt || entry.modified).toLocaleString(localeTag(), { dateStyle: "medium", timeStyle: "short" });
-      const result = meta?.result === "Win" ? `<span class="rec-result is-win">${esc(t("rec.win"))}</span>` : meta?.result === "Loss" ? `<span class="rec-result is-loss">${esc(t("rec.loss"))}</span>` : "";
-      const live = isRecording(entry) ? `<span class="rec-result is-live">${esc(t("rec.inProgress"))}</span>` : "";
-      const details = [date, meta?.duration ? clock(meta.duration) : "", bytes(entry.size), account ? "" : accountLabel(entry.account)].filter(Boolean).join(" · ");
-      const score = entry.kind === "game" ? kda(entry) : "";
-      return `
-        <div class="rec-row${selected?.path === entry.path ? " is-selected" : ""}" role="button" tabindex="0" data-rec-path="${esc(entry.path)}">
-          <div class="rec-row-main"><strong>${esc(title(entry))}</strong>${score ? `<span class="rec-kda">${esc(score)}</span>` : ""}${result}${live}</div>
-          <div class="rec-row-sub">${esc(details)}</div>
-          <button class="icon-btn rec-row-delete" data-rec="delete" data-tooltip="${esc(t("menu.delete"))}" aria-label="${esc(t("menu.delete"))}">${icon("trash", 14)}</button>
-        </div>`;
-    });
+    const inKind = (wanted: "game" | "clip") => view.entries.filter((entry) => entry.kind === wanted && (!account || entry.account === account));
+    const entries = shown().sort((a, b) => (order === "new" ? started(b) - started(a) : started(a) - started(b)));
+    // Modes present here, newest (or oldest) first.
+    const modes = [...new Set(entries.map(modeOf))];
+    if (mode_ && !modes.includes(mode_)) mode_ = "";
+    const visible = mode_ ? entries.filter((entry) => modeOf(entry) === mode_) : entries;
+    const empty = `<p class="rec-empty">${esc(t(kind === "game" ? "rec.empty" : "rec.emptyClips"))}</p>`;
+    const grouped = !mode_ && modes.length > 1;
+    const body = !visible.length
+      ? empty
+      : grouped
+        ? modes
+            .map((name) => {
+              const items = visible.filter((entry) => modeOf(entry) === name);
+              return `<section class="rec-group"><h4><span>${esc(name)}</span><em>${items.length}</em></h4><div class="rec-rows">${items.map(card).join("")}</div></section>`;
+            })
+            .join("")
+        : `<div class="rec-rows">${visible.map(card).join("")}</div>`;
+    const tab = (id: "game" | "clip", glyph: string, label: string) =>
+      `<button role="tab" class="rec-kind-tab is-${id}" data-rec-kind="${id}" aria-selected="${kind === id}">${icon(glyph, 16)}<span>${esc(label)}</span><em>${inKind(id).length}</em></button>`;
     list.innerHTML = `
-      <div class="segmented rec-kind" role="tablist">
-        <button data-rec-kind="game" aria-pressed="${kind === "game"}">${icon("film", 13)}<span>${esc(t("rec.games"))}</span></button>
-        <button data-rec-kind="clip" aria-pressed="${kind === "clip"}">${icon("scissors", 13)}<span>${esc(t("rec.clips"))}</span></button>
+      <div class="rec-lib-bar">
+        <div class="rec-kind-tabs" role="tablist">${tab("game", "film", t("rec.games"))}${tab("clip", "scissors", t("rec.clips"))}</div>
+        <div class="segmented rec-order" role="group" aria-label="${esc(t("rec.order"))}">
+          <button data-rec-order="new" aria-pressed="${order === "new"}">${esc(t("rec.newest"))}</button>
+          <button data-rec-order="old" aria-pressed="${order === "old"}">${esc(t("rec.oldest"))}</button>
+        </div>
       </div>
-      <div class="rec-rows">${rows.join("") || `<p class="rec-empty">${esc(t(kind === "game" ? "rec.empty" : "rec.emptyClips"))}</p>`}</div>`;
+      ${modes.length > 1 ? `<div class="rec-modes" role="group" aria-label="${esc(t("rec.modes"))}">
+        <button data-rec-mode-filter="" aria-pressed="${!mode_}">${esc(t("rec.allModes"))}<em>${entries.length}</em></button>
+        ${modes.map((name) => `<button data-rec-mode-filter="${esc(name)}" aria-pressed="${mode_ === name}">${esc(name)}<em>${entries.filter((entry) => modeOf(entry) === name).length}</em></button>`).join("")}
+      </div>` : ""}
+      <div class="rec-library">${body}</div>`;
   };
 
   // The player is rebuilt only when the selection changes; timeline updates are in place.
@@ -612,7 +669,7 @@ export async function openRecordings(): Promise<void> {
     const separate = sources.length > 0 && (selected.meta?.audioTracks.length ?? 0) > 1;
     const row = (name: string, label: string, max: number, disabled = false) => `
       <label class="rec-mix-row${disabled ? " is-disabled" : ""}"><span>${esc(label)}</span>
-        <input type="range" min="0" max="${max}" step="5" value="${level(name)}" data-rec-level="${esc(name)}"${disabled ? " disabled" : ""}/>
+        <input type="range" min="0" max="${max}" step="1" value="${level(name)}" data-rec-level="${esc(name)}"${disabled ? " disabled" : ""}/>
         <b data-rec-level-value="${esc(name)}">${level(name)}%</b></label>`;
     const note = !separate ? "" : trackState === "loading" ? t("rec.preparingTracks") : trackState === "failed" ? t("rec.tracksFailed") : t("rec.levelsHint");
     panel.innerHTML = `<h4>${esc(t("rec.volume"))}</h4>
@@ -961,6 +1018,18 @@ export async function openRecordings(): Promise<void> {
     if (accountButton) {
       account = accountButton.dataset.recAccount ?? "";
       renderNav();
+      return renderList();
+    }
+    const chosenOrder = target.closest<HTMLElement>("[data-rec-order]")?.dataset.recOrder;
+    if (chosenOrder) {
+      order = chosenOrder === "old" ? "old" : "new";
+      store("recOrder", order);
+      return renderList();
+    }
+    const modeButton = target.closest<HTMLElement>("[data-rec-mode-filter]");
+    if (modeButton) {
+      mode_ = modeButton.dataset.recModeFilter ?? "";
+      store("recMode", mode_);
       return renderList();
     }
     const kindButton = target.closest<HTMLElement>("[data-rec-kind]")?.dataset.recKind as "game" | "clip" | undefined;

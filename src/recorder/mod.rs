@@ -12,6 +12,7 @@ pub mod gameinfo;
 pub mod library;
 pub mod metrics;
 pub mod moments;
+pub mod queues;
 pub mod session;
 
 use library::{Entry, RecordingMeta, CLIPS};
@@ -80,8 +81,8 @@ pub enum ClipMode {
 /// Discord's limit is 10 MB; 9.5 MB leaves a margin.
 pub const DISCORD_BYTES: u64 = 9_500_000;
 
-/// Highest level for one source (300 %).
-pub const MAX_GAIN: f32 = 3.0;
+/// Highest level for one source (500 %).
+pub const MAX_GAIN: f32 = 5.0;
 
 /// The sound for a clip: `tracks` is the recording's track list (empty =
 /// one mixed track), `wanted` the sources to keep (`None` = everything),

@@ -24,6 +24,8 @@ pub struct RecordingMeta {
     pub puuid: String,
     pub champion: String,
     pub queue: String,
+    /// Riot's queue id (0 when unknown, e.g. older recordings).
+    pub queue_id: i64,
     /// "Win", "Loss" or empty.
     pub result: String,
     /// Unix ms.
@@ -211,6 +213,23 @@ pub const SOURCES: [&str; 4] = ["game", "pc", "mic", "discord"];
 pub fn track_file(video: &Path, source: &str) -> PathBuf {
     let stem = video.file_stem().map(|stem| stem.to_string_lossy().into_owned()).unwrap_or_default();
     video.parent().unwrap_or(Path::new(".")).join(TRACKS).join(format!("{stem}.{source}.mp4"))
+}
+
+/// Give a recording a new file name (`stem`, no extension), with its moments,
+/// game details and sound track files. Returns the new path.
+pub fn rename(path: &Path, stem: &str) -> std::io::Result<PathBuf> {
+    let directory = path.parent().unwrap_or(Path::new("."));
+    let target = unique_file(directory, &safe_name(stem));
+    if target == path {
+        return Ok(target);
+    }
+    std::fs::rename(path, &target)?;
+    let _ = std::fs::rename(meta_path(path), meta_path(&target));
+    let _ = std::fs::rename(path.with_extension("game.json"), target.with_extension("game.json"));
+    for source in SOURCES {
+        let _ = std::fs::rename(track_file(path, source), track_file(&target, source));
+    }
+    Ok(target)
 }
 
 /// Delete a recording, its moments file and its sound track files.

@@ -44,6 +44,7 @@ pub struct RecordRequest {
     pub riot_id: String,
     pub puuid: String,
     pub queue: String,
+    pub queue_id: i64,
     pub settings: RecordSettings,
 }
 
@@ -304,6 +305,7 @@ fn record(request: &RecordRequest, window: HWND, path: &Path, stop: &AtomicBool,
         puuid: request.puuid.clone(),
         champion: facts.champion,
         queue: request.queue.clone(),
+        queue_id: request.queue_id,
         result: facts.result,
         started_at,
         duration,
