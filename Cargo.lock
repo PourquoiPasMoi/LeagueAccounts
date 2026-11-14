@@ -2228,7 +2228,7 @@ dependencies = [
 
 [[package]]
 name = "leagueaccounts"
-version = "4.6.10"
+version = "4.6.11"
 dependencies = [
  "arboard",
  "html-escape",
@@ -2251,7 +2251,7 @@ dependencies = [
 
 [[package]]
 name = "leagueaccounts-app"
-version = "4.6.10"
+version = "4.6.11"
 dependencies = [
  "arboard",
  "leagueaccounts",
