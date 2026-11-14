@@ -1338,12 +1338,31 @@ fn migrate_autostart(app: &AppHandle) {
 #[cfg(not(windows))]
 fn migrate_autostart(_: &AppHandle) {}
 
+/// `LeagueAccounts.exe` from before v4.6.8: rename it to `LeagueCompanion.exe`,
+/// start that copy with the same arguments and exit (before any window or the
+/// single-instance lock exists). Not during an update hand-over.
+fn rename_old_exe(args: &[std::ffi::OsString]) {
+    let handing_over = args.iter().any(|arg| arg == leagueaccounts::self_update::UPDATED_FROM_FLAG || arg == leagueaccounts::self_update::FAILED_FLAG);
+    if handing_over {
+        return;
+    }
+    let Ok(exe) = std::env::current_exe() else { return };
+    let Some(renamed) = leagueaccounts::exe_name::rename_if_old(&exe) else { return };
+    if std::process::Command::new(&renamed).args(args.iter().skip(1)).spawn().is_ok() {
+        leagueaccounts::exe_name::follow_rename(&exe, &renamed);
+        std::process::exit(0);
+    }
+    // Could not start it: keep the old name and carry on.
+    let _ = std::fs::rename(&renamed, &exe);
+}
+
 fn main() {
     let args: Vec<std::ffi::OsString> = std::env::args_os().collect();
     if let Some((exe, pid)) = leagueaccounts::self_update::watch_request(&args) {
         let _ = logging::init();
         run_update_watcher(exe, pid);
     }
+    rename_old_exe(&args);
 
     let result = tauri::Builder::default()
         // Must come first. A second launch (shortcut, Start menu, autostart while the

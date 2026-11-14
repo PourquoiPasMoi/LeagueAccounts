@@ -163,7 +163,7 @@ Off by default. Turn it on in Settings › Experimental. It is still under devel
 
 ## Installation
 
-1. Download `LeagueAccounts.exe` from the [latest release](https://github.com/PourquoiPasMoi/LeagueAccounts/releases/latest).
+1. Download `LeagueCompanion.exe` from the [latest release](https://github.com/PourquoiPasMoi/LeagueAccounts/releases/latest).
 2. Put it in a folder of your own, such as `Documents\LeagueAccounts` (not `Program Files`, so it can update itself), and run it.
 3. The exe is not code-signed. If SmartScreen says "Windows protected your PC", click More info, then Run anyway.
 
@@ -230,7 +230,7 @@ npm install
 npx tauri build --no-bundle
 ```
 
-The exe ends up in `target/release/LeagueAccounts.exe`. Skin prices come from Meraki Analytics' community data; `node scripts/skin-prices.mjs` refreshes them after new skins come out.
+The exe ends up in `target/release/LeagueCompanion.exe`. Skin prices come from Meraki Analytics' community data; `node scripts/skin-prices.mjs` refreshes them after new skins come out.
 
 ## License and disclaimer
 

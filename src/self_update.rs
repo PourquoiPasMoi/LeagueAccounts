@@ -455,6 +455,11 @@ pub fn previous_process(args: &[OsString]) -> Option<u32> {
 /// The build the last swap installed, taken from the receipt beside the
 /// executable. Healthy or not, this is what the new process compares with its
 /// own version before reporting ready.
+/// An update was installed here but has not reported healthy yet.
+pub fn update_pending(paths: &Paths) -> bool {
+    read_receipt(&paths.receipt).is_some_and(|receipt| !receipt.healthy)
+}
+
 pub fn installed_target(paths: &Paths) -> Option<String> {
     read_receipt(&paths.receipt).map(|receipt| receipt.target_version)
 }
