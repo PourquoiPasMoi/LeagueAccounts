@@ -203,7 +203,7 @@ To fill an account's profile, log in to it once through the app with "Launch the
 
 ## Privacy and security
 
-- Passwords are stored in Windows Credential Manager (service `LeagueAccounts`), never in the app's files. Copied passwords are cleared from the clipboard after 30 seconds and kept out of clipboard history.
+- Passwords are stored in Windows Credential Manager (service `LeagueAccounts`), never in the app's files. The account list itself (login names, Riot IDs, notes) and Discord webhook addresses are encrypted with Windows Data Protection, so a copied file cannot be read on another PC or by another Windows user; use Export/Import to move to a new PC. Copied passwords are cleared from the clipboard after 30 seconds and kept out of clipboard history.
 - Exports contain passwords in plain text. Keep them private.
 - The app contacts OP.GG for ranks and recent games, the Riot and League clients on `127.0.0.1`, CommunityDragon for champion and skin pictures, and GitHub for updates. There is no telemetry and no account server.
 - Accounts, settings, profiles, game history, cached pictures, game settings backups and logs live in `%APPDATA%\LeagueAccounts\`. Logs hold fixed event codes only, never account data.

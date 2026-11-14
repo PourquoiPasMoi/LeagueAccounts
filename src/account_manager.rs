@@ -1,11 +1,11 @@
 use crate::credentials;
 use crate::locales;
 use crate::logging::{self, Event, Reason};
+use crate::protect;
 use crate::models::{Account, AccountKey, RankInfo, RankProvenance, TftRank};
 use crate::rank_fetcher::RankProvider;
 use crate::utils::{accounts_file, region_display, sort_accounts, REGION_MAP};
 use serde::{Deserialize, Serialize};
-use serde::ser::{SerializeSeq, Serializer as _};
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::error::Error;
 use std::io::Write;
@@ -145,7 +145,20 @@ impl AccountManager {
                 return Err(Box::new(error));
             }
         };
-        let mut loaded: Vec<Account> = match serde_json::from_slice(&contents) {
+        // The file is encrypted for this Windows user. A plain file comes
+        // from a version before encryption and is sealed right after loading.
+        let (plain, legacy) = match protect::open(&contents) {
+            protect::Opened::Sealed(plain) => (plain, false),
+            protect::Opened::Plain => (contents.clone(), true),
+            protect::Opened::Locked(error) => {
+                logging::record(Event::AccountsLoadFailed, Reason::from_error(&error));
+                // Sealed on another PC or Windows user: leave the file alone
+                // and refuse later writes so it is never replaced.
+                self.load_failed = true;
+                return Err(Box::new(error));
+            }
+        };
+        let mut loaded: Vec<Account> = match serde_json::from_slice(&plain) {
             Ok(loaded) => loaded,
             Err(error) => {
                 logging::record(Event::AccountsLoadFailed, Reason::from_error(&error));
@@ -172,6 +185,12 @@ impl AccountManager {
         self.load_failed = false;
         self.rank_jobs.clear();
         sort_accounts(&mut self.accounts);
+        if legacy {
+            // One-time upgrade: the atomic save replaces the plain file with
+            // the sealed one. A failure is logged by the save and keeps the
+            // plain file for the next start.
+            let _ = self.save_accounts();
+        }
         Ok(())
     }
 
@@ -238,17 +257,13 @@ impl AccountManager {
                 .filter(|path| !path.as_os_str().is_empty())
                 .unwrap_or_else(|| Path::new("."));
             std::fs::create_dir_all(parent)?;
-            // Stream references into a unique sibling file: no complete JSON
-            // buffer or duplicate account/password list is needed.
+            // Passwords are never part of this JSON (Credential Manager holds
+            // them); the rest is sealed for this Windows user before it
+            // reaches the disk, in a unique sibling file.
+            let accounts: Vec<&Account> = accounts.into_iter().collect();
+            let sealed = protect::seal(&serde_json::to_vec(&accounts)?)?;
             let mut file = tempfile::NamedTempFile::new_in(parent)?;
-            {
-                let mut serializer = serde_json::Serializer::pretty(file.as_file_mut());
-                let mut sequence = serializer.serialize_seq(None)?;
-                for account in accounts {
-                    sequence.serialize_element(account)?;
-                }
-                sequence.end()?;
-            }
+            file.write_all(&sealed)?;
             file.as_file().sync_all()?;
             Ok(file)
         })();
