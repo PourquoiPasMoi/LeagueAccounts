@@ -77,7 +77,7 @@ export function openProfile(context: ProfileContext): void {
   let view: ProfileView = { profile: null, history: [], games: [], seasons: [] };
   const statsFilters: StatsFilters = { queue: "all", range: 0, metric: "kda" };
   let tab: Tab = "overview";
-  let chartMode: Mode = context.mode;
+  let chartMode: ChartQueue = context.mode;
   let selectedChampion: number | null = null;
   let championQuery = "";
   let championSort: "name" | "mastery" | "skins" = "mastery";
@@ -252,7 +252,7 @@ export function openProfile(context: ProfileContext): void {
       setChartZoom(Number(zoom));
       return renderBody();
     }
-    const mode = target.closest<HTMLElement>("[data-chart-mode]")?.dataset.chartMode as Mode | undefined;
+    const mode = target.closest<HTMLElement>("[data-chart-mode]")?.dataset.chartMode as ChartQueue | undefined;
     if (mode && mode !== chartMode) {
       chartMode = mode;
       return renderBody();
@@ -315,6 +315,13 @@ export function openProfile(context: ProfileContext): void {
     const image = event.target as HTMLElement;
     if (image instanceof HTMLImageElement) image.classList.add("is-missing");
   }, true);
+  overlay.addEventListener("keydown", (event) => {
+    const card = (event.target as HTMLElement).closest<HTMLElement>(".ranked-card[data-chart-mode]");
+    if (card && (event.key === "Enter" || event.key === " ")) {
+      event.preventDefault();
+      card.click();
+    }
+  });
   document.addEventListener("keydown", onKey, true);
   wireChartHover(overlay);
 
@@ -351,13 +358,18 @@ function splitRiotId(name: string): [string, string] {
 
 // ---------------------------------------------------------------- overview
 
+/** The rank shown in the history chart: Solo/Duo (`lol`), Flex or TFT. */
+type ChartQueue = "lol" | "flex" | "tft";
+const CHART_QUEUES: Record<ChartQueue, string> = { lol: "RANKED_SOLO_5x5", flex: "RANKED_FLEX_SR", tft: "RANKED_TFT" };
+
 const QUEUE_TITLES: Record<string, MessageKey> = {
   RANKED_SOLO_5x5: "profile.q.solo",
   RANKED_FLEX_SR: "profile.q.flex",
   RANKED_TFT: "profile.q.tft",
 };
 
-function rankedCard(title: string, queue: Pick<RankedQueue, "tier" | "division" | "lp" | "wins" | "losses"> | null, mode: Mode, note = ""): string {
+/** A rank box; clicking it shows that rank's history in the chart below (the shown one is highlighted). */
+function rankedCard(title: string, queue: Pick<RankedQueue, "tier" | "division" | "lp" | "wins" | "losses"> | null, mode: Mode, chart: ChartQueue, shown: ChartQueue, note = ""): string {
   const tier = normalizeTier(queue?.tier ?? "Unranked");
   const ranked = tier !== "Unranked" && tier !== "Error";
   const games = (queue?.wins ?? 0) + (queue?.losses ?? 0);
@@ -365,7 +377,7 @@ function rankedCard(title: string, queue: Pick<RankedQueue, "tier" | "division" 
   const colors = palette(tier);
   const label = !ranked ? t("rank.unranked") : APEX.has(tier) || !queue?.division ? tierName(tier) : `${tierName(tier)} ${queue.division}`;
   return `
-    <section class="ranked-card" style="--tier:${colors.base};--tier-light:${colors.light};--tier-dark:${colors.dark}" data-tier="${tier}">
+    <section class="ranked-card${chart === shown ? " is-shown" : ""}" style="--tier:${colors.base};--tier-light:${colors.light};--tier-dark:${colors.dark}" data-tier="${tier}" data-chart-mode="${chart}" role="button" tabindex="0" aria-pressed="${chart === shown}">
       <h4>${esc(title)}</h4>
       <div class="ranked-card-body">
         <div class="ranked-emblem">${emblem(tier, 92, mode)}</div>
@@ -381,41 +393,45 @@ function rankedCard(title: string, queue: Pick<RankedQueue, "tier" | "division" 
     </section>`;
 }
 
-function overviewHtml(account: AccountView, view: ProfileView, chartMode: Mode, mode: Mode): string {
+function overviewHtml(account: AccountView, view: ProfileView, chartMode: ChartQueue, mode: Mode): string {
   const profile = view.profile;
   const queue = (name: string) => profile?.ranked.find((entry) => entry.queue === name) ?? null;
+  // Flex has no box without a client snapshot.
+  const shown: ChartQueue = !profile && chartMode === "flex" ? "lol" : chartMode;
   // Without a snapshot, show what OP.GG reports for the card.
   const fallback = (rank: { tier: string; division: string; lp: string }) => ({
     tier: rank.tier, division: rank.division, lp: Number.parseInt(rank.lp, 10) || 0, wins: 0, losses: 0,
   });
   const cards = profile
     ? [
-        rankedCard(t(QUEUE_TITLES.RANKED_SOLO_5x5), queue("RANKED_SOLO_5x5"), "lol"),
-        rankedCard(t(QUEUE_TITLES.RANKED_FLEX_SR), queue("RANKED_FLEX_SR"), "lol"),
-        rankedCard(t(QUEUE_TITLES.RANKED_TFT), queue("RANKED_TFT") ?? fallback(account.tft), "tft"),
+        rankedCard(t(QUEUE_TITLES.RANKED_SOLO_5x5), queue("RANKED_SOLO_5x5"), "lol", "lol", shown),
+        rankedCard(t(QUEUE_TITLES.RANKED_FLEX_SR), queue("RANKED_FLEX_SR"), "lol", "flex", shown),
+        rankedCard(t(QUEUE_TITLES.RANKED_TFT), queue("RANKED_TFT") ?? fallback(account.tft), "tft", "tft", shown),
       ]
     : [
-        rankedCard(t(QUEUE_TITLES.RANKED_SOLO_5x5), fallback(account.lol), "lol", t("profile.fromOpgg")),
-        rankedCard(t(QUEUE_TITLES.RANKED_TFT), fallback(account.tft), "tft", t("profile.fromOpgg")),
+        rankedCard(t(QUEUE_TITLES.RANKED_SOLO_5x5), fallback(account.lol), "lol", "lol", shown, t("profile.fromOpgg")),
+        rankedCard(t(QUEUE_TITLES.RANKED_TFT), fallback(account.tft), "tft", "tft", shown, t("profile.fromOpgg")),
       ];
+  let points = view.history.filter((point) => point.mode === shown);
+  // Flex was not kept before this version: start its line from the last client sync.
+  const current = queue(CHART_QUEUES[shown]);
+  if (!points.length && profile && current && normalizeTier(current.tier) !== "Unranked") {
+    points = [{ at: profile.syncedAt, mode: shown, tier: current.tier, division: current.division, lp: current.lp }];
+  }
   return `
     ${profile ? "" : emptyNotice()}
     <div class="ranked-cards">${cards.join("")}</div>
     <section class="profile-panel">
       <header class="panel-head">
-        <h3>${esc(t("profile.lpHistory"))}</h3>
+        <h3>${esc(t("profile.lpHistory"))} <span class="chart-queue">${esc(t(QUEUE_TITLES[CHART_QUEUES[shown]]))}</span></h3>
         <div class="chart-tools">
         <div class="segmented chart-zoom" data-tooltip="${esc(t("profile.zoomHint"))}">
           ${ZOOMS.map((days) => `<button data-chart-zoom="${days}" aria-pressed="${chartZoom === days}">${esc(zoomLabel(days))}</button>`).join("")}
         </div>
-        <div class="segmented">
-          <button data-chart-mode="lol" aria-pressed="${chartMode === "lol"}">${esc(t("mode.lol"))}</button>
-          <button data-chart-mode="tft" aria-pressed="${chartMode === "tft"}">${esc(t("mode.tft"))}</button>
-        </div>
         </div>
       </header>
-      ${rankChart(view.history.filter((point) => point.mode === chartMode), chartMode)}
-      ${historyNote(view.history.filter((point) => point.mode === chartMode))}
+      ${rankChart(points, shown === "tft" ? "tft" : "lol")}
+      ${historyNote(points)}
     </section>
     ${seasonHistory(view.seasons ?? [])}
     ${recentGames(view.games, profile, mode)}`;

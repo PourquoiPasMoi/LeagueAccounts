@@ -124,6 +124,13 @@
 .ranked-card-body { display: grid; grid-template-columns: 96px minmax(0, 1fr); align-items: center; gap: 12px; }
 .ranked-emblem { display: grid; place-items: center; filter: drop-shadow(0 0 8px color-mix(in srgb, var(--tier) 30%, transparent)); }
 .ranked-card[data-tier="Unranked"] .ranked-emblem { filter: none; opacity: .7; }
+/* Rank boxes pick the rank shown in the history chart; the shown one is framed in gold. */
+.ranked-card[data-chart-mode] { cursor: pointer; transition: border-color .15s, box-shadow .15s; }
+.ranked-card[data-chart-mode]:hover { border-color: #785a28; }
+.ranked-card[data-chart-mode]:focus-visible { outline: 1px solid #c8aa6e; outline-offset: 2px; }
+.ranked-card.is-shown { border-color: #c8aa6e; box-shadow: inset 0 0 0 1px #c8aa6e40, inset 0 -3px 0 #c8aa6e, 0 0 14px #c8aa6e26; }
+.ranked-card.is-shown h4 { color: #f0e6d2; }
+.chart-queue { margin-left: 8px; color: #c8aa6e; }
 .ranked-card .rank-name { font-size: 18px; white-space: normal; }
 .ranked-card .lp { margin-top: 2px; }
 .ranked-record { margin-top: 8px; font-size: 11px; color: #a09b8c; }

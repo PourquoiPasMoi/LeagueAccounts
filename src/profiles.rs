@@ -202,7 +202,7 @@ pub struct OpggSync {
 pub struct RankPoint {
     /// Unix ms.
     pub at: u64,
-    /// `lol` or `tft`.
+    /// `lol` (Solo/Duo), `flex` or `tft`.
     pub mode: String,
     pub tier: String,
     pub division: String,
@@ -893,6 +893,7 @@ pub fn store_snapshot(key: &AccountKey, profile: &Profile, games: Vec<MatchRecor
         .filter_map(|queue| {
             let mode = match queue.queue.as_str() {
                 "RANKED_SOLO_5x5" => "lol",
+                "RANKED_FLEX_SR" => "flex",
                 "RANKED_TFT" => "tft",
                 _ => return None,
             };

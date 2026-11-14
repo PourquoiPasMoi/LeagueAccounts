@@ -210,7 +210,8 @@ export interface MatchSummary {
 
 export interface RankPoint {
   at: number;
-  mode: "lol" | "tft";
+  /** lol = Ranked Solo/Duo. */
+  mode: "lol" | "flex" | "tft";
   tier: string;
   division: string;
   lp: number;
