@@ -1500,10 +1500,10 @@ fn main() {
                 square_corners(&window);
                 // The window opens at its configured size, which is 100%.
                 scale::apply(&window, 100, ui_scale);
-                let _ = window.show();
-                if start_minimized {
-                    let _ = window.minimize();
-                } else {
+                // Started with Windows and "start minimized": only the tray icon
+                // shows; the window opens from it.
+                if !start_minimized {
+                    let _ = window.show();
                     let _ = window.set_focus();
                 }
             }

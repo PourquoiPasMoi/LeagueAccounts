@@ -886,6 +886,9 @@ const UI_SCALES = [80, 90, 100, 110, 125, 150, 175, 200];
 
 /** The Settings tab shown last, opened again next time. */
 let settingsTab = "general";
+/** Settings dialog: whether the form differs from how it opened, and re-taking that state. */
+let settingsDirty: () => boolean = () => false;
+let settingsRebase: () => void = () => undefined;
 
 /** The pressed option of a segmented control in Settings › Recorder. */
 const recorderChoice = (root: HTMLElement, group: string): string =>
@@ -1053,7 +1056,43 @@ async function openSettings(): Promise<void> {
       { label: t("common.cancel"), value: "cancel" },
       { label: t("common.save"), value: "save", kind: "primary" },
     ],
+    cancelValue: "cancel",
+    confirmClose: async () => {
+      if (!settingsDirty()) return "close";
+      const answer = await modal({
+        title: t("settings.unsavedTitle"),
+        body: `<p class="hint">${esc(t("settings.unsavedText"))}</p>`,
+        actions: [
+          { label: t("settings.keepEditing"), value: "stay" },
+          { label: t("settings.discard"), value: "close" },
+          { label: t("common.save"), value: "save", kind: "primary" },
+        ],
+      });
+      return answer === "close" || answer === "save" ? answer : "stay";
+    },
     onOpen: (root) => {
+      // Unsaved changes: the form compared with how it opened. Save only when something changed.
+      const snapshot = () =>
+        JSON.stringify([
+          [...root.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>(".modal-body input, .modal-body select, .modal-body textarea")].map((field) =>
+            field instanceof HTMLInputElement && (field.type === "checkbox" || field.type === "radio") ? `${field.name}=${field.value}:${field.checked}` : `${field.name}=${field.value}`,
+          ),
+          [...root.querySelectorAll<HTMLElement>("[data-rec-group] [aria-pressed='true']")].map((button) => button.dataset.recOption),
+          recorderFolder,
+        ]);
+      let baseline = snapshot();
+      const saveButton = root.querySelector<HTMLButtonElement>('.modal-foot [data-value="save"]');
+      const refresh = () => {
+        if (saveButton) saveButton.disabled = snapshot() === baseline;
+      };
+      settingsDirty = () => snapshot() !== baseline;
+      // The microphone list fills in a moment later: that is not a change.
+      settingsRebase = () => {
+        baseline = snapshot();
+        refresh();
+      };
+      for (const name of ["input", "change", "click"]) root.addEventListener(name, () => requestAnimationFrame(refresh));
+      refresh();
       // Microphones: Windows' list, the default named; Test listens for 2 s.
       const micSelect = $<HTMLSelectElement>('[name="recMicDevice"]', root);
       void api
@@ -1063,6 +1102,7 @@ async function openSettings(): Promise<void> {
           micSelect.innerHTML =
             `<option value="">${esc(fallback ? t("settings.recMicDefaultNamed", { name: fallback.name }) : t("settings.recMicDefault"))}</option>` +
             devices.map((device) => `<option value="${esc(device.id)}"${device.id === recorder.micDevice ? " selected" : ""}>${esc(device.name)}</option>`).join("");
+          if (!settingsDirty() || micSelect.value === recorder.micDevice) settingsRebase();
         })
         .catch(() => undefined);
       root.addEventListener("click", (event) => {
@@ -1119,6 +1159,7 @@ async function openSettings(): Promise<void> {
             if (!folder) return;
             recorderFolder = folder;
             $("[data-rec-folder]", root).textContent = folder;
+            root.dispatchEvent(new Event("change"));
           }).catch((error) => toast("error", t("toast.openFailed"), String(error)));
         }
         const preset = (event.target as HTMLElement).closest<HTMLElement>("[data-interval]");

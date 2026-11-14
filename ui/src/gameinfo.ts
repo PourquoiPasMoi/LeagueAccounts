@@ -211,6 +211,7 @@ function scoreboard(details: GameDetails, all: Player[]): string {
       return `
       <div class="gi-team ${teamClass(teamId)}">
         <table class="gi-board">
+          <colgroup><col class="gi-col-champ"/><col class="gi-col-pair"/><col class="gi-col-pair"/><col/><col class="gi-col-items"/><col class="gi-col-kda"/><col class="gi-col-num"/><col class="gi-col-gold"/></colgroup>
           <thead><tr>
             <th colspan="4"><span class="gi-team-name">${esc(t(index === 0 ? "gi.team1" : "gi.team2"))}</span><span class="gi-team-result">${esc(team.win === "Win" ? t("gi.victory") : t("gi.defeat"))}</span></th>
             <th class="gi-items-head">${count(sum("goldEarned"))} ${esc(t("gi.goldShort"))}</th>

@@ -38,8 +38,10 @@ function kda(entry: Recording): string {
   return `${count((moment) => KILLS.has(moment.kind))} / ${count((moment) => moment.kind === "death")} / ${count((moment) => moment.kind === "assist")}`;
 }
 const MODE_HINTS: Record<ClipMode, MessageKey> = { fast: "rec.fastHint", exact: "rec.exactHint", discord: "rec.discordHint" };
-/** Seconds shown before a moment when jumping to it. */
-const LEAD = 3;
+/** Seconds shown before a moment when jumping to it (and kept before it in a clip). */
+const LEAD = 6;
+/** Seconds kept after a moment when a clip is made from it. */
+const TAIL = 4;
 
 let open = false;
 
@@ -137,7 +139,7 @@ function momentTooltip(moment: Moment): string {
   if (moment.ally === true) parts.push(t("rec.allyTeam"));
   if (moment.ally === false) parts.push(t("rec.enemyTeam"));
   if (moment.detail && !["multikill", "gameEnd"].includes(moment.kind)) parts.push(moment.detail);
-  return parts.join(" · ");
+  return `${parts.join(" · ")}\n${t("rec.momentClipHint")}`;
 }
 
 function title(entry: Recording): string {
@@ -388,7 +390,7 @@ export async function openRecordings(): Promise<void> {
     const rows = moments
       .map((moment, index) => {
         const detail = moment.detail && !["multikill", "gameEnd"].includes(moment.kind) ? moment.detail : moment.ally === true ? t("rec.allyTeam") : moment.ally === false ? t("rec.enemyTeam") : "";
-        return `<button class="rec-side-row tone-${momentTone(moment)}" data-rec-moment="${index}">
+        return `<button class="rec-side-row tone-${momentTone(moment)}" data-rec-moment="${index}" data-tooltip="${esc(t("rec.momentClipHint"))}">
           ${momentIcon(moment.kind, 15)}<b>${clock(moment.time)}</b><span>${esc(momentLabel(moment))}</span>${detail ? `<em>${esc(detail)}</em>` : ""}</button>`;
       })
       .join("");
@@ -1138,6 +1140,21 @@ export async function openRecordings(): Promise<void> {
       return renderList();
     }
     if (row) return select(row.dataset.recPath!);
+  });
+
+  // Right-click on a moment (timeline or side list): a clip range around it to adjust and save.
+  overlay.addEventListener("contextmenu", (event) => {
+    const index = (event.target as HTMLElement).closest<HTMLElement>("[data-rec-moment]")?.dataset.recMoment;
+    if (index === undefined || !video) return;
+    event.preventDefault();
+    const moment = currentMoments()[Number(index)];
+    if (!moment) return;
+    const total = duration();
+    range = { start: Math.max(0, moment.time - LEAD), end: Math.min(total || moment.time + TAIL, moment.time + TAIL) };
+    if (zoom > 1 && !(inView(range.start) && inView(range.end))) viewStart = range.start - viewLength() * 0.2;
+    seek(range.start);
+    if (!video.paused) video.pause();
+    toast("info", t("rec.momentClipSet"));
   });
 
   // Track: click to seek; drag the clip handles.
