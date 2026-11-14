@@ -44,7 +44,7 @@ button:focus-visible, a:focus-visible { color: #f0e6d2; }
 .backdrop::after { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, #040b1288, #040b12c9); }
 .titlebar { background: #07121bee; backdrop-filter: none; border-bottom-color: #695b38; padding-left: 24px; }
 .brand { gap: 12px; }
-.brand-icon { width: 28px; height: 28px; filter: none; }
+.brand-icon { width: 36px; height: 36px; filter: none; }
 .brand-name { font-family: Beaufort, WenKai, NotoCJK, serif; font-size: 15px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: var(--text); }
 .mode-switch { align-self: stretch; padding: 0; gap: 0; border: 0; border-radius: 0; background: none; }
 .mode-pill { top: auto; bottom: -1px; left: 0; height: 2px; width: 50%; border-radius: 0; background: linear-gradient(90deg, transparent, #c8aa6e 25%, #c8aa6e 75%, transparent); box-shadow: none; }
