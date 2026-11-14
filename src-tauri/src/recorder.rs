@@ -273,7 +273,10 @@ fn finish(app: &AppHandle, active: Active) {
             for _ in 0..10 {
                 thread::sleep(Duration::from_secs(30));
                 match leagueaccounts::recorder::gameinfo::fetch(&file, &meta) {
-                    Ok(_) => {
+                    Ok(details) => {
+                        if fill_result(&file, &details) {
+                            let _ = app.emit("recordings-changed", ());
+                        }
                         let _ = app.emit("recording-game", path.clone());
                         return;
                     }
@@ -297,8 +300,38 @@ fn in_game_phase() -> Option<bool> {
 /// Older recordings got internal mode names ("Kiwi" for ARAM: Mayhem): name
 /// them again from the queue id in their saved game details, file name too.
 /// Game details left without their recording are removed.
+/// A game whose recording stopped before Live Client sent its end (the window
+/// closes fast when the Nexus falls) has no result: take it from the match
+/// history details and add it to the file name, as a normal recording has.
+fn fill_result(file: &std::path::Path, details: &serde_json::Value) -> bool {
+    let Some(mut meta) = library::read_meta(file) else { return false };
+    if meta.kind != "game" || !meta.result.is_empty() {
+        return false;
+    }
+    let Some(result) = leagueaccounts::recorder::gameinfo::result(details) else { return false };
+    meta.result = result.to_owned();
+    let mut current = file.to_path_buf();
+    // Only names made by the recorder ("<date> <champion> <queue>"), not a name the player chose.
+    let stem = file.file_stem().map(|stem| stem.to_string_lossy().into_owned()).unwrap_or_default();
+    if meta.title.is_empty() && !meta.queue.is_empty() && stem.ends_with(&library::safe_name(&meta.queue)) {
+        if let Ok(target) = library::rename(file, &format!("{stem} {result}")) {
+            current = target;
+        }
+    }
+    library::write_meta(&current, &meta).is_ok()
+}
+
 fn relabel_old_recordings(root: &std::path::Path) -> bool {
     let mut changed = false;
+    for entry in library::list(root) {
+        let Some(path) = library::resolve(root, &entry.path) else { continue };
+        if entry.kind != "game" || entry.meta.as_ref().is_none_or(|meta| !meta.result.is_empty()) || is_being_recorded(&path) {
+            continue;
+        }
+        if let Some(details) = leagueaccounts::recorder::gameinfo::load(&path) {
+            changed |= fill_result(&path, &details);
+        }
+    }
     for entry in library::list(root) {
         let Some(path) = library::resolve(root, &entry.path) else { continue };
         let Some(mut meta) = entry.meta.clone() else { continue };
