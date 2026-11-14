@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="250 254 726 726">
+  <title>League Companion</title>
+  <!-- Flat version of the sharp gold/teal frame: two silhouettes, one soft gradient each, thin light rim. -->
+  <defs>
+    <linearGradient id="gold" x1="0.35" y1="0" x2="0.15" y2="1">
+      <stop offset="0" stop-color="#fbe08e"/>
+      <stop offset="0.45" stop-color="#ebc56c"/>
+      <stop offset="1" stop-color="#c38f3c"/>
+    </linearGradient>
+    <linearGradient id="teal" x1="1" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0a9fb2"/>
+      <stop offset="0.5" stop-color="#0fc8d6"/>
+      <stop offset="1" stop-color="#079bb0"/>
+    </linearGradient>
+  </defs>
+  <path d="M 933,262 L 425,261 L 257,430 L 258,921 L 390,793 L 390,489 L 465,413 L 786,413 Z"
+        fill="url(#gold)" stroke="#fff0b4" stroke-opacity="0.55" stroke-width="4" stroke-linejoin="miter"/>
+  <path d="M 967,315 L 822,457 L 822,761 L 738,843 L 415,843 L 287,972 L 809,973 L 969,812 Z"
+        fill="url(#teal)" stroke="#7ef2f5" stroke-opacity="0.45" stroke-width="4" stroke-linejoin="miter"/>
+</svg>
