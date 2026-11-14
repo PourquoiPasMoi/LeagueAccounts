@@ -732,6 +732,11 @@ pub async fn add_discord_webhook(name: String, url: String) -> CommandResult<Vec
 }
 
 #[tauri::command]
+pub async fn rename_discord_webhook(id: String, name: String) -> CommandResult<Vec<WebhookView>> {
+    leagueaccounts::discord::rename(&id, &name).map(webhook_views).map_err(fail)
+}
+
+#[tauri::command]
 pub async fn remove_discord_webhook(id: String) -> CommandResult<Vec<WebhookView>> {
     leagueaccounts::discord::remove(&id).map(webhook_views).map_err(fail)
 }
@@ -750,10 +755,27 @@ pub async fn post_to_discord(path: String, ids: Vec<String>, message: String) ->
     let file = library::resolve(&root, &path).ok_or_else(|| fail("recording_missing"))?;
     tauri::async_runtime::spawn_blocking(move || {
         let hooks = leagueaccounts::discord::load();
-        ids.iter()
+        let mut posted = Vec::new();
+        let results: Vec<PostResult> = ids
+            .iter()
             .filter_map(|id| hooks.iter().find(|hook| &hook.id == id))
-            .map(|hook| PostResult { name: hook.name.clone(), error: leagueaccounts::discord::post(&hook.url, &file, &message).err().map(str::to_owned) })
-            .collect()
+            .map(|hook| {
+                let error = leagueaccounts::discord::post(&hook.url, &file, &message).err().map(str::to_owned);
+                if error.is_none() {
+                    let at = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |time| time.as_millis() as u64);
+                    posted.push(library::DiscordPost { webhook: hook.id.clone(), channel: hook.name.clone(), at });
+                }
+                PostResult { name: hook.name.clone(), error }
+            })
+            .collect();
+        // Keep the history in the clip's `.json` (the video file is not touched).
+        if !posted.is_empty() {
+            if let Some(mut meta) = library::read_meta(&file) {
+                meta.posts.extend(posted);
+                let _ = library::write_meta(&file, &meta);
+            }
+        }
+        results
     })
     .await
     .map_err(|_| fail("operation_failed"))

@@ -68,6 +68,19 @@ pub fn add(name: &str, url: &str) -> Result<Vec<Webhook>, &'static str> {
     Ok(list)
 }
 
+/// Give a saved webhook a new name (the address stays).
+pub fn rename(id: &str, name: &str) -> Result<Vec<Webhook>, &'static str> {
+    let name = name.trim();
+    if name.is_empty() {
+        return Err("discord_name_empty");
+    }
+    let mut list = load();
+    let webhook = list.iter_mut().find(|webhook| webhook.id == id).ok_or("discord_webhook_invalid")?;
+    webhook.name = name.chars().take(60).collect();
+    save(&list)?;
+    Ok(list)
+}
+
 pub fn remove(id: &str) -> Result<Vec<Webhook>, &'static str> {
     let mut list = load();
     list.retain(|webhook| webhook.id != id);

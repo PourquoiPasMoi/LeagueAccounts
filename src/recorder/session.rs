@@ -323,6 +323,7 @@ fn record(request: &RecordRequest, window: HWND, path: &Path, stop: &AtomicBool,
         clip_start: 0.0,
         discord: false,
         title: String::new(),
+        posts: Vec::new(),
     };
     let _ = library::write_meta(&final_path, &meta);
     let size = std::fs::metadata(&final_path).map(|metadata| metadata.len()).unwrap_or(0);
