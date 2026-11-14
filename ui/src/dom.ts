@@ -97,6 +97,11 @@ export function modal(options: {
   stacked?: boolean;
   onOpen?: (root: HTMLElement) => void;
   onSubmit?: (value: string, root: HTMLElement) => boolean | Promise<boolean>;
+  /// Asked before closing without saving (X, Esc, outside click, `cancelValue`):
+  /// "close" closes, "stay" keeps the dialog, "save" runs the primary action.
+  confirmClose?: () => Promise<"close" | "stay" | "save">;
+  /// The action that means "close without saving" (goes through `confirmClose`).
+  cancelValue?: string;
 }): Promise<string | null> {
   return new Promise((resolve) => {
     const overlay = fragment(`
@@ -181,6 +186,20 @@ export function modal(options: {
       if (closed || !accepted) return;
       close(value);
     };
+    let asking = false;
+    /** Close without saving, after asking when the dialog wants that. */
+    const tryClose = async (value: string | null) => {
+      if (closed || submitting || asking) return;
+      if (!options.confirmClose) return close(value);
+      asking = true;
+      const choice = await options.confirmClose();
+      asking = false;
+      if (choice === "close") close(value);
+      else if (choice === "save") {
+        const primary = defaultAction();
+        if (primary) void submit(primary.value);
+      }
+    };
     const onKey = (event: KeyboardEvent) => {
       // A child dialog owns the keyboard until it closes. Ignore its exit
       // animation too, so the editor becomes active as soon as it is dismissed.
@@ -197,19 +216,20 @@ export function modal(options: {
       if (event.key === "Escape") {
         event.preventDefault();
         event.stopImmediatePropagation();
-        if (!submitting) close(null);
+        if (!submitting) void tryClose(null);
       }
     };
     document.addEventListener("keydown", onKey, true);
     overlay.addEventListener("mousedown", (event) => {
-      if (event.target === overlay && !submitting) close(null);
+      if (event.target === overlay && !submitting) void tryClose(null);
     });
     overlay.querySelectorAll<HTMLButtonElement>("[data-value]").forEach((button) => {
       button.addEventListener("click", (event) => {
         event.preventDefault();
         if (submitting) return;
         const value = button.dataset.value ?? "";
-        if (value === "__close") close(null);
+        if (value === "__close") void tryClose(null);
+        else if (options.cancelValue !== undefined && value === options.cancelValue) void tryClose(value);
         else void submit(value);
       });
     });

@@ -185,3 +185,14 @@ td.gi-items > * { display: inline-block; margin-right: 2px; vertical-align: midd
 }
 .gi-items img, .gi-rune-head .gi-items img { background: #0a1015; outline: 1px solid #1e282d; }
 #client-tooltip { white-space: pre-line; }
+
+/* Both teams' tables share fixed columns, so items and scores line up whatever the names. */
+.gi-board { table-layout: fixed; }
+.gi-col-champ { width: 48px; }
+.gi-col-pair { width: 28px; }
+.gi-col-items { width: 214px; }
+.gi-col-kda { width: 130px; }
+.gi-col-num { width: 70px; }
+.gi-col-gold { width: 90px; }
+.gi-board th:first-child { overflow: hidden; text-overflow: ellipsis; }
+.gi-board .gi-name { max-width: none; }
