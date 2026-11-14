@@ -464,7 +464,7 @@
 .hud-timer b { font: 700 25px/1 Beaufort, WenKai, NotoCJK, serif; color: #f0e6d2; font-variant-numeric: tabular-nums; }
 
 /* Players */
-.hud-panel { position: absolute; left: 50%; bottom: 0; transform: translateX(-50%); width: 1420px; padding: 3px 0; background: linear-gradient(180deg, rgba(10, 21, 32, .76), rgba(1, 10, 19, .82)); border: 2px solid #463714; border-bottom: 0; }
+.hud-panel { position: absolute; left: 50%; bottom: 0; transform: translateX(-50%); width: 1420px; padding: 3px 0; background: linear-gradient(180deg, rgba(10, 21, 32, .95), rgba(1, 10, 19, .97)); border: 2px solid #463714; border-bottom: 0; }
 .hud-panel.no-items { width: 1000px; }
 .hud-line { display: grid; grid-template-columns: minmax(0, 1fr) 104px minmax(0, 1fr); height: 54px; align-items: stretch; }
 .hud-line + .hud-line { border-top: 1px solid #1e282d; }
