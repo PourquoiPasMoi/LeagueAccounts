@@ -1112,13 +1112,56 @@ async function openSettings(): Promise<void> {
       const showHooks = (hooks: DiscordWebhook[]) => {
         hookList.innerHTML = hooks.length
           ? hooks
-              .map((hook) => `<div class="discord-hook"><strong>${esc(hook.name)}</strong><span>${esc(hook.hint)}</span><button type="button" class="btn btn-ghost" data-discord-remove="${esc(hook.id)}">${esc(t("settings.discordRemove"))}</button></div>`)
+              .map(
+                (hook) =>
+                  `<div class="discord-hook" data-discord-hook="${esc(hook.id)}"><strong>${esc(hook.name)}</strong><span>${esc(hook.hint)}</span><button type="button" class="btn btn-ghost" data-discord-rename>${esc(t("rec.rename"))}</button><button type="button" class="btn btn-ghost" data-discord-remove="${esc(hook.id)}">${esc(t("settings.discordRemove"))}</button></div>`,
+              )
               .join("")
           : `<p class="hint">${esc(t("settings.discordNone"))}</p>`;
       };
       void api.discordWebhooks().then(showHooks).catch(() => showHooks([]));
+      // Rename in place: the name becomes a field, Enter or Save keeps it, Esc or Cancel goes back.
+      const startRename = (row: HTMLElement) => {
+        const label = $("strong", row);
+        const old = label.textContent ?? "";
+        row.classList.add("editing");
+        row.innerHTML = `<input name="discordRename" maxlength="60" autocomplete="off" spellcheck="false"/><button type="button" class="btn btn-ghost" data-discord-rename-save>${esc(t("common.save"))}</button><button type="button" class="btn btn-ghost" data-discord-rename-cancel>${esc(t("common.cancel"))}</button>`;
+        const input = $<HTMLInputElement>("input", row);
+        input.value = old;
+        input.focus();
+        input.select();
+      };
+      const saveRename = (row: HTMLElement) => {
+        const name = $<HTMLInputElement>("input", row).value;
+        void api
+          .renameDiscordWebhook(row.dataset.discordHook ?? "", name)
+          .then(showHooks)
+          .catch((error) => toast("error", t("rec.rename"), describeError(error)));
+      };
+      const cancelRename = () => void api.discordWebhooks().then(showHooks).catch(() => showHooks([]));
+      // Window capture runs before the dialog's own Esc handler, so Esc only leaves the field.
+      const renameKeys = (event: KeyboardEvent) => {
+        if (!root.isConnected) return window.removeEventListener("keydown", renameKeys, true);
+        const input = document.activeElement;
+        if (!(input instanceof HTMLInputElement) || input.name !== "discordRename") return;
+        const row = input.closest<HTMLElement>("[data-discord-hook]");
+        if (!row) return;
+        if (event.key === "Escape") {
+          event.preventDefault();
+          event.stopImmediatePropagation();
+          cancelRename();
+        } else if (event.key === "Enter") {
+          event.preventDefault();
+          saveRename(row);
+        }
+      };
+      window.addEventListener("keydown", renameKeys, true);
       root.addEventListener("click", (event) => {
         const target = event.target as HTMLElement;
+        const hookRow = target.closest<HTMLElement>("[data-discord-hook]");
+        if (hookRow && target.closest("[data-discord-rename]")) startRename(hookRow);
+        if (hookRow && target.closest("[data-discord-rename-save]")) saveRename(hookRow);
+        if (target.closest("[data-discord-rename-cancel]")) cancelRename();
         const removeId = target.closest<HTMLElement>("[data-discord-remove]")?.dataset.discordRemove;
         if (removeId) void api.removeDiscordWebhook(removeId).then(showHooks).catch((error) => toast("error", t("toast.settingsFailed"), describeError(error)));
         if (target.closest("[data-discord-add]")) {

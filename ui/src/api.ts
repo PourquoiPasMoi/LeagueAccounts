@@ -525,6 +525,7 @@ export const api = {
   /** Discord webhooks (named channels); `hint` is the end of the address. */
   discordWebhooks: () => call<DiscordWebhook[]>("discord_webhooks"),
   addDiscordWebhook: (name: string, url: string) => call<DiscordWebhook[]>("add_discord_webhook", { name, url }),
+  renameDiscordWebhook: (id: string, name: string) => call<DiscordWebhook[]>("rename_discord_webhook", { id, name }),
   removeDiscordWebhook: (id: string) => call<DiscordWebhook[]>("remove_discord_webhook", { id }),
   /** Post a clip with a message to the chosen webhooks; one result per channel. */
   postToDiscord: (path: string, ids: string[], message: string) => call<{ name: string; error: string | null }[]>("post_to_discord", { path, ids, message }),
@@ -812,6 +813,17 @@ export interface RecordingMeta {
   discord?: boolean;
   /** The name the player gave it. */
   title?: string;
+  /** Clips: successful posts to Discord, oldest first. */
+  posts?: DiscordPost[];
+}
+
+export interface DiscordPost {
+  /** Webhook id (its current name is shown when it still exists). */
+  webhook: string;
+  /** The webhook's name when posted. */
+  channel: string;
+  /** Unix ms. */
+  at: number;
 }
 
 export interface DiscordWebhook {

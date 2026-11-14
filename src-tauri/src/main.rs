@@ -1418,6 +1418,7 @@ fn main() {
             recorder::recording_waves,
             recorder::discord_webhooks,
             recorder::add_discord_webhook,
+            recorder::rename_discord_webhook,
             recorder::remove_discord_webhook,
             recorder::post_to_discord,
             recorder::rename_recording,

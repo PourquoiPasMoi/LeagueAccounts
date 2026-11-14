@@ -301,6 +301,8 @@ pub fn save_clip(root: &Path, relative: &str, parts: &[(f64, f64)], mode: ClipMo
         source: format!("{stem}.mp4"),
         clip_start,
         discord: mode == ClipMode::Discord,
+        // A new file: not posted anywhere yet.
+        posts: Vec::new(),
         audio: !kept.is_empty(),
         audio_source: kept.join("+"),
         // One track in a clip.

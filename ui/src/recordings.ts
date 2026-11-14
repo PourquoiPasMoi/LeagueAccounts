@@ -155,6 +155,8 @@ export async function openRecordings(): Promise<void> {
   if (open) return;
   open = true;
   let view: RecordingsView = { root: "", totalBytes: 0, limitBytes: 0, entries: [] };
+  /** Discord webhook id → its current name (for the post history). */
+  let hookNames = new Map<string, string>();
   let status: RecorderStatus = { enabled: false, recording: false, account: "", startedAt: 0, path: "", error: "" };
   let account = "";
   let kind: "game" | "clip" = "game";
@@ -305,6 +307,18 @@ export async function openRecordings(): Promise<void> {
     return id ? `<img class="rec-row-banner" src="${esc(gameImage(`v1/champion-tiles/${id}/${id}000.jpg`))}" alt="" loading="lazy" draggable="false"/>` : "";
   };
 
+  /** Discord channels a clip was posted to: current webhook names, each once. */
+  const postedChannels = (entry: Recording) => [...new Set((entry.meta?.posts ?? []).map((post) => hookNames.get(post.webhook) ?? post.channel))];
+  /** Every post with its date, for tooltips and the viewer. */
+  const postedList = (entry: Recording) =>
+    (entry.meta?.posts ?? [])
+      .map((post) => `${hookNames.get(post.webhook) ?? post.channel} (${new Date(post.at).toLocaleString(localeTag(), { dateStyle: "medium", timeStyle: "short" })})`)
+      .join(", ");
+  const postedTag = (entry: Recording) => {
+    const channels = postedChannels(entry);
+    return channels.length ? `<span class="rec-posted-tag" data-tooltip="${esc(t("rec.postedTo", { list: postedList(entry) }))}">${esc(t("rec.posted"))}: ${esc(channels.join(", "))}</span>` : "";
+  };
+
   const card = (entry: Recording) => {
     const meta = entry.meta;
     const date = new Date(started(entry)).toLocaleString(localeTag(), { dateStyle: "medium", timeStyle: "short" });
@@ -314,7 +328,7 @@ export async function openRecordings(): Promise<void> {
     const score = entry.kind === "game" ? kda(entry) : "";
     const tag =
       entry.kind === "clip"
-        ? `<span class="rec-clip-tag">${icon("scissors", 11)}${esc(t("rec.clip"))}</span>${isDiscord(entry) ? `<span class="rec-discord-tag">${esc(t("rec.discord"))}</span>` : ""}${meta?.queue ? `<span class="rec-mode-tag">${esc(meta.queue)}</span>` : ""}`
+        ? `<span class="rec-clip-tag">${icon("scissors", 11)}${esc(t("rec.clip"))}</span>${isDiscord(entry) ? `<span class="rec-discord-tag">${esc(t("rec.discord"))}</span>` : ""}${meta?.queue ? `<span class="rec-mode-tag">${esc(meta.queue)}</span>` : ""}${postedTag(entry)}`
         : `<span class="rec-mode-tag">${esc(modeOf(entry))}</span>`;
     const outcome = meta?.result === "Win" ? " is-win" : meta?.result === "Loss" ? " is-loss" : "";
     return `
@@ -427,6 +441,26 @@ export async function openRecordings(): Promise<void> {
     renderList();
   };
 
+  /** The viewer's top bar: title, facts, Discord posts and actions. */
+  const renderViewerHead = (entry: Recording) => {
+    const meta = entry.meta;
+    const date = new Date(meta?.startedAt || entry.modified).toLocaleString(localeTag(), { dateStyle: "medium", timeStyle: "short" });
+    const result = meta?.result === "Win" ? `<span class="rec-result is-win">${esc(t("rec.win"))}</span>` : meta?.result === "Loss" ? `<span class="rec-result is-loss">${esc(t("rec.loss"))}</span>` : "";
+    const score = entry.kind === "game" ? kda(entry) : "";
+    viewerHead.innerHTML = `
+      <button class="btn btn-ghost rec-back" data-rec="back">${icon("arrow-left", 14)}<span>${esc(t("rec.title"))}</span></button>
+      <div class="rec-viewer-title">
+        <h2>${esc(title(entry))}</h2><button class="icon-btn rec-rename" data-rec="rename" data-tooltip="${esc(t("rec.rename"))}" aria-label="${esc(t("rec.rename"))}">${icon("pencil", 14)}</button>${result}${score ? `<span class="rec-kda">${esc(score)}</span>` : ""}
+        <span class="rec-viewer-sub">${esc([date, meta?.duration ? clock(meta.duration) : "", accountLabel(entry.account), bytes(entry.size)].filter(Boolean).join(" · "))}</span>
+        ${meta?.posts?.length ? `<span class="rec-viewer-sub rec-viewer-posted">${esc(t("rec.postedTo", { list: postedList(entry) }))}</span>` : ""}
+      </div>
+      ${entry.kind === "game" ? `<button class="btn btn-ghost" data-rec="game-info" aria-pressed="${gameShown()}">${icon("chart-line", 14)}<span>${esc(t("gi.title"))}</span></button>` : ""}
+      ${entry.kind === "clip" ? `<button class="btn btn-ghost" data-rec="discord-post">${icon("upload", 14)}<span>${esc(t("rec.discordPost"))}</span></button>` : ""}
+      ${entry.kind === "clip" && !isDiscord(entry) ? `<button class="btn btn-ghost" data-rec="discord-version" data-tooltip="${esc(t("rec.discordVersionHint"))}">${icon("upload", 14)}<span>${esc(t("rec.discordVersion"))}</span></button>` : ""}
+      <button class="btn btn-ghost" data-rec="reveal">${icon("folder-open", 14)}<span>${esc(t("rec.showFile"))}</span></button>
+      <button class="btn btn-ghost" data-rec="delete-current">${icon("trash", 14)}<span>${esc(t("menu.delete"))}</span></button>`;
+  };
+
   const renderPlayer = () => {
     stopSound();
     gameDetails = null;
@@ -444,20 +478,7 @@ export async function openRecordings(): Promise<void> {
     const entry = selected;
     const meta = entry.meta;
     viewer.hidden = false;
-    const date = new Date(meta?.startedAt || entry.modified).toLocaleString(localeTag(), { dateStyle: "medium", timeStyle: "short" });
-    const result = meta?.result === "Win" ? `<span class="rec-result is-win">${esc(t("rec.win"))}</span>` : meta?.result === "Loss" ? `<span class="rec-result is-loss">${esc(t("rec.loss"))}</span>` : "";
-    const score = entry.kind === "game" ? kda(entry) : "";
-    viewerHead.innerHTML = `
-      <button class="btn btn-ghost rec-back" data-rec="back">${icon("arrow-left", 14)}<span>${esc(t("rec.title"))}</span></button>
-      <div class="rec-viewer-title">
-        <h2>${esc(title(entry))}</h2><button class="icon-btn rec-rename" data-rec="rename" data-tooltip="${esc(t("rec.rename"))}" aria-label="${esc(t("rec.rename"))}">${icon("pencil", 14)}</button>${result}${score ? `<span class="rec-kda">${esc(score)}</span>` : ""}
-        <span class="rec-viewer-sub">${esc([date, meta?.duration ? clock(meta.duration) : "", accountLabel(entry.account), bytes(entry.size)].filter(Boolean).join(" · "))}</span>
-      </div>
-      ${entry.kind === "game" ? `<button class="btn btn-ghost" data-rec="game-info" aria-pressed="${gameShown()}">${icon("chart-line", 14)}<span>${esc(t("gi.title"))}</span></button>` : ""}
-      ${entry.kind === "clip" ? `<button class="btn btn-ghost" data-rec="discord-post">${icon("upload", 14)}<span>${esc(t("rec.discordPost"))}</span></button>` : ""}
-      ${entry.kind === "clip" && !isDiscord(entry) ? `<button class="btn btn-ghost" data-rec="discord-version" data-tooltip="${esc(t("rec.discordVersionHint"))}">${icon("upload", 14)}<span>${esc(t("rec.discordVersion"))}</span></button>` : ""}
-      <button class="btn btn-ghost" data-rec="reveal">${icon("folder-open", 14)}<span>${esc(t("rec.showFile"))}</span></button>
-      <button class="btn btn-ghost" data-rec="delete-current">${icon("trash", 14)}<span>${esc(t("menu.delete"))}</span></button>`;
+    renderViewerHead(entry);
     if (isRecording(entry)) {
       player.innerHTML = `<p class="rec-empty rec-pick">${esc(t("rec.inProgress"))}</p>`;
       side.innerHTML = "";
@@ -971,6 +992,24 @@ export async function openRecordings(): Promise<void> {
       const done = results.filter((result) => !result.error).map((result) => result.name);
       if (done.length) toast("success", t("rec.discordPosted", { names: done.join(", ") }));
       for (const result of results.filter((item) => item.error)) toast("error", result.name, errorText(result.error ?? "discord_failed"), 8000);
+      // The history lives in the clip's .json: show it at once.
+      await reload();
+      if (selected?.path === entry.path) renderViewerHead(selected);
+      if (!done.length) return;
+      const choice = await modal({
+        title: t("rec.postedDeleteTitle"),
+        body: `<p class="hint">${esc(t("rec.postedDeleteText", { names: done.join(", ") }))}</p>`,
+        actions: [{ label: t("rec.keep"), value: "keep", kind: "primary" }, { label: t("menu.delete"), value: "delete", kind: "danger" }],
+      });
+      if (choice !== "delete") return;
+      if (selected?.path === entry.path) closeViewer();
+      try {
+        await api.deleteRecording(entry.path);
+        toast("success", t("rec.deleted"));
+      } catch (error) {
+        toast("error", t("rec.deleteFailed"), describe(error));
+      }
+      await reload();
     } catch (error) {
       toast("error", t("rec.discordPost"), describe(error), 8000);
     }
@@ -1049,7 +1088,11 @@ export async function openRecordings(): Promise<void> {
 
   const reload = async (keepSelection = true) => {
     try {
-      [view, status] = await Promise.all([api.recordings(), api.recorderStatus()]);
+      [view, status, hookNames] = await Promise.all([
+        api.recordings(),
+        api.recorderStatus(),
+        api.discordWebhooks().then((hooks) => new Map(hooks.map((hook) => [hook.id, hook.name]))).catch(() => hookNames),
+      ]);
     } catch (error) {
       toast("error", t("rec.loadFailed"), describe(error), 6000);
     }

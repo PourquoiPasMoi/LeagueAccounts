@@ -54,6 +54,20 @@ pub struct RecordingMeta {
     pub discord: bool,
     /// The name the player gave it (shown instead of champion and mode).
     pub title: String,
+    /// Clips: where it was posted on Discord (oldest first).
+    pub posts: Vec<DiscordPost>,
+}
+
+/// One successful post of a clip to a Discord webhook.
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct DiscordPost {
+    /// The webhook's id in `discord.json` (to show its current name).
+    pub webhook: String,
+    /// The webhook's name when it was posted.
+    pub channel: String,
+    /// Unix ms.
+    pub at: u64,
 }
 
 #[derive(Clone, Debug, Serialize)]
