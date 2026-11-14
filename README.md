@@ -84,6 +84,30 @@ Game settings in the sidebar does that for you. It shows your hotkeys as keycaps
 
 Off by default. Turn it on in Settings › Recorder and every League game is recorded from the loading screen to the end, with nothing to press, like Medal.
 
+<img src="docs/screenshots/recorder-library.png" alt="Recordings library with games grouped by game mode, champion banners, results and K/D/A" width="960" />
+
+<img src="docs/screenshots/recorder-viewer.png" alt="A recording opened in the viewer: key moments on the timeline and in a side list, sound waves for game, microphone and Discord, and a clip range set around a kill" width="960" />
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/recorder-sound.png" alt="Volume per sound up to 500 percent" /><br /><sub>Volume per sound, up to 500 %. Saved clips use the same levels.</sub></td>
+    <td width="50%"><img src="docs/screenshots/recorder-clips.png" alt="Clips tab with Discord versions and other clips" /><br /><sub>Clips, with Discord versions under 9.5 MB.</sub></td>
+  </tr>
+</table>
+
+<img src="docs/screenshots/recorder-scoreboard.png" alt="End-of-game scoreboard under the video" width="960" />
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/recorder-overview.png" alt="Gold advantage graph with the hover readout, kills over time and the kill map" /><br /><sub>Gold advantage, kills over time and the kill map. Click a time to watch it.</sub></td>
+    <td width="50%"><img src="docs/screenshots/recorder-graphs.png" alt="Graphs tab comparing damage for all ten players" /><br /><sub>Compare any stats for all ten players.</sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/recorder-runes.png" alt="Runes tab with each rune's end-of-game numbers" /><br /><sub>Every player's runes with their numbers.</sub></td>
+    <td><img src="docs/screenshots/recorder-settings.png" alt="Recorder settings" /><br /><sub>Recorder settings: quality, sounds, microphone test, disk limit.</sub></td>
+  </tr>
+</table>
+
 - Every game mode gets its proper name (Ranked Solo/Duo, Ranked Flex, Ranked 5s, Normal Draft, Swiftplay, ARAM, ARAM: Mayhem, Arena, Clash, Classic Rift and more). The library has Games and Clips tabs, champion banners on each card, and can filter or group games by mode, newest or oldest first. Hover a card for its delete button, or use Select to tick several recordings and delete them at once. Cards are edged in teal for a win and red for a loss. Clips are grouped into Discord versions and other clips, and any clip can be turned into a Discord version (under 9.5 MB) in one click. Right-click a key moment to set a clip around it (6 s before, 4 s after), adjust it and save. Rename any recording with the pencil next to its title. Under the timeline, sound waves show game sound, microphone and Discord separately (follow the zoom, click to jump, hide with one button), so moments where everyone talks are easy to find.
 - Recordings are saved per account: `<folder>\<account>\Games\` for full games and `<folder>\<account>\Clips\` for clips, with readable names such as `2026-11-13 21-40 Ahri Ranked Solo Win.mp4`. The account is the saved account signed in when the game starts (`Unknown` when none matches).
 - Your key moments are marked on the timeline with their own icons: kills, deaths, assists, multikills, first blood, and the dragons, barons, heralds, grubs, towers and inhibitors you took part in, aces you finished, and the game end. Click one to jump there.
@@ -101,6 +125,13 @@ Off by default. Turn it on in Settings › Experimental. It is still under devel
 
 - In champ select, the build page opens with OP.GG's runes, summoner spells and one 6-item build adapted to the enemy team. Apply puts the rune page, spells and item set into the client (only through the League client's own local API, like other build apps), and the item set is the one the shop shows first.
 - When the game starts, the page switches to a live view of both teams: champions, ranks, team composition, K/D/A, kill participation, CS per minute, vision, items and objectives. It reads only Riot's local live game data; nothing is drawn over or injected into the game.
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/champ-select.png" alt="Champ select build page with runes, spells, the build to follow, skill order and matchups" /><br /><sub>Champ select: runes, spells and a build adapted to the enemy team, applied in one click.</sub></td>
+    <td width="50%"><img src="docs/screenshots/live-game.png" alt="Live game view with both teams, ranks, K/D/A, CS, vision and items" /><br /><sub>Live game: both teams with ranks, K/D/A, CS per minute, vision and items.</sub></td>
+  </tr>
+</table>
 
 ### Smaller changes
 
