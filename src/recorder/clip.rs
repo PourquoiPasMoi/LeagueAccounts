@@ -655,3 +655,39 @@ pub fn track_levels(path: &Path) -> Vec<f64> {
     }
     levels
 }
+
+/// Loudness of every audio track (file order), `per_second` values a second,
+/// each 0..255 (square root of the peak, so quiet voices still show).
+pub fn peaks(path: &Path, per_second: u32) -> Result<Vec<Vec<u8>>> {
+    unsafe {
+        let reader = MFCreateSourceReaderFromURL(&HSTRING::from(path.as_os_str()), None::<&IMFAttributes>)?;
+        reader.SetStreamSelection(MF_SOURCE_READER_ALL_STREAMS.0 as u32, false)?;
+        let (_, audio) = streams(&reader);
+        let mut tracks = Vec::new();
+        for (index, _) in &audio {
+            reader.SetStreamSelection(*index, true)?;
+            reader.SetCurrentMediaType(*index, None, &pcm_type()?)?;
+            tracks.push(Track { reader: *index, writer: None, role: Role::Audio, done: false });
+        }
+        let mut out: Vec<Vec<u8>> = vec![Vec::new(); audio.len()];
+        let channels = AUDIO_CHANNELS as usize;
+        let per_frame = f64::from(per_second) / f64::from(AUDIO_RATE);
+        pump(&reader, &mut tracks, |track, sample, time| {
+            let Some(slot) = audio.iter().position(|(index, _)| *index == track.reader) else { return Ok(()) };
+            let pcm = pcm_of(sample)?;
+            let first = time as f64 / UNITS * f64::from(per_second);
+            let levels = &mut out[slot];
+            for (frame, values) in pcm.chunks(channels).enumerate() {
+                let bucket = (first + frame as f64 * per_frame) as usize;
+                if levels.len() <= bucket {
+                    levels.resize(bucket + 1, 0);
+                }
+                let peak = values.iter().map(|value| value.unsigned_abs()).max().unwrap_or(0);
+                let level = ((f64::from(peak) / 32768.0).sqrt() * 255.0).min(255.0) as u8;
+                levels[bucket] = levels[bucket].max(level);
+            }
+            Ok(())
+        })?;
+        Ok(out)
+    }
+}

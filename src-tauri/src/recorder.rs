@@ -264,6 +264,7 @@ fn finish(app: &AppHandle, active: Active) {
         let app = app.clone();
         thread::spawn(move || {
             let _ = leagueaccounts::recorder::sound_tracks(&root, &path);
+            let _ = leagueaccounts::recorder::waves(&root, &path);
             let Some(file) = library::resolve(&root, &path) else { return };
             let meta = library::read_meta(&file).unwrap_or_default();
             if meta.kind != "game" {
@@ -669,6 +670,36 @@ pub async fn recording_game(path: String, fetch: bool) -> CommandResult<Option<V
     .await
     .map_err(|_| fail("operation_failed"))?
     .map_err(fail)
+}
+
+/// Sound levels drawn under the player (worked out once, then read from disk).
+#[tauri::command]
+pub async fn recording_waves(path: String) -> CommandResult<leagueaccounts::recorder::Waves> {
+    let root = prefs().root();
+    let file = library::resolve(&root, &path).ok_or_else(|| fail("recording_missing"))?;
+    if is_being_recorded(&file) {
+        return Err(fail("recording_busy"));
+    }
+    tauri::async_runtime::spawn_blocking(move || leagueaccounts::recorder::waves(&root, &path))
+        .await
+        .map_err(|_| fail("operation_failed"))?
+        .map_err(fail)
+}
+
+/// Rename a recording; returns its new path.
+#[tauri::command]
+pub async fn rename_recording(app: AppHandle, path: String, name: String) -> CommandResult<String> {
+    let root = prefs().root();
+    let file = library::resolve(&root, &path).ok_or_else(|| fail("recording_missing"))?;
+    if is_being_recorded(&file) {
+        return Err(fail("recording_busy"));
+    }
+    let renamed = tauri::async_runtime::spawn_blocking(move || leagueaccounts::recorder::rename_recording(&root, &path, &name))
+        .await
+        .map_err(|_| fail("operation_failed"))?
+        .map_err(fail)?;
+    let _ = app.emit("recordings-changed", ());
+    Ok(renamed)
 }
 
 // ---------------------------------------------------------------- larec scheme

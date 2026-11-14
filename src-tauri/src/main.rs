@@ -1415,6 +1415,8 @@ fn main() {
             recorder::open_recordings_folder,
             recorder::save_clip,
             recorder::recording_game,
+            recorder::recording_waves,
+            recorder::rename_recording,
             recorder::microphones,
             recorder::microphone_level,
             recorder::recording_sound_tracks,

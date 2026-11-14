@@ -374,3 +374,14 @@
 .rec-select-group button[disabled] { opacity: .45; cursor: default; }
 .rec-select-group .rec-delete-many:not([disabled]) { color: #e06d62; }
 .rec-select-group .rec-delete-many:not([disabled]):hover { color: #f0e6d2; background: #be1e3755; }
+
+/* Sound waves: one strip per sound under the timeline, same zoom. */
+.rec-waves { display: flex; flex-direction: column; gap: 2px; margin-top: 4px; }
+.rec-waves[hidden] { display: none; }
+.rec-wave-row { position: relative; height: 26px; background: #0a1015; border: 1px solid #1e282d; cursor: pointer; }
+.rec-wave-row canvas { display: block; width: 100%; height: 100%; }
+.rec-wave-row span { position: absolute; left: 6px; top: 50%; transform: translateY(-50%); padding: 1px 5px; background: #010a13cc; font: 700 9.5px/1.2 Beaufort, WenKai, NotoCJK, serif; letter-spacing: .1em; text-transform: uppercase; color: #a09b8c; pointer-events: none; }
+.rec-waves-note { margin: 2px 0; font-size: 11.5px; color: #7d786c; }
+.rec-waves-toggle[aria-pressed="true"] { color: #c8aa6e; }
+.rec-rename { flex: none; align-self: center; width: 26px; height: 26px; color: #7d786c; }
+.rec-rename:hover { color: #f0e6d2; }

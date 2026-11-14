@@ -153,6 +153,90 @@ pub fn sound_tracks(root: &Path, relative: &str) -> Result<Vec<(String, String)>
     Ok(result)
 }
 
+/// Sound levels for the player: one row per source (game, mic, Discord) when
+/// they were recorded apart, else one for the recording's sound.
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct Waves {
+    /// Values a second.
+    pub rate: u32,
+    /// "game", "mic", "discord", "pc", or "" for a mixed track.
+    pub labels: Vec<String>,
+    pub levels: Vec<Vec<u8>>,
+}
+
+pub const WAVES_PER_SECOND: u32 = 10;
+
+/// The recording's sound levels, worked out once (a few seconds) and kept in
+/// `.tracks/<name>.waves.json`.
+pub fn waves(root: &Path, relative: &str) -> Result<Waves, &'static str> {
+    let source = library::resolve(root, relative).ok_or("recording_missing")?;
+    let cache = library::waves_file(&source);
+    let fresh = std::fs::metadata(&cache).ok().zip(std::fs::metadata(&source).ok()).is_some_and(|(cached, video)| cached.modified().ok() >= video.modified().ok());
+    if fresh {
+        if let Some(waves) = std::fs::read(&cache).ok().and_then(|bytes| serde_json::from_slice::<Waves>(&bytes).ok()) {
+            return Ok(waves);
+        }
+    }
+    let meta = library::read_meta(&source).unwrap_or_default();
+    let separate = meta.audio_tracks.len() >= 2;
+    let files: Vec<(String, std::path::PathBuf)> = if separate {
+        sound_tracks(root, relative)?.into_iter().filter_map(|(label, path)| Some((label, library::resolve(root, &path)?))).collect()
+    } else {
+        vec![(meta.audio_tracks.first().cloned().unwrap_or_default(), source.clone())]
+    };
+    // One thread per sound: each is decoded on its own core.
+    let results: Vec<(String, Option<Vec<u8>>)> = std::thread::scope(|scope| {
+        let jobs: Vec<_> = files
+            .into_iter()
+            .map(|(label, file)| {
+                scope.spawn(move || {
+                    if startup().is_err() {
+                        return (label, None);
+                    }
+                    let levels = clip::peaks(&file, WAVES_PER_SECOND).ok().and_then(|mut levels| (!levels.is_empty()).then(|| levels.swap_remove(0)));
+                    shutdown();
+                    (label, levels)
+                })
+            })
+            .collect();
+        jobs.into_iter().filter_map(|job| job.join().ok()).collect()
+    });
+    let mut waves = Waves { rate: WAVES_PER_SECOND, labels: Vec::new(), levels: Vec::new() };
+    for (label, levels) in results {
+        if let Some(levels) = levels {
+            waves.labels.push(label);
+            waves.levels.push(levels);
+        }
+    }
+    if let Some(directory) = cache.parent() {
+        let _ = std::fs::create_dir_all(directory);
+    }
+    if waves.levels.is_empty() {
+        // Nothing readable (no sound, or the file is still being written): not kept.
+        return Err("recording_no_sound");
+    }
+    let _ = serde_json::to_vec(&waves).map(|bytes| std::fs::write(&cache, bytes));
+    Ok(waves)
+}
+
+/// Give a recording a name of the player's: the file is renamed (with its
+/// moments, details and sound files) and the name is shown in the app.
+/// Returns the new relative path.
+pub fn rename_recording(root: &Path, relative: &str, name: &str) -> Result<String, &'static str> {
+    let name = name.trim();
+    if name.is_empty() {
+        return Err("rename_empty");
+    }
+    let source = library::resolve(root, relative).ok_or("recording_missing")?;
+    let target = library::rename(&source, name).map_err(|_| "file_write")?;
+    let mut meta = library::read_meta(&target).unwrap_or_default();
+    meta.title = name.chars().take(120).collect();
+    library::write_meta(&target, &meta).map_err(|_| "file_write")?;
+    let folder = relative.rsplit_once('/').map_or("", |(folder, _)| folder);
+    let file = target.file_name().map(|file| file.to_string_lossy().into_owned()).unwrap_or_default();
+    Ok(format!("{folder}/{file}"))
+}
+
 /// `sounds`: the audio sources to keep in the clip (`None` = all of them);
 /// `gains`: their levels (the player's volume per source).
 #[allow(clippy::too_many_arguments)]
