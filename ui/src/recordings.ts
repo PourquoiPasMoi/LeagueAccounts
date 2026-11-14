@@ -454,6 +454,7 @@ export async function openRecordings(): Promise<void> {
         <span class="rec-viewer-sub">${esc([date, meta?.duration ? clock(meta.duration) : "", accountLabel(entry.account), bytes(entry.size)].filter(Boolean).join(" · "))}</span>
       </div>
       ${entry.kind === "game" ? `<button class="btn btn-ghost" data-rec="game-info" aria-pressed="${gameShown()}">${icon("chart-line", 14)}<span>${esc(t("gi.title"))}</span></button>` : ""}
+      ${entry.kind === "clip" ? `<button class="btn btn-ghost" data-rec="discord-post">${icon("upload", 14)}<span>${esc(t("rec.discordPost"))}</span></button>` : ""}
       ${entry.kind === "clip" && !isDiscord(entry) ? `<button class="btn btn-ghost" data-rec="discord-version" data-tooltip="${esc(t("rec.discordVersionHint"))}">${icon("upload", 14)}<span>${esc(t("rec.discordVersion"))}</span></button>` : ""}
       <button class="btn btn-ghost" data-rec="reveal">${icon("folder-open", 14)}<span>${esc(t("rec.showFile"))}</span></button>
       <button class="btn btn-ghost" data-rec="delete-current">${icon("trash", 14)}<span>${esc(t("menu.delete"))}</span></button>`;
@@ -499,6 +500,7 @@ export async function openRecordings(): Promise<void> {
         <button class="btn btn-ghost" data-rec="set-start">${esc(t("rec.setStart"))}</button>
         <button class="btn btn-ghost" data-rec="set-end">${esc(t("rec.setEnd"))}</button>
         <button class="btn btn-ghost" data-rec="add-part" disabled>${esc(t("rec.addPart"))}</button>
+        <button class="btn btn-ghost rec-clear-clip" data-rec="clear-clip" hidden>${icon("x", 12)}<span>${esc(t("rec.clearClip"))}</span></button>
         <span class="rec-range-text" data-rec-range></span>
         <div class="segmented rec-mode" data-tooltip="${esc(t(MODE_HINTS[mode]))}">
           <button data-rec-mode="fast" aria-pressed="${mode === "fast"}">${esc(t("rec.fast"))}</button>
@@ -820,6 +822,7 @@ export async function openRecordings(): Promise<void> {
           .join("")
       : "";
     $<HTMLButtonElement>('[data-rec="add-part"]', player).disabled = !range || range.end - range.start < 1;
+    $<HTMLButtonElement>('[data-rec="clear-clip"]', player).hidden = !range && parts.length === 0;
     save.disabled = saving || clipParts().length === 0;
     save.classList.toggle("is-busy", saving);
     drawWaves();
@@ -829,6 +832,16 @@ export async function openRecordings(): Promise<void> {
 
   const WAVE_COLORS: Record<string, string> = { game: "#c8aa6e", mic: "#0ac8b9", discord: "#7983f5", pc: "#c8aa6e", "": "#c8aa6e" };
   const waveLabel = (label: string) => (label ? t(`rec.audio.${label}` as MessageKey) : t("rec.sound"));
+
+  /** Each sound strip's height (dragged by the player), kept between visits. */
+  let waveHeights: Record<string, number> = (() => {
+    try {
+      return JSON.parse(localStorage.getItem("recWaveHeights") ?? "{}") ?? {};
+    } catch {
+      return {};
+    }
+  })();
+  const waveHeight = (label: string) => Math.min(160, Math.max(14, Number(waveHeights[label || "mix"]) || 26));
 
   const renderWaves = () => {
     const box = player.querySelector<HTMLElement>("[data-rec-waves]");
@@ -840,7 +853,7 @@ export async function openRecordings(): Promise<void> {
       return;
     }
     box.innerHTML = waves.labels
-      .map((label, index) => `<div class="rec-wave-row" data-rec-wave="${index}"><canvas></canvas><span>${esc(waveLabel(label))}</span></div>`)
+      .map((label, index) => `<div class="rec-wave-row" data-rec-wave="${index}" style="height:${waveHeight(label)}px"><canvas></canvas><span>${esc(waveLabel(label))}</span><div class="rec-wave-resize" data-rec-wave-resize="${index}" data-tooltip="${esc(t("rec.waveResize"))}"></div></div>`)
       .join("");
     drawWaves();
   };
@@ -904,6 +917,63 @@ export async function openRecordings(): Promise<void> {
       wavesError = error instanceof ApiError ? error.code : "unknown";
     }
     renderWaves();
+  };
+
+  /** Post a clip to Discord channels (the webhooks set in Settings), with a message. */
+  const postToDiscord = async (entry: Recording) => {
+    const hooks = await api.discordWebhooks().catch(() => []);
+    if (!hooks.length) {
+      await modal({
+        title: t("rec.discordPost"),
+        body: `<p class="hint">${esc(t("rec.discordNoHooks"))}</p>`,
+        actions: [{ label: t("common.ok"), value: "ok", kind: "primary" }],
+      });
+      return;
+    }
+    let remembered: string[] = [];
+    try {
+      remembered = JSON.parse(localStorage.getItem("recDiscordHooks") ?? "[]");
+    } catch {
+      remembered = [];
+    }
+    const big = entry.size > 10_000_000;
+    let ids: string[] = [];
+    let message = "";
+    const answer = await modal({
+      title: t("rec.discordPost"),
+      body: `<label class="field"><span>${esc(t("rec.discordMessage"))}</span>
+          <textarea name="discordMessage" maxlength="2000" rows="3" spellcheck="true"></textarea></label>
+        <div class="rec-discord-hooks"><span>${esc(t("rec.discordChannels"))}</span>
+          ${hooks.map((hook) => `<label class="gi-check"><input type="checkbox" name="discordHook" value="${esc(hook.id)}"${remembered.includes(hook.id) || hooks.length === 1 ? " checked" : ""}/><span>${esc(hook.name)}</span></label>`).join("")}
+        </div>
+        ${big ? `<p class="hint rec-discord-warn">${esc(t("rec.discordTooBig", { size: bytes(entry.size) }))}</p>` : ""}
+        <p class="hint rec-discord-error" hidden>${esc(t("rec.discordPickOne"))}</p>`,
+      actions: [{ label: t("common.cancel"), value: "cancel" }, { label: t("rec.discordSend"), value: "post", kind: "primary" }],
+      onOpen: (root) => root.querySelector<HTMLTextAreaElement>('[name="discordMessage"]')?.focus(),
+      onSubmit: (value, root) => {
+        if (value !== "post") return true;
+        ids = [...root.querySelectorAll<HTMLInputElement>('[name="discordHook"]:checked')].map((input) => input.value);
+        message = root.querySelector<HTMLTextAreaElement>('[name="discordMessage"]')?.value ?? "";
+        const error = root.querySelector<HTMLElement>(".rec-discord-error");
+        if (error) error.hidden = ids.length > 0;
+        return ids.length > 0;
+      },
+    });
+    if (answer !== "post" || !ids.length) return;
+    try {
+      localStorage.setItem("recDiscordHooks", JSON.stringify(ids));
+    } catch {
+      // Not kept: fine.
+    }
+    toast("info", t("rec.discordPosting"));
+    try {
+      const results = await api.postToDiscord(entry.path, ids, message);
+      const done = results.filter((result) => !result.error).map((result) => result.name);
+      if (done.length) toast("success", t("rec.discordPosted", { names: done.join(", ") }));
+      for (const result of results.filter((item) => item.error)) toast("error", result.name, errorText(result.error ?? "discord_failed"), 8000);
+    } catch (error) {
+      toast("error", t("rec.discordPost"), describe(error), 8000);
+    }
   };
 
   const renameCurrent = async () => {
@@ -1201,6 +1271,12 @@ export async function openRecordings(): Promise<void> {
     }
     if (action === "game-load" && selected) return void loadGame(selected, true);
     if (action === "rename") return void renameCurrent();
+    if (action === "clear-clip") {
+      range = null;
+      parts = [];
+      return updateTimeline();
+    }
+    if (action === "discord-post" && selected) return void postToDiscord(selected);
     if (action === "waves") {
       wavesShown = !wavesShown;
       try {
@@ -1303,6 +1379,37 @@ export async function openRecordings(): Promise<void> {
   // Track: click to seek; drag the clip handles.
   overlay.addEventListener("pointerdown", (event) => {
     const target = event.target as HTMLElement;
+    const grip = target.closest<HTMLElement>("[data-rec-wave-resize]");
+    if (grip && waves) {
+      // Drag a sound strip's bottom edge to make it taller or shorter.
+      event.preventDefault();
+      event.stopPropagation();
+      const row = grip.closest<HTMLElement>("[data-rec-wave]")!;
+      const label = waves.labels[Number(grip.dataset.recWaveResize)] || "mix";
+      const startY = event.clientY;
+      const startHeight = row.getBoundingClientRect().height;
+      grip.setPointerCapture(event.pointerId);
+      const onMove = (moveEvent: PointerEvent) => {
+        const height = Math.min(160, Math.max(14, Math.round(startHeight + moveEvent.clientY - startY)));
+        row.style.height = `${height}px`;
+        waveHeights = { ...waveHeights, [label]: height };
+        drawWaves();
+      };
+      const onUp = () => {
+        grip.removeEventListener("pointermove", onMove);
+        grip.removeEventListener("pointerup", onUp);
+        grip.removeEventListener("pointercancel", onUp);
+        try {
+          localStorage.setItem("recWaveHeights", JSON.stringify(waveHeights));
+        } catch {
+          // Not kept: fine.
+        }
+      };
+      grip.addEventListener("pointermove", onMove);
+      grip.addEventListener("pointerup", onUp);
+      grip.addEventListener("pointercancel", onUp);
+      return;
+    }
     const overview = target.closest<HTMLElement>("[data-rec-overview]");
     if (overview && video) {
       // The overview strip: move the zoomed view there.
@@ -1344,7 +1451,8 @@ export async function openRecordings(): Promise<void> {
     track.addEventListener("pointercancel", onUp);
   });
 
-  // Timeline wheel: Ctrl + wheel zooms around the cursor; the wheel alone moves along when zoomed in.
+  // Timeline wheel: the wheel zooms around the cursor; Shift + wheel (or sideways) moves along when zoomed in.
+  let wheelSum = 0;
   overlay.addEventListener(
     "wheel",
     (event) => {
@@ -1355,15 +1463,20 @@ export async function openRecordings(): Promise<void> {
       if (!track || !video) return;
       const box = track.getBoundingClientRect();
       const anchor = viewStart + Math.min(1, Math.max(0, (event.clientX - box.left) / box.width)) * viewLength();
-      if (event.ctrlKey) {
-        setZoom(event.deltaY < 0 ? zoom * 2 : zoom / 2, anchor);
-      } else if (zoom > 1) {
-        event.preventDefault();
-        const delta = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY;
+      event.preventDefault();
+      const sideways = event.shiftKey || Math.abs(event.deltaX) > Math.abs(event.deltaY);
+      if (sideways) {
+        if (zoom <= 1) return;
+        const delta = event.shiftKey ? event.deltaY || event.deltaX : event.deltaX;
         viewStart += Math.sign(delta) * viewLength() * 0.15;
         clampView();
-        updateTimeline();
+        return updateTimeline();
       }
+      // Mouse wheel notches zoom at once; touchpads add up small steps first.
+      wheelSum += event.deltaMode === 1 ? event.deltaY * 40 : event.deltaY;
+      if (Math.abs(wheelSum) < 60) return;
+      setZoom(wheelSum < 0 ? zoom * 2 : zoom / 2, anchor);
+      wheelSum = 0;
     },
     { passive: false },
   );
@@ -1402,6 +1515,11 @@ export async function openRecordings(): Promise<void> {
       if (mixerOpen) {
         mixerOpen = false;
         return renderMixer();
+      }
+      if (!viewer.hidden && (range || parts.length)) {
+        range = null;
+        parts = [];
+        return updateTimeline();
       }
       if (selecting && viewer.hidden) {
         selecting = false;

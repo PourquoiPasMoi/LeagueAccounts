@@ -10,6 +10,7 @@ pub mod autotype;
 pub mod builds;
 pub mod clipboard;
 pub mod credentials;
+pub mod discord;
 pub mod game_locale;
 pub mod game_settings;
 pub mod image_cache;

@@ -522,6 +522,12 @@ export const api = {
   /** End-of-game details saved with a game recording; read from the League client first when `fetch`. */
   recordingGame: (path: string, fetch: boolean) => call<import("./gameinfo").GameDetails | null>("recording_game", { path, fetch }),
   recordingWaves: (path: string) => call<Waves>("recording_waves", { path }),
+  /** Discord webhooks (named channels); `hint` is the end of the address. */
+  discordWebhooks: () => call<DiscordWebhook[]>("discord_webhooks"),
+  addDiscordWebhook: (name: string, url: string) => call<DiscordWebhook[]>("add_discord_webhook", { name, url }),
+  removeDiscordWebhook: (id: string) => call<DiscordWebhook[]>("remove_discord_webhook", { id }),
+  /** Post a clip with a message to the chosen webhooks; one result per channel. */
+  postToDiscord: (path: string, ids: string[], message: string) => call<{ name: string; error: string | null }[]>("post_to_discord", { path, ids, message }),
   /** Rename a recording; returns its new path. */
   renameRecording: (path: string, name: string) => call<string>("rename_recording", { path, name }),
   recordingSoundTracks: (path: string) => call<{ label: string; path: string }[]>("recording_sound_tracks", { path }),
@@ -806,6 +812,12 @@ export interface RecordingMeta {
   discord?: boolean;
   /** The name the player gave it. */
   title?: string;
+}
+
+export interface DiscordWebhook {
+  id: string;
+  name: string;
+  hint: string;
 }
 
 /** Sound levels drawn under the player: `rate` values a second, 0..255. */

@@ -702,6 +702,63 @@ pub async fn rename_recording(app: AppHandle, path: String, name: String) -> Com
     Ok(renamed)
 }
 
+// ---------------------------------------------------------------- Discord webhooks
+
+/// A webhook as the interface sees it: the address is shortened (it holds a token).
+#[derive(Serialize)]
+pub struct WebhookView {
+    id: String,
+    name: String,
+    hint: String,
+}
+
+fn webhook_views(list: Vec<leagueaccounts::discord::Webhook>) -> Vec<WebhookView> {
+    list.into_iter()
+        .map(|webhook| {
+            let tail: String = webhook.url.chars().rev().take(6).collect::<Vec<_>>().into_iter().rev().collect();
+            WebhookView { id: webhook.id, name: webhook.name, hint: format!("…{tail}") }
+        })
+        .collect()
+}
+
+#[tauri::command]
+pub async fn discord_webhooks() -> CommandResult<Vec<WebhookView>> {
+    Ok(webhook_views(leagueaccounts::discord::load()))
+}
+
+#[tauri::command]
+pub async fn add_discord_webhook(name: String, url: String) -> CommandResult<Vec<WebhookView>> {
+    leagueaccounts::discord::add(&name, &url).map(webhook_views).map_err(fail)
+}
+
+#[tauri::command]
+pub async fn remove_discord_webhook(id: String) -> CommandResult<Vec<WebhookView>> {
+    leagueaccounts::discord::remove(&id).map(webhook_views).map_err(fail)
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PostResult {
+    name: String,
+    error: Option<String>,
+}
+
+/// Post a recording (a clip) with a message to the chosen webhooks, one after the other.
+#[tauri::command]
+pub async fn post_to_discord(path: String, ids: Vec<String>, message: String) -> CommandResult<Vec<PostResult>> {
+    let root = prefs().root();
+    let file = library::resolve(&root, &path).ok_or_else(|| fail("recording_missing"))?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let hooks = leagueaccounts::discord::load();
+        ids.iter()
+            .filter_map(|id| hooks.iter().find(|hook| &hook.id == id))
+            .map(|hook| PostResult { name: hook.name.clone(), error: leagueaccounts::discord::post(&hook.url, &file, &message).err().map(str::to_owned) })
+            .collect()
+    })
+    .await
+    .map_err(|_| fail("operation_failed"))
+}
+
 // ---------------------------------------------------------------- larec scheme
 
 /// Largest piece sent per request; the player asks for the next one.
