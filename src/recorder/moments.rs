@@ -44,6 +44,38 @@ pub struct GameFacts {
 /// Readings kept for the offset (one per poll, about every 2 s).
 const SAMPLES: usize = 15;
 
+/// Game seconds between two snapshots of every player: every poll (about 2 s),
+/// so the moment Riot's CS (given in steps of 10) goes up is known closely.
+const SNAPSHOT_EVERY: f64 = 1.5;
+
+/// Every player's state over the game, for the player's Tab scoreboard:
+/// `players` once, then `snapshots` whose `p` rows follow that order.
+#[derive(Clone, Debug, Default, Serialize)]
+pub struct LiveLog {
+    pub players: Vec<LivePlayer>,
+    pub snapshots: Vec<LiveSnapshot>,
+}
+
+#[derive(Clone, Debug, Default, Serialize, PartialEq)]
+pub struct LivePlayer {
+    pub name: String,
+    pub tag: String,
+    pub champion: String,
+    /// ORDER (blue) or CHAOS (red).
+    pub team: String,
+    /// TOP, JUNGLE, MIDDLE, BOTTOM, UTILITY (empty in modes without roles).
+    pub position: String,
+}
+
+#[derive(Clone, Debug, Default, Serialize)]
+pub struct LiveSnapshot {
+    /// Game seconds.
+    pub t: f64,
+    /// Per player: level, kills, deaths, assists, CS, ward score ×10, dead (0/1),
+    /// respawn seconds ×10, then the items in slots 0..6 (0 = empty).
+    pub p: Vec<Vec<i64>>,
+}
+
 pub struct MomentTracker {
     video_start: Instant,
     /// Lower-case game names that mean "me".
@@ -57,6 +89,8 @@ pub struct MomentTracker {
     /// Recent video-minus-game-time readings (seconds).
     samples: Vec<f64>,
     pub facts: GameFacts,
+    pub live: LiveLog,
+    last_snapshot: f64,
 }
 
 /// "Name#TAG", "Name" → "name".
@@ -66,7 +100,18 @@ fn key(name: &str) -> String {
 
 impl MomentTracker {
     pub fn new(video_start: Instant) -> Self {
-        Self { video_start, me: Vec::new(), my_team: String::new(), players: HashMap::new(), next_event: 0, started: false, samples: Vec::new(), facts: GameFacts::default() }
+        Self {
+            video_start,
+            me: Vec::new(),
+            my_team: String::new(),
+            players: HashMap::new(),
+            next_event: 0,
+            started: false,
+            samples: Vec::new(),
+            facts: GameFacts::default(),
+            live: LiveLog::default(),
+            last_snapshot: f64::NEG_INFINITY,
+        }
     }
 
     fn is_me(&self, name: &str) -> bool {
@@ -91,6 +136,10 @@ impl MomentTracker {
         let Some(stats) = live_client("/liveclientdata/gamestats") else { return };
         let answered = self.video_start.elapsed().as_secs_f64();
         if let Some(game_time) = stats["gameTime"].as_f64().filter(|time| self.started && *time > 0.0) {
+            if game_time - self.last_snapshot >= SNAPSHOT_EVERY {
+                self.last_snapshot = game_time;
+                self.snapshot(game_time);
+            }
             // The answer reflects some moment between asking and answering; a slow
             // answer only makes the gap larger, so the smallest recent one is kept.
             self.samples.push((asked + answered) / 2.0 - game_time);
@@ -114,6 +163,51 @@ impl MomentTracker {
             self.next_event = id + 1;
             self.handle(event, offset);
         }
+    }
+
+    /// Everyone's items, scores, level and death timer right now (one local
+    /// request); kept only when something changed since the last one.
+    fn snapshot(&mut self, game_time: f64) {
+        let Some(list) = live_client("/liveclientdata/playerlist") else { return };
+        let mut rows: Vec<Vec<i64>> = vec![Vec::new(); self.live.players.len()];
+        for player in list.as_array().into_iter().flatten() {
+            let text = |key: &str| player[key].as_str().unwrap_or_default().to_owned();
+            let riot_id = text("riotId");
+            let name = Some(text("riotIdGameName")).filter(|name| !name.is_empty()).unwrap_or_else(|| riot_id.split('#').next().unwrap_or_default().to_owned());
+            let entry = LivePlayer { name, tag: text("riotIdTagLine"), champion: text("championName"), team: text("team"), position: text("position") };
+            let index = match self.live.players.iter().position(|known| known.name == entry.name && known.champion == entry.champion) {
+                Some(index) => index,
+                None => {
+                    self.live.players.push(entry);
+                    rows.push(Vec::new());
+                    self.live.players.len() - 1
+                }
+            };
+            let scores = &player["scores"];
+            let score = |key: &str| scores[key].as_f64().unwrap_or(0.0);
+            let mut row = vec![
+                player["level"].as_i64().unwrap_or(0),
+                score("kills") as i64,
+                score("deaths") as i64,
+                score("assists") as i64,
+                score("creepScore") as i64,
+                (score("wardScore") * 10.0).round() as i64,
+                i64::from(player["isDead"].as_bool().unwrap_or(false)),
+                (player["respawnTimer"].as_f64().unwrap_or(0.0) * 10.0).round() as i64,
+            ];
+            let mut items = [0i64; 7];
+            for item in player["items"].as_array().into_iter().flatten() {
+                if let Some(slot) = item["slot"].as_u64().map(|slot| slot as usize).filter(|slot| *slot < items.len()) {
+                    items[slot] = item["itemID"].as_i64().unwrap_or(0);
+                }
+            }
+            row.extend(items);
+            rows[index] = row;
+        }
+        if rows.iter().all(Vec::is_empty) || self.live.snapshots.last().is_some_and(|last| last.p == rows) {
+            return;
+        }
+        self.live.snapshots.push(LiveSnapshot { t: (game_time * 10.0).round() / 10.0, p: rows });
     }
 
     fn read_players(&mut self) {

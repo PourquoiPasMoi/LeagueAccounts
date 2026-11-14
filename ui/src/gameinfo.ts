@@ -14,11 +14,12 @@ type Json = Record<string, any>;
 export interface GameDetails {
   puuid: string;
   game: Json;
-  timeline: { frames: { t: number; gold: number[] }[]; events: Json[] } | null;
+  /** Per minute, in participant id order; `level` and `cs` only in details saved since the Tab scoreboard. */
+  timeline: { v?: number; frames: { t: number; gold: number[]; level?: number[]; cs?: number[] }[]; events: Json[] } | null;
 }
 
 const META = championMeta as Record<string, { n: string }>;
-const championName = (id: number) => META[String(id)]?.n ?? `#${id}`;
+export const championName = (id: number) => META[String(id)]?.n ?? `#${id}`;
 
 let assets: GameAssets | null = null;
 let assetsLoading: Promise<void> | null = null;
@@ -38,7 +39,7 @@ const TABS: [Tab, MessageKey][] = [
   ["runes", "gi.runes"],
 ];
 
-interface Player {
+export interface Player {
   id: number;
   team: number;
   champion: number;
@@ -143,14 +144,14 @@ const image = (path: string | undefined, label: string, size: number, className 
   path
     ? `<img class="${className}" src="${esc(gameImage(path))}" alt="" width="${size}" height="${size}" loading="lazy" draggable="false" data-tooltip="${esc(label)}"/>`
     : `<span class="gi-blank ${className}" style="width:${size}px;height:${size}px"></span>`;
-const itemImage = (id: number, size = 28) => (id ? image(assets?.items[id]?.icon, assets?.items[id]?.name ?? "", size) : `<span class="gi-blank" style="width:${size}px;height:${size}px"></span>`);
-const spellImage = (id: number, size = 18) => image(assets?.spells[id]?.icon, assets?.spells[id]?.name ?? "", size);
+export const itemImage = (id: number, size = 28) => (id ? image(assets?.items[id]?.icon, assets?.items[id]?.name ?? "", size) : `<span class="gi-blank" style="width:${size}px;height:${size}px"></span>`);
+export const spellImage = (id: number, size = 18) => image(assets?.spells[id]?.icon, assets?.spells[id]?.name ?? "", size);
 const perkImage = (id: number, size = 18, className = "") => image(assets?.perks[id]?.icon, assets?.perks[id]?.name ?? "", size, className);
 const styleImage = (id: number, size = 14) => image(assets?.styles[id]?.icon, assets?.styles[id]?.name ?? "", size);
 const champImage = (player: Player, size = 32) =>
   `<img class="gi-portrait" src="${esc(championIcon(player.champion))}" alt="" width="${size}" height="${size}" loading="lazy" draggable="false" data-tooltip="${esc(championName(player.champion))}"/>`;
 
-function players(details: GameDetails): Player[] {
+export function players(details: GameDetails): Player[] {
   const game = details.game;
   const identities = new Map<number, Json>((game.participantIdentities ?? []).map((identity: Json) => [identity.participantId, identity.player ?? {}]));
   const list: Player[] = (game.participants ?? [])
@@ -526,3 +527,4 @@ export function renderGameInfo(root: HTMLElement, details: GameDetails): void {
   // Names and icons arrive a moment later the first time.
   if (!assets) void loadGameAssets().then(() => assets && (root as HTMLElement & { giDetails?: GameDetails }).giDetails === details && renderGameInfo(root, details));
 }
+

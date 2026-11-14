@@ -11,6 +11,13 @@ use std::sync::LazyLock;
 use std::time::Duration;
 
 const ORIGIN: &str = "https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/";
+/// Pictures the client does not serve over its API, from CommunityDragon's copy
+/// of the game files: `x-ux/` = the game's own interface (in-game scoreboard
+/// and minimap icons), `x-mh/` = the client's match history screen.
+const EXTRA: [(&str, &str); 2] = [
+    ("x-ux/", "https://raw.communitydragon.org/latest/game/assets/ux/"),
+    ("x-mh/", "https://raw.communitydragon.org/latest/plugins/rcp-fe-lol-match-history/global/default/"),
+];
 /// Larger answers are refused: no picture the app shows is this big.
 const MAX_BYTES: u64 = 8 * 1024 * 1024;
 
@@ -66,9 +73,13 @@ pub fn load(path: &str) -> Option<(Vec<u8>, &'static str)> {
     }
     // The running League client has every picture of its patch locally (no
     // bandwidth); CommunityDragon otherwise (it sometimes times out, 522).
-    let bytes = match crate::riot_client::league_client().and_then(|client| client.game_asset(&client_path(&client, path), MAX_BYTES)) {
-        Some(bytes) => bytes,
-        None => download(path)?,
+    let extra = EXTRA.iter().find_map(|(prefix, origin)| path.strip_prefix(prefix).map(|rest| format!("{origin}{rest}")));
+    let bytes = match extra {
+        Some(url) => download(&url)?,
+        None => match crate::riot_client::league_client().and_then(|client| client.game_asset(&client_path(&client, path), MAX_BYTES)) {
+            Some(bytes) => bytes,
+            None => download(&format!("{ORIGIN}{path}"))?,
+        },
     };
     // A failed write only means the next view downloads it again.
     if let Ok(mut temporary) = tempfile::NamedTempFile::new_in(file.parent()?) {
@@ -81,9 +92,9 @@ pub fn load(path: &str) -> Option<(Vec<u8>, &'static str)> {
 }
 
 /// One picture from CommunityDragon, tried twice (it sometimes answers 522).
-fn download(path: &str) -> Option<Vec<u8>> {
+fn download(url: &str) -> Option<Vec<u8>> {
     for attempt in 0..2 {
-        let response = CLIENT.as_ref()?.get(format!("{ORIGIN}{path}")).send();
+        let response = CLIENT.as_ref()?.get(url).send();
         match response {
             Ok(response) if response.status().is_success() => {
                 let mut bytes = Vec::new();

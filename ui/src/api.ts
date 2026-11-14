@@ -522,6 +522,7 @@ export const api = {
   /** Each sound source of a recording as its own file (split the first time). */
   /** End-of-game details saved with a game recording; read from the League client first when `fetch`. */
   recordingGame: (path: string, fetch: boolean) => call<import("./gameinfo").GameDetails | null>("recording_game", { path, fetch }),
+  recordingLive: (path: string) => call<import("./broadcast").LiveLog | null>("recording_live", { path }),
   recordingWaves: (path: string) => call<Waves>("recording_waves", { path }),
   /** Discord webhooks (named channels); `hint` is the end of the address. */
   discordWebhooks: () => call<DiscordWebhook[]>("discord_webhooks"),

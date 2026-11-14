@@ -377,7 +377,7 @@ fn relabel_old_recordings(root: &std::path::Path) -> bool {
             let Ok(files) = std::fs::read_dir(&folder) else { continue };
             for file in files.flatten().map(|file| file.path()) {
                 let name = file.file_name().map(|name| name.to_string_lossy().into_owned()).unwrap_or_default();
-                if let Some(stem) = name.strip_suffix(".game.json") {
+                if let Some(stem) = name.strip_suffix(".game.json").or_else(|| name.strip_suffix(".live.json")) {
                     if !folder.join(format!("{stem}.mp4")).exists() {
                         let _ = std::fs::remove_file(&file);
                     }
@@ -692,7 +692,7 @@ pub async fn recording_game(path: String, fetch: bool) -> CommandResult<Option<V
     tauri::async_runtime::spawn_blocking(move || {
         let file = library::resolve(&root, &path).ok_or("recording_missing")?;
         if let Some(details) = leagueaccounts::recorder::gameinfo::load(&file) {
-            return Ok(Some(details));
+            return Ok(Some(leagueaccounts::recorder::gameinfo::upgrade(&file, details)));
         }
         if !fetch {
             return Ok(None);
@@ -703,6 +703,17 @@ pub async fn recording_game(path: String, fetch: bool) -> CommandResult<Option<V
     .await
     .map_err(|_| fail("operation_failed"))?
     .map_err(fail)
+}
+
+/// Every player's state sampled during the recording (None for games
+/// recorded before it was kept).
+#[tauri::command]
+pub async fn recording_live(path: String) -> CommandResult<Option<Value>> {
+    let root = prefs().root();
+    let file = library::resolve(&root, &path).ok_or_else(|| fail("recording_missing"))?;
+    tauri::async_runtime::spawn_blocking(move || leagueaccounts::recorder::gameinfo::load_live(&file))
+        .await
+        .map_err(|_| fail("operation_failed"))
 }
 
 /// Sound levels drawn under the player (worked out once, then read from disk).

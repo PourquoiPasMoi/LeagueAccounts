@@ -32,21 +32,30 @@ fn find_game(client: &LeagueApi, started_at: u64) -> Option<i64> {
         .map(|(id, _)| id)
 }
 
-/// Gold per player each minute and the kills, objectives and buildings with
-/// their time and place (a few kilobytes instead of the client's full timeline).
+/// Gold, level and CS per player each minute and the kills, objectives and
+/// buildings with their time and place (a few kilobytes instead of the
+/// client's full timeline). Arrays are in participant id order.
 fn compact_timeline(timeline: &Value) -> Value {
     let frames = timeline["frames"].as_array().cloned().unwrap_or_default();
     let gold: Vec<Value> = frames
         .iter()
         .map(|frame| {
-            let mut players: Vec<(i64, i64)> = frame["participantFrames"]
+            let mut players: Vec<(i64, i64, i64, i64)> = frame["participantFrames"]
                 .as_object()
                 .into_iter()
                 .flatten()
-                .map(|(_, player)| (player["participantId"].as_i64().unwrap_or(0), player["totalGold"].as_i64().unwrap_or(0)))
+                .map(|(_, player)| {
+                    let number = |key: &str| player[key].as_i64().unwrap_or(0);
+                    (number("participantId"), number("totalGold"), number("level"), number("minionsKilled") + number("jungleMinionsKilled"))
+                })
                 .collect();
             players.sort_unstable();
-            json!({ "t": frame["timestamp"], "gold": players.into_iter().map(|(_, gold)| gold).collect::<Vec<_>>() })
+            json!({
+                "t": frame["timestamp"],
+                "gold": players.iter().map(|player| player.1).collect::<Vec<_>>(),
+                "level": players.iter().map(|player| player.2).collect::<Vec<_>>(),
+                "cs": players.iter().map(|player| player.3).collect::<Vec<_>>(),
+            })
         })
         .collect();
     let events: Vec<Value> = frames
@@ -63,13 +72,17 @@ fn compact_timeline(timeline: &Value) -> Value {
                 "x": event["position"]["x"],
                 "y": event["position"]["y"],
                 "monster": event["monsterType"],
+                "sub": event["monsterSubType"],
                 "building": event["buildingType"],
                 "team": event["teamId"],
             })
         })
         .collect();
-    json!({ "frames": gold, "events": events })
+    json!({ "v": TIMELINE_VERSION, "frames": gold, "events": events })
 }
+
+/// 2: frames keep level and CS, monster kills keep their type (dragon element).
+const TIMELINE_VERSION: i64 = 2;
 
 /// "Win" or "Loss" for the recorded player, from saved details (None for a
 /// remade game or when the player is not found).
@@ -82,6 +95,39 @@ pub fn result(details: &Value) -> Option<&'static str> {
     let id = game["participantIdentities"].as_array()?.iter().find(|identity| identity["player"]["puuid"].as_str() == Some(puuid))?["participantId"].as_i64()?;
     let player = game["participants"].as_array()?.iter().find(|player| player["participantId"].as_i64() == Some(id))?;
     Some(if player["stats"]["win"].as_bool()? { "Win" } else { "Loss" })
+}
+
+/// Details saved by an older version (no levels and CS per minute, no dragon
+/// types): read the timeline again by its game id while the client still has
+/// it (any signed-in account).
+/// Returns the details as they are when that is not possible.
+pub fn upgrade(video: &Path, mut details: Value) -> Value {
+    let has_frames = details["timeline"]["frames"].as_array().is_some_and(|frames| !frames.is_empty());
+    if !has_frames || details["timeline"]["v"].as_i64().unwrap_or(1) >= TIMELINE_VERSION {
+        return details;
+    }
+    let Some(id) = details["game"]["gameId"].as_i64() else { return details };
+    let Some(client) = league_client() else { return details };
+    let Some(timeline) = client.get_json(&format!("/lol-match-history/v1/game-timelines/{id}")) else { return details };
+    let compact = compact_timeline(&timeline);
+    if compact["frames"].as_array().is_none_or(Vec::is_empty) {
+        return details;
+    }
+    details["timeline"] = compact;
+    if video.is_file() {
+        let _ = std::fs::write(path(video), details.to_string());
+    }
+    details
+}
+
+/// `<folder>/<name>.live.json`: every player's items, scores and level
+/// sampled from the Live Client while the game was recorded.
+pub fn live_path(video: &Path) -> PathBuf {
+    video.with_extension("live.json")
+}
+
+pub fn load_live(video: &Path) -> Option<Value> {
+    serde_json::from_slice(&std::fs::read(live_path(video)).ok()?).ok()
 }
 
 /// Read the game from the client and save it. Error codes: `game_client_needed`
