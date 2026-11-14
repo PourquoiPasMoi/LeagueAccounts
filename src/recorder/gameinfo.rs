@@ -71,6 +71,19 @@ fn compact_timeline(timeline: &Value) -> Value {
     json!({ "frames": gold, "events": events })
 }
 
+/// "Win" or "Loss" for the recorded player, from saved details (None for a
+/// remade game or when the player is not found).
+pub fn result(details: &Value) -> Option<&'static str> {
+    let game = &details["game"];
+    if game["endOfGameResult"].as_str().is_some_and(|end| end.contains("Abort")) {
+        return None;
+    }
+    let puuid = details["puuid"].as_str().filter(|puuid| !puuid.is_empty())?;
+    let id = game["participantIdentities"].as_array()?.iter().find(|identity| identity["player"]["puuid"].as_str() == Some(puuid))?["participantId"].as_i64()?;
+    let player = game["participants"].as_array()?.iter().find(|player| player["participantId"].as_i64() == Some(id))?;
+    Some(if player["stats"]["win"].as_bool()? { "Win" } else { "Loss" })
+}
+
 /// Read the game from the client and save it. Error codes: `game_client_needed`
 /// (no client), `game_other_account` (another account is signed in),
 /// `game_not_found` (not in the account's recent games, or not there yet).
