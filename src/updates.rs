@@ -19,8 +19,10 @@ use std::time::Duration;
 /// `owner/name` of the repository whose releases are checked.
 /// Our fork: updates come only from its releases, never from upstream.
 pub const REPOSITORY: &str = "PourquoiPasMoi/LeagueAccounts";
-/// The release asset that replaces the running executable.
-const EXECUTABLE_ASSET: &str = "LeagueAccounts.exe";
+/// The release assets that replace the running executable, preferred first.
+/// Releases carry both names (same file) so versions before the rename, which
+/// look for `LeagueAccounts.exe`, keep updating.
+const EXECUTABLE_ASSETS: [&str; 2] = ["LeagueCompanion.exe", "LeagueAccounts.exe"];
 const MAX_EXECUTABLE_BYTES: u64 = 256 * 1024 * 1024;
 
 #[derive(Clone, Debug, Serialize, PartialEq, Eq)]
@@ -176,9 +178,11 @@ fn parse_release(json: &serde_json::Value) -> Option<Release> {
 }
 
 fn executable_download(json: &serde_json::Value) -> Option<Download> {
-    let executable = json["assets"].as_array()?.iter().find(|asset| {
-        asset["name"].as_str() == Some(EXECUTABLE_ASSET)
-            && asset["state"].as_str().is_none_or(|state| state == "uploaded")
+    let assets = json["assets"].as_array()?;
+    let executable = EXECUTABLE_ASSETS.iter().find_map(|wanted| {
+        assets.iter().find(|asset| {
+            asset["name"].as_str() == Some(*wanted) && asset["state"].as_str().is_none_or(|state| state == "uploaded")
+        })
     })?;
     let url = executable["browser_download_url"].as_str().filter(|url| is_asset_url(url))?;
     let size = executable["size"]

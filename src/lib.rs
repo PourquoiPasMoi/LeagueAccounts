@@ -11,6 +11,7 @@ pub mod builds;
 pub mod clipboard;
 pub mod credentials;
 pub mod discord;
+pub mod exe_name;
 pub mod game_locale;
 pub mod game_settings;
 pub mod image_cache;
