@@ -16,7 +16,7 @@ import { openGameSettings } from "./gamesettings";
 import "./recordings.css";
 import "./gameinfo.css";
 import { openRecordings } from "./recordings";
-import type { RecorderPrefs, RecorderStatus } from "./api";
+import type { DiscordWebhook, RecorderPrefs, RecorderStatus } from "./api";
 import { experimentalOn, initBuilds, openCurrentBuild, resumeChampSelect, setExperimental, trackGames } from "./builds";
 import type { SessionStatus, SkinOwner } from "./api";
 import { LANGUAGES, applyStatic, asLang, en, errorText, fromBrowser, lang, localeTag, localizeRank, needsLanguageChoice, setLang, t, tierName, useLang, type Lang, type MessageKey } from "./i18n";
@@ -884,6 +884,9 @@ function renderSchedule(): void {
 /** Interface size presets in percent; the backend zooms the window and resizes it with them. */
 const UI_SCALES = [80, 90, 100, 110, 125, 150, 175, 200];
 
+/** An error from the backend as text. */
+const describeError = (error: unknown): string => (error instanceof ApiError ? errorText(error.code, error.detail) : String(error));
+
 /** The Settings tab shown last, opened again next time. */
 let settingsTab = "general";
 /** Settings dialog: whether the form differs from how it opened, and re-taking that state. */
@@ -951,6 +954,7 @@ async function openSettings(): Promise<void> {
           <button type="button" role="tab" data-settings-tab="tools" aria-selected="${settingsTab === "tools"}">${esc(t("settings.tools"))}</button>
           <span class="settings-nav-group">${esc(t("settings.groupFeatures"))}</span>
           <button type="button" role="tab" data-settings-tab="recorder" aria-selected="${settingsTab === "recorder"}">${esc(t("settings.recorder"))}</button>
+          <button type="button" role="tab" data-settings-tab="discord" aria-selected="${settingsTab === "discord"}">${esc(t("settings.discord"))}</button>
           <button type="button" role="tab" data-settings-tab="experimental" aria-selected="${settingsTab === "experimental"}">${esc(t("settings.experimental"))}</button>
         </nav>
         <div class="settings-pages">
@@ -1045,6 +1049,16 @@ async function openSettings(): Promise<void> {
           </div>
         </div>
         </section>
+        <section class="settings-page" data-settings-page="discord" ${settingsTab === "discord" ? "" : "hidden"} data-settings-ignore>
+          <h3 class="settings-page-title">${esc(t("settings.discord"))}</h3>
+          <p class="settings-note">${esc(t("settings.discordHint"))}</p>
+          <div class="discord-hooks" data-discord-list></div>
+          <div class="discord-add">
+            <label class="field"><span>${esc(t("settings.discordName"))}</span><input name="discordName" maxlength="60" autocomplete="off" spellcheck="false"/></label>
+            <label class="field"><span>${esc(t("settings.discordUrl"))}</span><input name="discordUrl" autocomplete="off" spellcheck="false" placeholder="https://discord.com/api/webhooks/…"/></label>
+            <button type="button" class="btn btn-ghost" data-discord-add>${icon("plus", 13)}<span>${esc(t("settings.discordAdd"))}</span></button>
+          </div>
+        </section>
         <section class="settings-page" data-settings-page="experimental" ${settingsTab === "experimental" ? "" : "hidden"}>
           <h3 class="settings-page-title">${esc(t("settings.experimental"))}</h3>
         ${toggle("companion", experimentalOn(), t("settings.companion"), t("settings.companionHint"))}
@@ -1074,7 +1088,7 @@ async function openSettings(): Promise<void> {
       // Unsaved changes: the form compared with how it opened. Save only when something changed.
       const snapshot = () =>
         JSON.stringify([
-          [...root.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>(".modal-body input, .modal-body select, .modal-body textarea")].map((field) =>
+          [...root.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>(".modal-body input, .modal-body select, .modal-body textarea")].filter((field) => !field.closest("[data-settings-ignore]")).map((field) =>
             field instanceof HTMLInputElement && (field.type === "checkbox" || field.type === "radio") ? `${field.name}=${field.value}:${field.checked}` : `${field.name}=${field.value}`,
           ),
           [...root.querySelectorAll<HTMLElement>("[data-rec-group] [aria-pressed='true']")].map((button) => button.dataset.recOption),
@@ -1093,6 +1107,34 @@ async function openSettings(): Promise<void> {
       };
       for (const name of ["input", "change", "click"]) root.addEventListener(name, () => requestAnimationFrame(refresh));
       refresh();
+      // Discord webhooks: saved at once (not by the Save button).
+      const hookList = $("[data-discord-list]", root);
+      const showHooks = (hooks: DiscordWebhook[]) => {
+        hookList.innerHTML = hooks.length
+          ? hooks
+              .map((hook) => `<div class="discord-hook"><strong>${esc(hook.name)}</strong><span>${esc(hook.hint)}</span><button type="button" class="btn btn-ghost" data-discord-remove="${esc(hook.id)}">${esc(t("settings.discordRemove"))}</button></div>`)
+              .join("")
+          : `<p class="hint">${esc(t("settings.discordNone"))}</p>`;
+      };
+      void api.discordWebhooks().then(showHooks).catch(() => showHooks([]));
+      root.addEventListener("click", (event) => {
+        const target = event.target as HTMLElement;
+        const removeId = target.closest<HTMLElement>("[data-discord-remove]")?.dataset.discordRemove;
+        if (removeId) void api.removeDiscordWebhook(removeId).then(showHooks).catch((error) => toast("error", t("toast.settingsFailed"), describeError(error)));
+        if (target.closest("[data-discord-add]")) {
+          const name = $<HTMLInputElement>('[name="discordName"]', root);
+          const url = $<HTMLInputElement>('[name="discordUrl"]', root);
+          void api
+            .addDiscordWebhook(name.value, url.value)
+            .then((hooks) => {
+              showHooks(hooks);
+              name.value = "";
+              url.value = "";
+              toast("success", t("settings.discordAdded"));
+            })
+            .catch((error) => toast("error", t("settings.discordAdd"), describeError(error)));
+        }
+      });
       // Microphones: Windows' list, the default named; Test listens for 2 s.
       const micSelect = $<HTMLSelectElement>('[name="recMicDevice"]', root);
       void api

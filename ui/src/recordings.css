@@ -385,3 +385,24 @@
 .rec-waves-toggle[aria-pressed="true"] { color: #c8aa6e; }
 .rec-rename { flex: none; align-self: center; width: 26px; height: 26px; color: #7d786c; }
 .rec-rename:hover { color: #f0e6d2; }
+
+/* Sound strips: drag the bottom edge to resize each one. */
+.rec-wave-resize { position: absolute; left: 0; right: 0; bottom: -3px; height: 7px; cursor: ns-resize; z-index: 1; }
+.rec-wave-resize:hover, .rec-wave-resize:active { background: linear-gradient(180deg, transparent 2px, #c8aa6e 2px, #c8aa6e 4px, transparent 4px); }
+.rec-clear-clip { display: inline-flex; align-items: center; gap: 6px; }
+.rec-clear-clip[hidden] { display: none; }
+/* Post to Discord dialog. */
+.rec-discord-hooks { display: flex; flex-direction: column; gap: 2px; margin-top: 10px; }
+.rec-discord-hooks > span { font-size: 12px; color: #a09b8c; margin-bottom: 2px; }
+.rec-discord-hooks .gi-check { padding-left: 0; }
+.rec-discord-warn { color: #e06d62; }
+.rec-discord-error { color: #e06d62; }
+
+/* Settings › Discord */
+.discord-hooks { display: flex; flex-direction: column; gap: 6px; margin: 12px 0 16px; }
+.discord-hook { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 12px; padding: 8px 12px; border: 1px solid #1e282d; background: #0a1015; }
+.discord-hook strong { font-weight: 600; color: #f0e6d2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.discord-hook span { font-size: 12px; color: #7d786c; font-family: Consolas, monospace; }
+.discord-hook .btn { height: 28px; padding: 0 10px; font-size: 11px; }
+.discord-add { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) auto; align-items: end; gap: 10px; }
+.discord-add .btn { height: 36px; display: inline-flex; align-items: center; gap: 6px; }
