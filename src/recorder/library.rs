@@ -52,6 +52,8 @@ pub struct RecordingMeta {
     pub clip_start: f64,
     /// Clips: made small enough for Discord.
     pub discord: bool,
+    /// The name the player gave it (shown instead of champion and mode).
+    pub title: String,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -221,17 +223,25 @@ pub fn track_file(video: &Path, source: &str) -> PathBuf {
 /// game details and sound track files. Returns the new path.
 pub fn rename(path: &Path, stem: &str) -> std::io::Result<PathBuf> {
     let directory = path.parent().unwrap_or(Path::new("."));
-    let target = unique_file(directory, &safe_name(stem));
-    if target == path {
-        return Ok(target);
+    let wanted = safe_name(stem);
+    if path.file_stem().is_some_and(|current| current.to_string_lossy() == wanted) {
+        return Ok(path.to_path_buf());
     }
+    let target = unique_file(directory, &wanted);
     std::fs::rename(path, &target)?;
     let _ = std::fs::rename(meta_path(path), meta_path(&target));
     let _ = std::fs::rename(path.with_extension("game.json"), target.with_extension("game.json"));
     for source in SOURCES {
         let _ = std::fs::rename(track_file(path, source), track_file(&target, source));
     }
+    let _ = std::fs::rename(waves_file(path), waves_file(&target));
     Ok(target)
+}
+
+/// `<folder>/.tracks/<name>.waves.json`: the sound levels drawn under the player.
+pub fn waves_file(video: &Path) -> PathBuf {
+    let stem = video.file_stem().map(|stem| stem.to_string_lossy().into_owned()).unwrap_or_default();
+    video.parent().unwrap_or(Path::new(".")).join(TRACKS).join(format!("{stem}.waves.json"))
 }
 
 /// Delete a recording, its moments file and its sound track files.
@@ -239,6 +249,7 @@ pub fn delete(path: &Path) -> std::io::Result<()> {
     std::fs::remove_file(path)?;
     let _ = std::fs::remove_file(meta_path(path));
     let _ = std::fs::remove_file(path.with_extension("game.json"));
+    let _ = std::fs::remove_file(waves_file(path));
     for source in SOURCES {
         let _ = std::fs::remove_file(track_file(path, source));
     }

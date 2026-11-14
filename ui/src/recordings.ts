@@ -1,7 +1,7 @@
 // Recordings page: full games and clips per account, a player whose timeline
 // shows the key moments (click one to jump there), and a start/end range that
 // is saved as a clip in the account's Clips folder.
-import { ApiError, api, events, gameImage, type Moment, type RecorderStatus, type Recording, type RecordingsView } from "./api";
+import { ApiError, api, events, gameImage, type Waves, type Moment, type RecorderStatus, type Recording, type RecordingsView } from "./api";
 import { errorText, localeTag, t, type MessageKey } from "./i18n";
 import { $, esc, fragment, leave, modal, toast } from "./dom";
 import { icon } from "./icons";
@@ -144,6 +144,8 @@ function momentTooltip(moment: Moment): string {
 
 function title(entry: Recording): string {
   const meta = entry.meta;
+  // A name the player gave it comes first.
+  if (meta?.title) return meta.title;
   // Clips are named by the player: show that name.
   if (entry.kind === "clip" || !meta || !meta.champion) return entry.name;
   return [meta.champion, meta.queue].filter(Boolean).join(" · ");
@@ -196,6 +198,17 @@ export async function openRecordings(): Promise<void> {
   let tracks: { label: string; element: HTMLAudioElement; source: MediaElementAudioSourceNode; gain: GainNode }[] = [];
   let trackState: "none" | "loading" | "ready" | "failed" = "none";
   let mixerOpen = false;
+  /** Sound waves under the timeline (shown unless hidden by the player). */
+  let waves: Waves | null = null;
+  let wavesState: "none" | "loading" | "ready" | "error" = "none";
+  let wavesError = "";
+  let wavesShown = (() => {
+    try {
+      return localStorage.getItem("recWaves") !== "hidden";
+    } catch {
+      return true;
+    }
+  })();
 
   const overlay = fragment(`
     <div class="overlay rec-overlay">
@@ -308,7 +321,7 @@ export async function openRecordings(): Promise<void> {
       <div class="rec-row is-${entry.kind}${outcome}${selected?.path === entry.path ? " is-selected" : ""}${picked.has(entry.path) ? " is-picked" : ""}" role="button" tabindex="0" data-rec-path="${esc(entry.path)}"${selecting ? ` aria-pressed="${picked.has(entry.path)}"` : ""}>
         ${banner(entry)}
         ${selecting ? `<span class="rec-pick" aria-hidden="true"></span>` : ""}
-        <div class="rec-row-main"><strong>${esc(entry.kind === "game" && meta?.champion ? meta.champion : title(entry))}</strong>${score ? `<span class="rec-kda">${esc(score)}</span>` : ""}${result}${live}</div>
+        <div class="rec-row-main"><strong>${esc(meta?.title || (entry.kind === "game" && meta?.champion ? meta.champion : title(entry)))}</strong>${score ? `<span class="rec-kda">${esc(score)}</span>` : ""}${result}${live}</div>
         <div class="rec-row-tags">${tag}</div>
         <div class="rec-row-sub">${esc(details)}</div>
         ${selecting ? "" : `<button class="rec-row-delete" data-rec="delete" data-tooltip="${esc(t("menu.delete"))}" aria-label="${esc(t("menu.delete"))}">${icon("trash", 13)}</button>`}
@@ -437,7 +450,7 @@ export async function openRecordings(): Promise<void> {
     viewerHead.innerHTML = `
       <button class="btn btn-ghost rec-back" data-rec="back">${icon("arrow-left", 14)}<span>${esc(t("rec.title"))}</span></button>
       <div class="rec-viewer-title">
-        <h2>${esc(title(entry))}</h2>${result}${score ? `<span class="rec-kda">${esc(score)}</span>` : ""}
+        <h2>${esc(title(entry))}</h2><button class="icon-btn rec-rename" data-rec="rename" data-tooltip="${esc(t("rec.rename"))}" aria-label="${esc(t("rec.rename"))}">${icon("pencil", 14)}</button>${result}${score ? `<span class="rec-kda">${esc(score)}</span>` : ""}
         <span class="rec-viewer-sub">${esc([date, meta?.duration ? clock(meta.duration) : "", accountLabel(entry.account), bytes(entry.size)].filter(Boolean).join(" · "))}</span>
       </div>
       ${entry.kind === "game" ? `<button class="btn btn-ghost" data-rec="game-info" aria-pressed="${gameShown()}">${icon("chart-line", 14)}<span>${esc(t("gi.title"))}</span></button>` : ""}
@@ -464,11 +477,13 @@ export async function openRecordings(): Promise<void> {
           <div class="rec-head-line"></div>
         </div>
         <div class="rec-overview" data-rec-overview hidden><div class="rec-overview-window"></div><div class="rec-overview-head"></div></div>
+        <div class="rec-waves" data-rec-waves hidden></div>
       </div>
       <div class="rec-controls">
         <button class="icon-btn rec-play" data-rec="play" aria-label="${esc(t("rec.play"))}"><span class="rec-play-glyph"></span></button>
         <span class="rec-time"><b data-rec-now>0:00</b> / <span data-rec-total>${clock(meta?.duration ?? 0)}</span></span>
         <span class="rec-spacer"></span>
+        <button class="icon-btn rec-waves-toggle" data-rec="waves" aria-pressed="${wavesShown}" data-tooltip="${esc(t("rec.waves"))}" aria-label="${esc(t("rec.waves"))}">${icon("chart-line", 15)}</button>
         <div class="rec-zoom" data-tooltip="${esc(t("rec.zoomHint"))}">
           <button class="icon-btn" data-rec="zoom-out" aria-label="${esc(t("rec.zoomOut"))}">${icon("minus", 13)}</button>
           <span data-rec-zoom>×1</span>
@@ -510,6 +525,9 @@ export async function openRecordings(): Promise<void> {
     video.addEventListener("waiting", () => tracks.forEach(({ element }) => element.pause()));
     connectVideo(video);
     void loadTracks(entry);
+    waves = null;
+    wavesState = "none";
+    if (wavesShown) void loadWaves(entry);
     void loadGame(entry, true);
     renderMoments();
     updatePlayState();
@@ -804,6 +822,118 @@ export async function openRecordings(): Promise<void> {
     $<HTMLButtonElement>('[data-rec="add-part"]', player).disabled = !range || range.end - range.start < 1;
     save.disabled = saving || clipParts().length === 0;
     save.classList.toggle("is-busy", saving);
+    drawWaves();
+  };
+
+  // ------------------------------------------------------------ sound waves
+
+  const WAVE_COLORS: Record<string, string> = { game: "#c8aa6e", mic: "#0ac8b9", discord: "#7983f5", pc: "#c8aa6e", "": "#c8aa6e" };
+  const waveLabel = (label: string) => (label ? t(`rec.audio.${label}` as MessageKey) : t("rec.sound"));
+
+  const renderWaves = () => {
+    const box = player.querySelector<HTMLElement>("[data-rec-waves]");
+    if (!box) return;
+    box.hidden = !wavesShown || wavesState === "none";
+    if (box.hidden) return;
+    if (wavesState !== "ready" || !waves) {
+      box.innerHTML = `<p class="rec-waves-note">${esc(wavesState === "loading" ? t("rec.wavesLoading") : errorText(wavesError))}</p>`;
+      return;
+    }
+    box.innerHTML = waves.labels
+      .map((label, index) => `<div class="rec-wave-row" data-rec-wave="${index}"><canvas></canvas><span>${esc(waveLabel(label))}</span></div>`)
+      .join("");
+    drawWaves();
+  };
+
+  /** Each sound as a bar per pixel for the visible part of the timeline. */
+  const drawWaves = () => {
+    if (!waves || !wavesShown || !video) return;
+    const start = viewStart;
+    const length = viewLength();
+    const now = video.currentTime;
+    player.querySelectorAll<HTMLElement>("[data-rec-wave]").forEach((row) => {
+      const index = Number(row.dataset.recWave);
+      const levels = waves!.levels[index] ?? [];
+      const canvas = row.querySelector("canvas")!;
+      const ratio = window.devicePixelRatio || 1;
+      const width = Math.max(1, Math.round(row.clientWidth * ratio));
+      const height = Math.max(1, Math.round(row.clientHeight * ratio));
+      if (canvas.width !== width || canvas.height !== height) {
+        canvas.width = width;
+        canvas.height = height;
+      }
+      const context = canvas.getContext("2d");
+      if (!context) return;
+      context.clearRect(0, 0, width, height);
+      const color = WAVE_COLORS[waves!.labels[index]] ?? "#c8aa6e";
+      const perPixel = (length * waves!.rate) / width;
+      const middle = height / 2;
+      for (let x = 0; x < width; x++) {
+        const from = Math.floor((start + (x / width) * length) * waves!.rate);
+        const to = Math.max(from + 1, Math.floor(from + perPixel));
+        let peak = 0;
+        for (let bucket = from; bucket < to && bucket < levels.length; bucket++) peak = Math.max(peak, levels[bucket]);
+        if (!peak) continue;
+        const bar = Math.max(1, (peak / 255) * (height - 2));
+        const time = start + (x / width) * length;
+        context.fillStyle = color;
+        context.globalAlpha = time <= now ? 0.95 : 0.5;
+        context.fillRect(x, middle - bar / 2, 1, bar);
+      }
+      context.globalAlpha = 1;
+      const head = ((now - start) / length) * width;
+      if (head >= 0 && head <= width) {
+        context.fillStyle = "#f0e6d2";
+        context.fillRect(Math.round(head), 0, Math.max(1, Math.round(ratio)), height);
+      }
+    });
+  };
+
+  const loadWaves = async (entry: Recording) => {
+    if (isRecording(entry) || !entry.meta?.audio) return;
+    wavesState = "loading";
+    renderWaves();
+    try {
+      const result = await api.recordingWaves(entry.path);
+      if (selected !== entry) return;
+      waves = result;
+      wavesState = "ready";
+    } catch (error) {
+      if (selected !== entry) return;
+      wavesState = "error";
+      wavesError = error instanceof ApiError ? error.code : "unknown";
+    }
+    renderWaves();
+  };
+
+  const renameCurrent = async () => {
+    const entry = selected;
+    if (!entry) return;
+    let name = "";
+    const answer = await modal({
+      title: t("rec.renameTitle"),
+      body: `<label class="field"><span>${esc(t("rec.renameLabel"))}</span>
+        <input name="recName" maxlength="120" autocomplete="off" spellcheck="false" value="${esc(title(entry))}"/></label>`,
+      actions: [{ label: t("common.cancel"), value: "cancel" }, { label: t("rec.rename"), value: "save", kind: "primary" }],
+      onOpen: (root) => $<HTMLInputElement>('[name="recName"]', root).select(),
+      onSubmit: (value, root) => {
+        name = $<HTMLInputElement>('[name="recName"]', root).value.trim();
+        return value !== "save" || name.length > 0;
+      },
+    });
+    if (answer !== "save" || !name || selected !== entry) return;
+    const time = video?.currentTime ?? 0;
+    try {
+      const path = await api.renameRecording(entry.path, name);
+      view = await api.recordings();
+      selected = view.entries.find((item) => item.path === path) ?? null;
+      renderList();
+      renderPlayer();
+      video?.addEventListener("loadedmetadata", () => seek(time), { once: true });
+      toast("success", t("rec.renamed"), name);
+    } catch (error) {
+      toast("error", t("rec.renameFailed"), describe(error));
+    }
   };
 
   /** Merge a part into the list (time order, overlaps joined). */
@@ -1070,6 +1200,19 @@ export async function openRecordings(): Promise<void> {
       return renderGame();
     }
     if (action === "game-load" && selected) return void loadGame(selected, true);
+    if (action === "rename") return void renameCurrent();
+    if (action === "waves") {
+      wavesShown = !wavesShown;
+      try {
+        localStorage.setItem("recWaves", wavesShown ? "shown" : "hidden");
+      } catch {
+        // Not kept: fine.
+      }
+      target.closest<HTMLElement>("[data-rec]")?.setAttribute("aria-pressed", String(wavesShown));
+      if (wavesShown && wavesState === "none" && selected) void loadWaves(selected);
+      renderWaves();
+      return updateTimeline();
+    }
     if (action === "mixer") {
       mixerOpen = !mixerOpen;
       return renderMixer();
@@ -1168,7 +1311,7 @@ export async function openRecordings(): Promise<void> {
       clampView();
       return updateTimeline();
     }
-    const track = target.closest<HTMLElement>("[data-rec-track]");
+    const track = target.closest<HTMLElement>("[data-rec-track]") ?? target.closest<HTMLElement>("[data-rec-waves]");
     if (!track || !video || target.closest(".rec-marker")) return;
     const handle = target.closest<HTMLElement>("[data-rec-handle]")?.dataset.recHandle as "start" | "end" | undefined;
     const timeAt = (x: number) => {

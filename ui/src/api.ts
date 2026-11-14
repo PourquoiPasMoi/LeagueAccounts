@@ -521,6 +521,9 @@ export const api = {
   /** Each sound source of a recording as its own file (split the first time). */
   /** End-of-game details saved with a game recording; read from the League client first when `fetch`. */
   recordingGame: (path: string, fetch: boolean) => call<import("./gameinfo").GameDetails | null>("recording_game", { path, fetch }),
+  recordingWaves: (path: string) => call<Waves>("recording_waves", { path }),
+  /** Rename a recording; returns its new path. */
+  renameRecording: (path: string, name: string) => call<string>("rename_recording", { path, name }),
   recordingSoundTracks: (path: string) => call<{ label: string; path: string }[]>("recording_sound_tracks", { path }),
   /** Puts the chosen parts of the build into the League client. */
   applyBuild: (request: ApplyRequest) => call<ApplyResult>("apply_build", { request }),
@@ -801,6 +804,16 @@ export interface RecordingMeta {
   clipStart: number;
   /** Clips made small enough for Discord. */
   discord?: boolean;
+  /** The name the player gave it. */
+  title?: string;
+}
+
+/** Sound levels drawn under the player: `rate` values a second, 0..255. */
+export interface Waves {
+  rate: number;
+  /** "game", "mic", "discord", "pc", or "" for a mixed track. */
+  labels: string[];
+  levels: number[][];
 }
 
 export interface Recording {
