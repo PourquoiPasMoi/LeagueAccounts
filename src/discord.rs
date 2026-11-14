@@ -18,14 +18,30 @@ fn file() -> Option<PathBuf> {
     app_data_dir().ok().map(|directory| directory.join("discord.json"))
 }
 
+/// The file is encrypted for this Windows user (`protect`). A plain file
+/// from an older version is read once and sealed at once.
 pub fn load() -> Vec<Webhook> {
-    file().and_then(|path| std::fs::read(path).ok()).and_then(|bytes| serde_json::from_slice(&bytes).ok()).unwrap_or_default()
+    let Some(bytes) = file().and_then(|path| std::fs::read(path).ok()) else {
+        return Vec::new();
+    };
+    match crate::protect::open(&bytes) {
+        crate::protect::Opened::Sealed(plain) => serde_json::from_slice(&plain).unwrap_or_default(),
+        crate::protect::Opened::Plain => {
+            let list: Vec<Webhook> = serde_json::from_slice(&bytes).unwrap_or_default();
+            if !list.is_empty() {
+                let _ = save(&list);
+            }
+            list
+        }
+        crate::protect::Opened::Locked(_) => Vec::new(),
+    }
 }
 
 fn save(list: &[Webhook]) -> Result<(), &'static str> {
     let path = file().ok_or("file_write")?;
-    let body = serde_json::to_vec_pretty(list).map_err(|_| "file_write")?;
-    std::fs::write(path, body).map_err(|_| "file_write")
+    let body = serde_json::to_vec(list).map_err(|_| "file_write")?;
+    let sealed = crate::protect::seal(&body).map_err(|_| "file_write")?;
+    std::fs::write(path, sealed).map_err(|_| "file_write")
 }
 
 /// Only Discord's own webhook addresses.
