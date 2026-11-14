@@ -6,7 +6,8 @@ import { errorText, localeTag, t, type MessageKey } from "./i18n";
 import { $, esc, fragment, leave, modal, toast } from "./dom";
 import { icon } from "./icons";
 import { momentIcon } from "./momenticons";
-import { renderGameInfo, type GameDetails } from "./gameinfo";
+import { loadGameAssets, renderGameInfo, type GameDetails } from "./gameinfo";
+import { broadcastHud, type Hud, type LiveLog } from "./broadcast";
 import championIds from "./data/champion-ids.json";
 
 const UNKNOWN = "Unknown";
@@ -203,6 +204,18 @@ export async function openRecordings(): Promise<void> {
   /** Sound waves under the timeline (shown unless hidden by the player). */
   let waves: Waves | null = null;
   let wavesState: "none" | "loading" | "ready" | "error" = "none";
+  // Tab scoreboard over the video: every player's state at the moment shown.
+  let liveLog: LiveLog | null = null;
+  let tabShown = false;
+  let hudShown: Hud = { banner: "", timers: "", panel: "" };
+  // The overlay kept on while watching (the HUD button), else only while Tab is held.
+  let hudPinned = (() => {
+    try {
+      return localStorage.getItem("recHud") === "on";
+    } catch {
+      return false;
+    }
+  })();
   let wavesError = "";
   let wavesShown = (() => {
     try {
@@ -426,6 +439,8 @@ export async function openRecordings(): Promise<void> {
   };
 
   const closeViewer = () => {
+    tabShown = false;
+    liveLog = null;
     stopSound();
     mixerOpen = false;
     video?.pause();
@@ -515,6 +530,7 @@ export async function openRecordings(): Promise<void> {
           <button class="icon-btn" data-rec="mixer" aria-label="${esc(t("rec.volume"))}" data-tooltip="${esc(t("rec.volume"))}">${icon(level("master") === 0 ? "volume-x" : "volume", 15)}</button>
           <div class="rec-mixer" data-rec-mixer hidden></div>
         </div>
+        ${entry.kind === "game" ? `<button class="btn btn-ghost rec-hud-toggle" data-rec="hud" aria-pressed="${hudPinned}" data-tooltip="${esc(t("rec.hudToggle"))}">HUD</button>` : ""}
         <button class="icon-btn" data-rec="fullscreen" aria-label="${esc(t("rec.fullscreen"))}">${icon("monitor", 15)}</button>
       </div>
       <div class="rec-tools">
@@ -552,10 +568,78 @@ export async function openRecordings(): Promise<void> {
     wavesState = "none";
     if (wavesShown) void loadWaves(entry);
     void loadGame(entry, true);
+    liveLog = null;
+    tabShown = false;
+    if (entry.kind === "game") {
+      void api.recordingLive(entry.path).then((log) => {
+        if (selected !== entry) return;
+        liveLog = log;
+        renderTab();
+      }).catch(() => undefined);
+    }
+    for (const name of ["timeupdate", "seeked", "loadedmetadata"]) video.addEventListener(name, () => renderTab());
+    if (hudPinned) void loadGameAssets().then(() => ((hudShown = { banner: "", timers: "", panel: "" }), renderTab()));
     renderMoments();
     updatePlayState();
     renderMixer();
   };
+
+  // ------------------------------------------------------------ Tab scoreboard
+
+  /** Video seconds at game time 0 (measured while recording, else from a moment). */
+  const gameOffset = () => {
+    const meta = selected?.meta;
+    const moment = meta?.moments.find((entry) => Number.isFinite(entry.gameTime));
+    return meta?.gameStart ?? (moment ? moment.time - moment.gameTime : 0);
+  };
+
+  /**
+   * Draw (or remove) the broadcast overlay on the picture itself (not the black
+   * bars), laid out on a 1920-wide canvas scaled to it, so it matches the
+   * video in the window and in full screen.
+   */
+  const renderTab = () => {
+    const screen = player.querySelector<HTMLElement>(".rec-screen");
+    let layer = screen?.querySelector<HTMLElement>(".hud-layer") ?? null;
+    const wanted = (tabShown || hudPinned) && screen && video && selected?.kind === "game";
+    const hud = wanted ? broadcastHud(gameDetails, liveLog, video!.currentTime - gameOffset(), selected!.meta?.riotId ?? "") : null;
+    if (!wanted || !screen || !video) {
+      layer?.remove();
+      hudShown = { banner: "", timers: "", panel: "" };
+      return;
+    }
+    if (!layer) {
+      screen.insertAdjacentHTML("beforeend", `<div class="hud-layer"><div class="hud-canvas"><div class="hud-region" data-hud="timers"></div><div class="hud-region" data-hud="banner"></div><div class="hud-region" data-hud="panel"></div></div></div>`);
+      layer = $(".hud-layer", screen);
+      hudShown = { banner: "", timers: "", panel: "" };
+    }
+    const width = screen.clientWidth;
+    const height = screen.clientHeight;
+    const ratio = video.videoWidth && video.videoHeight ? video.videoWidth / video.videoHeight : 16 / 9;
+    const pictureWidth = Math.min(width, height * ratio);
+    const pictureHeight = pictureWidth / ratio;
+    Object.assign(layer.style, { left: `${(width - pictureWidth) / 2}px`, top: `${(height - pictureHeight) / 2}px`, width: `${pictureWidth}px`, height: `${pictureHeight}px` });
+    const canvas = $(".hud-canvas", layer);
+    canvas.style.height = `${1920 / ratio}px`;
+    canvas.style.transform = `scale(${pictureWidth / 1920})`;
+    const content: Hud = hud ?? { banner: `<p class="hud-empty">${esc(t("rec.tabNoData"))}</p>`, timers: "", panel: "" };
+    for (const region of ["banner", "timers", "panel"] as const) {
+      if (content[region] === hudShown[region]) continue;
+      $(`[data-hud="${region}"]`, layer).innerHTML = content[region];
+    }
+    hudShown = content;
+  };
+  const hideTab = () => {
+    if (!tabShown) return;
+    tabShown = false;
+    renderTab();
+  };
+  const onKeyUp = (event: KeyboardEvent) => {
+    if (event.key === "Tab") hideTab();
+  };
+  document.addEventListener("keyup", onKeyUp, true);
+  window.addEventListener("blur", hideTab);
+  document.addEventListener("fullscreenchange", () => renderTab());
 
   // ------------------------------------------------------------ game details
 
@@ -604,6 +688,7 @@ export async function openRecordings(): Promise<void> {
     }
     gamePanel.innerHTML = "";
     renderGame();
+    renderTab();
   };
 
   // ------------------------------------------------------------ sound
@@ -1251,6 +1336,8 @@ export async function openRecordings(): Promise<void> {
     audio = null;
     masterGain = null;
     document.removeEventListener("keydown", onKey, true);
+    document.removeEventListener("keyup", onKeyUp, true);
+    window.removeEventListener("blur", hideTab);
     resized.disconnect();
     unlisten.forEach((stop) => void stop.then((fn) => fn()));
     void leave(overlay, "overlay-out");
@@ -1320,6 +1407,17 @@ export async function openRecordings(): Promise<void> {
       return updateTimeline();
     }
     if (action === "discord-post" && selected) return void postToDiscord(selected);
+    if (action === "hud") {
+      hudPinned = !hudPinned;
+      try {
+        localStorage.setItem("recHud", hudPinned ? "on" : "off");
+      } catch {
+        // Not kept: fine.
+      }
+      target.closest<HTMLElement>("[data-rec]")?.setAttribute("aria-pressed", String(hudPinned));
+      void loadGameAssets().then(() => ((hudShown = { banner: "", timers: "", panel: "" }), renderTab()));
+      return renderTab();
+    }
     if (action === "waves") {
       wavesShown = !wavesShown;
       try {
@@ -1572,6 +1670,16 @@ export async function openRecordings(): Promise<void> {
       return viewer.hidden ? close() : closeViewer();
     }
     if (!video || viewer.hidden) return;
+    // Hold Tab: the scoreboard at this moment of the game, as in the game itself.
+    if (event.key === "Tab" && selected?.kind === "game") {
+      event.preventDefault();
+      if (!tabShown) {
+        tabShown = true;
+        renderTab();
+        void loadGameAssets().then(() => tabShown && ((hudShown = { banner: "", timers: "", panel: "" }), renderTab()));
+      }
+      return;
+    }
     if (event.key === " " && !(event.target as HTMLElement).closest?.("[data-rec-path], button")) {
       event.preventDefault();
       togglePlay();
@@ -1580,7 +1688,10 @@ export async function openRecordings(): Promise<void> {
     if (event.key === "ArrowRight") seek(video.currentTime + 5);
   };
   document.addEventListener("keydown", onKey, true);
-  const resized = new ResizeObserver(() => updateTimeline());
+  const resized = new ResizeObserver(() => {
+    updateTimeline();
+    renderTab();
+  });
   resized.observe(player);
 
   const unlisten = [

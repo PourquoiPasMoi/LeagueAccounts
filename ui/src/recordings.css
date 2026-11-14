@@ -411,3 +411,97 @@
 .discord-hook input:focus { border-color: #c8aa6e; }
 .discord-add { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) auto; align-items: end; gap: 10px; }
 .discord-add .btn { height: 36px; display: inline-flex; align-items: center; gap: 6px; }
+
+
+/* ------------------------------------------------------------- broadcast HUD over the video */
+/* Laid out on a 1920-wide canvas, scaled to the picture (window or full screen). */
+
+.rec-screen .hud-layer { position: absolute; z-index: 5; pointer-events: none; overflow: hidden; }
+.hud-canvas { position: absolute; left: 0; top: 0; width: 1920px; transform-origin: 0 0; color: #f0e6d2; text-shadow: 0 1px 2px rgba(0, 0, 0, .85); font: 600 20px/1.15 Spiegel, "Segoe UI", system-ui, WenKai, sans-serif; }
+.hud-region { display: contents; }
+.hud-canvas svg { display: block; }
+
+/* Score banner */
+.hud-banner { position: absolute; top: 0; left: 50%; transform: translateX(-50%); width: 900px; filter: drop-shadow(0 4px 10px rgba(0, 0, 0, .6)); }
+.hud-top { display: grid; grid-template-columns: minmax(0, 1fr) 2px minmax(0, 1fr); height: 70px; background: linear-gradient(180deg, rgba(10, 21, 32, .78), rgba(1, 10, 19, .8)); border: 2px solid #463714; border-top: 0; }
+.hud-vs { background: linear-gradient(180deg, transparent, #785a28, transparent); }
+.hud-side { display: flex; align-items: center; gap: 24px; padding: 0 22px; min-width: 0; }
+.hud-side.is-blue { border-left: 6px solid #0ac8b9; }
+.hud-side.is-red { flex-direction: row-reverse; border-right: 6px solid #e06d62; }
+.hud-team { font: 700 26px/1 Beaufort, WenKai, NotoCJK, serif; letter-spacing: .1em; text-transform: uppercase; }
+.is-blue .hud-team, .is-blue .hud-kills { color: #0ac8b9; }
+.is-red .hud-team, .is-red .hud-kills { color: #e06d62; }
+.hud-kills { font: 700 46px/1 Beaufort, WenKai, NotoCJK, serif; }
+.is-blue .hud-kills { margin-left: auto; }
+.is-red .hud-kills { margin-right: auto; }
+.hud-stat { position: relative; display: inline-flex; align-items: center; gap: 7px; font-size: 26px; font-weight: 700; }
+.hud-tower { width: 40px; height: 40px; margin: -6px -4px; }
+.hud-coins { display: block; width: 30px; height: 26px; overflow: hidden; }
+.hud-coins img { display: block; width: 30px; }
+.hud-gold em {
+  position: absolute; left: 50%; top: 100%; transform: translate(-50%, 3px); padding: 1px 7px; white-space: nowrap;
+  font: 700 15px/1.2 Spiegel, "Segoe UI", sans-serif; font-style: normal; color: #f0e6d2;
+}
+.is-blue .hud-gold em { background: #0397ab; }
+.is-red .hud-gold em { background: #be1e37; }
+.hud-bottom { display: grid; grid-template-columns: minmax(0, 1fr) 128px minmax(0, 1fr); width: 720px; height: 40px; margin: 0 auto; background: rgba(1, 10, 19, .76); border: 1px solid #463714; border-top: 0; }
+.hud-clock { align-self: center; text-align: center; font: 700 27px/1 Beaufort, WenKai, NotoCJK, serif; letter-spacing: .06em; font-variant-numeric: tabular-nums; }
+.hud-under { display: flex; align-items: center; gap: 12px; padding: 0 14px; min-width: 0; }
+.hud-under.is-red { flex-direction: row-reverse; }
+.hud-under .hud-stat { font-size: 20px; }
+.hud-grub { width: 34px; height: 34px; }
+.hud-drakes { display: flex; gap: 2px; }
+.hud-drake { width: 32px; height: 32px; }
+.hud-buff { display: inline-flex; align-items: center; gap: 4px; font-size: 19px; font-weight: 700; }
+.hud-buff-icon { width: 30px; height: 30px; }
+.hud-buff b { color: #f0e6d2; }
+
+/* Objective timers */
+.hud-timers { position: absolute; top: 14px; left: 14px; display: flex; gap: 8px; }
+.hud-timer { display: flex; align-items: center; gap: 6px; height: 50px; padding: 0 14px 0 6px; background: rgba(1, 10, 19, .74); border: 1px solid #463714; }
+.hud-timer img { width: 40px; height: 40px; }
+.hud-timer.is-up b { color: #0ac8b9; }
+.hud-timer b { font: 700 25px/1 Beaufort, WenKai, NotoCJK, serif; color: #f0e6d2; font-variant-numeric: tabular-nums; }
+
+/* Players */
+.hud-panel { position: absolute; left: 50%; bottom: 0; transform: translateX(-50%); width: 1420px; padding: 3px 0; background: linear-gradient(180deg, rgba(10, 21, 32, .76), rgba(1, 10, 19, .82)); border: 2px solid #463714; border-bottom: 0; }
+.hud-panel.no-items { width: 1000px; }
+.hud-line { display: grid; grid-template-columns: minmax(0, 1fr) 104px minmax(0, 1fr); height: 54px; align-items: stretch; }
+.hud-line + .hud-line { border-top: 1px solid #1e282d; }
+.hud-player { display: flex; align-items: center; gap: 10px; min-width: 0; padding: 0 12px; }
+.hud-player.is-blue { border-right: 3px solid #0ac8b9; }
+.hud-player.is-red { flex-direction: row-reverse; border-left: 3px solid #e06d62; }
+.hud-player.is-me { background: linear-gradient(90deg, rgba(200, 170, 110, .05), rgba(200, 170, 110, .2)); }
+.hud-player.is-red.is-me { background: linear-gradient(270deg, rgba(200, 170, 110, .05), rgba(200, 170, 110, .2)); }
+.hud-items { display: flex; gap: 3px; }
+.hud-items img, .hud-items .gi-blank { display: block; width: 32px; height: 32px; border: 1px solid #463714; box-sizing: border-box; }
+.hud-spells { display: grid; gap: 2px; }
+.hud-spells:empty { display: none; }
+.hud-spells img, .hud-spells .gi-blank { display: block; width: 21px; height: 21px; }
+.hud-champ { position: relative; flex: none; width: 46px; height: 46px; }
+.hud-champ img { display: block; width: 46px; height: 46px; border: 1px solid #785a28; box-sizing: border-box; }
+.hud-champ em {
+  position: absolute; bottom: -2px; min-width: 22px; padding: 1px 3px; text-align: center;
+  font: 700 14px/1.15 Spiegel, "Segoe UI", sans-serif; font-style: normal; background: #010a13; border: 1px solid #785a28;
+}
+.is-blue .hud-champ em { left: -4px; }
+.is-red .hud-champ em { right: -4px; }
+.hud-champ i { position: absolute; inset: 0; display: grid; place-items: center; font: 700 22px/1 Beaufort, WenKai, NotoCJK, serif; font-style: normal; text-shadow: 0 0 4px #000, 0 0 2px #000; }
+.hud-player.is-dead .hud-champ img { filter: grayscale(1) brightness(.4); }
+.hud-player.is-dead .hud-pname { color: #738891; }
+.hud-pname { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 20px; color: #cdbe91; }
+.is-red .hud-pname { text-align: right; }
+.hud-player.is-me .hud-pname { color: #f0e6d2; font-weight: 700; }
+.hud-score { display: grid; justify-items: end; min-width: 86px; font-variant-numeric: tabular-nums; }
+.is-red .hud-score { justify-items: start; }
+.hud-score b { font-size: 20px; color: #c8aa6e; }
+.hud-score span { font-size: 19px; font-weight: 700; }
+.hud-mid { display: grid; place-items: center; }
+.hud-diff { padding: 3px 9px; font: 700 19px/1.1 Spiegel, "Segoe UI", sans-serif; font-variant-numeric: tabular-nums; }
+.hud-diff.lead-blue { color: #0ac8b9; border-left: 4px solid #0ac8b9; }
+.hud-diff.lead-red { color: #e06d62; border-right: 4px solid #e06d62; }
+.hud-empty { position: absolute; top: 16px; left: 50%; transform: translateX(-50%); margin: 0; padding: 12px 20px; background: rgba(1, 10, 19, .92); border: 1px solid #463714; font-size: 22px; }
+
+/* Player control */
+.rec-hud-toggle { height: 28px; padding: 0 10px; font: 700 11px/1 Beaufort, WenKai, NotoCJK, serif; letter-spacing: .12em; }
+.rec-hud-toggle[aria-pressed="true"] { color: #0ac8b9; border-color: #0397ab; }

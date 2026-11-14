@@ -212,6 +212,7 @@ fn record(request: &RecordRequest, window: HWND, path: &Path, stop: &AtomicBool,
                     *facts = Some(tracker.facts.clone());
                 }
             }
+            tracker.map(|tracker| tracker.live).unwrap_or_default()
         })
     };
 
@@ -280,7 +281,7 @@ fn record(request: &RecordRequest, window: HWND, path: &Path, stop: &AtomicBool,
     let screen = capture.is_screen();
     drop(capture);
     drop(mixer);
-    let _ = moments.join();
+    let live = moments.join().unwrap_or_default();
     if !wrote {
         let _ = std::fs::remove_file(path);
         return Outcome::Failed(if failed { "recorder_capture" } else { "recorder_no_frames" });
@@ -326,6 +327,11 @@ fn record(request: &RecordRequest, window: HWND, path: &Path, stop: &AtomicBool,
         posts: Vec::new(),
     };
     let _ = library::write_meta(&final_path, &meta);
+    if !live.snapshots.is_empty() {
+        if let Ok(text) = serde_json::to_string(&live) {
+            let _ = std::fs::write(super::gameinfo::live_path(&final_path), text);
+        }
+    }
     let size = std::fs::metadata(&final_path).map(|metadata| metadata.len()).unwrap_or(0);
     let name = final_path.file_stem().map(|stem| stem.to_string_lossy().into_owned()).unwrap_or_default();
     Outcome::Saved(Box::new(Entry {

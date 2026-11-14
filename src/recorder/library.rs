@@ -245,6 +245,7 @@ pub fn rename(path: &Path, stem: &str) -> std::io::Result<PathBuf> {
     std::fs::rename(path, &target)?;
     let _ = std::fs::rename(meta_path(path), meta_path(&target));
     let _ = std::fs::rename(path.with_extension("game.json"), target.with_extension("game.json"));
+    let _ = std::fs::rename(path.with_extension("live.json"), target.with_extension("live.json"));
     for source in SOURCES {
         let _ = std::fs::rename(track_file(path, source), track_file(&target, source));
     }
@@ -263,6 +264,7 @@ pub fn delete(path: &Path) -> std::io::Result<()> {
     std::fs::remove_file(path)?;
     let _ = std::fs::remove_file(meta_path(path));
     let _ = std::fs::remove_file(path.with_extension("game.json"));
+    let _ = std::fs::remove_file(path.with_extension("live.json"));
     let _ = std::fs::remove_file(waves_file(path));
     for source in SOURCES {
         let _ = std::fs::remove_file(track_file(path, source));
