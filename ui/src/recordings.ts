@@ -62,6 +62,16 @@ function level(name: string): number {
   const value = Number(levels[name]);
   return Number.isFinite(value) ? Math.min(name === "master" ? MAX_MASTER : MAX_LEVEL, Math.max(0, value)) : 100;
 }
+/** All sound off without losing the levels (kept between sessions). */
+let muted = (() => {
+  try {
+    return localStorage.getItem("recMuted") === "on";
+  } catch {
+    return false;
+  }
+})();
+const silent = () => muted || level("master") === 0;
+
 function setLevel(name: string, value: number): void {
   levels = { ...levels, [name]: value };
   try {
@@ -503,7 +513,12 @@ export async function openRecordings(): Promise<void> {
       ? [meta.width && `${meta.width}×${meta.height}`, meta.fps && `${meta.fps} fps`, meta.encoder, meta.audioSource && meta.audioSource.split("+").map((source) => t(`rec.audio.${source}` as MessageKey)).join(" + ")].filter(Boolean)
       : [];
     player.innerHTML = `
-      <div class="rec-screen"><video preload="metadata" crossorigin="anonymous" src="http://larec.localhost/${encodeURIComponent(entry.path)}?v=${entry.modified}"></video></div>
+      <div class="rec-screen"><video preload="metadata" crossorigin="anonymous" src="http://larec.localhost/${encodeURIComponent(entry.path)}?v=${entry.modified}"></video>
+        <div class="rec-screen-tools">
+          <button class="rec-screen-btn" data-rec="mute" aria-pressed="${muted}" aria-label="${esc(t("rec.mute"))}">${icon(silent() ? "volume-x" : "volume", 20)}</button>
+          <button class="rec-screen-btn" data-rec="fullscreen" aria-label="${esc(t(document.fullscreenElement ? "rec.exitFullscreen" : "rec.fullscreen"))}">${icon(document.fullscreenElement ? "minimize" : "maximize", 20)}</button>
+        </div>
+      </div>
       <div class="rec-timeline">
         <div class="rec-track" data-rec-track>
           <div class="rec-parts-layer"></div>
@@ -527,7 +542,7 @@ export async function openRecordings(): Promise<void> {
           <button class="icon-btn" data-rec="zoom-in" aria-label="${esc(t("rec.zoomIn"))}">${icon("plus", 13)}</button>
         </div>
         <div class="rec-mixer-wrap">
-          <button class="icon-btn" data-rec="mixer" aria-label="${esc(t("rec.volume"))}" data-tooltip="${esc(t("rec.volume"))}">${icon(level("master") === 0 ? "volume-x" : "volume", 15)}</button>
+          <button class="icon-btn" data-rec="mixer" aria-label="${esc(t("rec.volume"))}" data-tooltip="${esc(t("rec.volume"))}">${icon(silent() ? "volume-x" : "volume", 15)}</button>
           <div class="rec-mixer" data-rec-mixer hidden></div>
         </div>
         ${entry.kind === "game" ? `<button class="btn btn-ghost rec-hud-toggle" data-rec="hud" aria-pressed="${hudPinned}" data-tooltip="${esc(t("rec.hudToggle"))}">HUD</button>` : ""}
@@ -707,13 +722,44 @@ export async function openRecordings(): Promise<void> {
   };
 
   const applyLevels = () => {
-    if (masterGain) masterGain.gain.value = level("master") / 100;
-    else if (video) video.volume = Math.min(1, level("master") / 100);
+    const master = muted ? 0 : level("master");
+    if (masterGain) masterGain.gain.value = master / 100;
+    else if (video) video.volume = Math.min(1, master / 100);
     if (videoSound) videoSound.gain.gain.value = trackState === "ready" ? 0 : 1;
     tracks.forEach(({ label, gain }) => (gain.gain.value = level(label) / 100));
     const button = player.querySelector<HTMLElement>('[data-rec="mixer"]');
-    if (button) button.innerHTML = icon(level("master") === 0 ? "volume-x" : "volume", 15);
+    if (button) button.innerHTML = icon(silent() ? "volume-x" : "volume", 15);
+    const mute = player.querySelector<HTMLElement>('[data-rec="mute"]');
+    if (mute) {
+      mute.innerHTML = icon(silent() ? "volume-x" : "volume", 20);
+      mute.setAttribute("aria-pressed", String(muted));
+    }
   };
+
+  // Mute and full screen buttons in the picture's corner: shown while the mouse
+  // moves over the video, hidden again after a moment without moving.
+  let toolsTimer = 0;
+  const showTools = () => {
+    const screen = player.querySelector<HTMLElement>(".rec-screen");
+    if (!screen) return;
+    screen.classList.add("is-active");
+    window.clearTimeout(toolsTimer);
+    toolsTimer = window.setTimeout(() => screen.classList.remove("is-active"), 2500);
+  };
+  player.addEventListener("mousemove", (event) => {
+    if ((event.target as HTMLElement).closest(".rec-screen")) showTools();
+  });
+  player.addEventListener("mouseleave", () => player.querySelector(".rec-screen")?.classList.remove("is-active"));
+  const toggleFullscreen = () => {
+    if (document.fullscreenElement) return void document.exitFullscreen().catch(() => undefined);
+    void player.querySelector(".rec-screen")?.requestFullscreen?.().catch(() => undefined);
+  };
+  document.addEventListener("fullscreenchange", () => {
+    const button = player.querySelector<HTMLElement>('.rec-screen-btn[data-rec="fullscreen"]');
+    if (!button) return;
+    button.innerHTML = icon(document.fullscreenElement ? "minimize" : "maximize", 20);
+    button.setAttribute("aria-label", t(document.fullscreenElement ? "rec.exitFullscreen" : "rec.fullscreen"));
+  });
 
   const connectVideo = (element: HTMLVideoElement) => {
     const context_ = context();
@@ -1439,7 +1485,17 @@ export async function openRecordings(): Promise<void> {
       mixerOpen = false;
       renderMixer();
     }
-    if (action === "fullscreen") return void player.querySelector(".rec-screen")?.requestFullscreen?.().catch(() => undefined);
+    if (action === "fullscreen") return toggleFullscreen();
+    if (action === "mute") {
+      muted = !muted;
+      try {
+        localStorage.setItem("recMuted", muted ? "on" : "off");
+      } catch {
+        // Not kept: fine.
+      }
+      void audio?.resume().catch(() => undefined);
+      return applyLevels();
+    }
     if ((action === "set-start" || action === "set-end") && video) {
       const now = video.currentTime;
       const total = duration();
@@ -1628,6 +1684,15 @@ export async function openRecordings(): Promise<void> {
     if (!slider) return;
     const name = slider.dataset.recLevel!;
     setLevel(name, Number(slider.value));
+    // Turning a volume up means wanting sound: leave mute.
+    if (muted) {
+      muted = false;
+      try {
+        localStorage.setItem("recMuted", "off");
+      } catch {
+        // Not kept: fine.
+      }
+    }
     const value = player.querySelector(`[data-rec-level-value="${CSS.escape(name)}"]`);
     if (value) value.textContent = `${level(name)}%`;
     applyLevels();

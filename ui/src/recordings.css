@@ -91,6 +91,17 @@
 
 
 .rec-screen:fullscreen { border: 0; max-height: none; }
+/* Mute and full screen in the picture's bottom-right corner, shown while the mouse moves over it. */
+.rec-screen-tools { position: absolute; right: 12px; bottom: 12px; z-index: 6; display: flex; gap: 6px; opacity: 0; pointer-events: none; transition: opacity .2s; }
+.rec-screen.is-active .rec-screen-tools, .rec-screen-tools:focus-within { opacity: 1; pointer-events: auto; }
+.rec-screen.is-active video { cursor: pointer; }
+.rec-screen:fullscreen:not(.is-active) video { cursor: none; }
+.rec-screen-btn {
+  display: grid; place-items: center; width: 40px; height: 40px; padding: 0; cursor: pointer;
+  color: #f0e6d2; background: rgba(1, 10, 19, .78); border: 1px solid #785a28;
+}
+.rec-screen-btn:hover { color: #fff; border-color: #c8aa6e; background: rgba(30, 35, 40, .9); }
+.rec-screen-btn[aria-pressed="true"] { color: #e06d62; }
 
 .rec-controls { display: flex; align-items: center; gap: 10px; }
 .rec-play { width: 30px; height: 30px; border: 1px solid #785a28; display: grid; place-items: center; }
