@@ -1014,6 +1014,7 @@ async function openSettings(): Promise<void> {
         <div class="rec-settings-grid">
           <div>
             ${toggle("recEnabled", recorder.enabled, t("settings.recOn"), t("settings.recOnHint"))}
+            ${toggle("recChampSelect", recorder.champSelect, t("settings.recChampSelect"), t("settings.recChampSelectHint"))}
             <div class="rec-folder">
               <span class="toggle-text"><strong>${esc(t("settings.recFolder"))}</strong><span data-rec-folder>${esc(recorder.root)}</span></span>
               <button type="button" class="btn btn-ghost" data-rec-browse>${icon("folder-open", 14)}${esc(t("settings.recBrowse"))}</button>
@@ -1295,6 +1296,7 @@ async function openSettings(): Promise<void> {
         discord: checked("recDiscord"),
         micDevice: $<HTMLSelectElement>('[name="recMicDevice"]', root).value,
         diskLimitGb: Math.min(100000, Math.max(0, Math.round(Number($<HTMLInputElement>('[name="recLimit"]', root).value) || 0))),
+        champSelect: checked("recChampSelect"),
       };
       const recorderSaved = await guard(() => api.setRecorderPrefs(recorderPrefs), "toast.settingsFailed");
       if (!recorderSaved.ok) return false;

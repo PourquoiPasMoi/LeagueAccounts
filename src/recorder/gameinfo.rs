@@ -143,7 +143,9 @@ pub fn fetch(video: &Path, meta: &RecordingMeta) -> Result<Value, &'static str> 
     if !meta.puuid.is_empty() && meta.puuid != puuid {
         return Err("game_other_account");
     }
-    let id = find_game(&client, meta.started_at).ok_or("game_not_found")?;
+    // Recordings with champ select start minutes before the game itself.
+    let started = meta.started_at + (meta.champ_select.max(0.0) * 1000.0) as u64;
+    let id = find_game(&client, started).ok_or("game_not_found")?;
     let game = client.get_json(&format!("/lol-match-history/v1/games/{id}")).ok_or("game_not_found")?;
     if game["participants"].as_array().is_none_or(Vec::is_empty) {
         return Err("game_not_found");

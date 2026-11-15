@@ -3,15 +3,19 @@
 //! window closes (or `stop` is called) the file is finished, renamed to e.g.
 //! `2026-11-13 21-40 Ahri Ranked Solo Win.mp4` and its moments are written next
 //! to it.
+//!
+//! With champ select on, the recording starts on the League client window when
+//! a match is found and moves to the game window once it draws, through a
+//! short GPU transition (`transition.rs`), all in one file.
 
 use super::audio::{self, AudioMixer};
-use super::capture::{window_process_id, Capture, Gpu};
+use super::capture::{find_game_window, monitor_size, window_process_id, Capture, Gpu};
 use super::encoder::{EncoderSettings, VideoEncoder};
 use super::library::{self, Entry, RecordingMeta, GAMES};
 use super::moments::MomentTracker;
-use super::{output_size, shutdown, startup};
+use super::{output_size, shutdown, startup, transition};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicIsize, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -46,7 +50,17 @@ pub struct RecordRequest {
     pub queue: String,
     pub queue_id: i64,
     pub settings: RecordSettings,
+    /// Start on the League client window (champ select) and move to the game
+    /// window when it appears.
+    pub pregame: bool,
 }
+
+/// Longest wait on the client window for the game to start.
+const PREGAME_LIMIT: Duration = Duration::from_secs(20 * 60);
+/// The game window's first pictures can be black: wait a moment before the transition.
+const GAME_SETTLE: Duration = Duration::from_millis(1800);
+/// A game window that never draws: transition anyway (into the dark colour).
+const GAME_NO_PICTURE: Duration = Duration::from_secs(15);
 
 pub enum Outcome {
     Saved(Box<Entry>),
@@ -56,6 +70,11 @@ pub enum Outcome {
 
 pub struct Recording {
     stop: Arc<AtomicBool>,
+    discard: Arc<AtomicBool>,
+    /// The window being captured (the client's, then the game's).
+    window: Arc<AtomicIsize>,
+    /// The game window is being recorded (always true without champ select).
+    in_game: Arc<AtomicBool>,
     thread: Option<JoinHandle<Outcome>>,
     /// The file being written.
     pub path: PathBuf,
@@ -67,6 +86,23 @@ pub struct Recording {
 impl Recording {
     pub fn stop(&self) {
         self.stop.store(true, Ordering::Relaxed);
+    }
+
+    /// Stop and delete the file: the match did not start (declined, dodged).
+    /// Only before the game: a game is never thrown away.
+    pub fn discard(&self) {
+        if !self.in_game() {
+            self.discard.store(true, Ordering::Relaxed);
+            self.stop();
+        }
+    }
+
+    pub fn in_game(&self) -> bool {
+        self.in_game.load(Ordering::Relaxed)
+    }
+
+    pub fn window(&self) -> isize {
+        self.window.load(Ordering::Relaxed)
     }
 
     pub fn is_finished(&self) -> bool {
@@ -96,24 +132,52 @@ pub fn start(request: RecordRequest, window: HWND) -> std::io::Result<Recording>
     let stamp = stamp();
     let path = library::unique_file(&directory, &format!("{stamp} recording"));
     let stop = Arc::new(AtomicBool::new(false));
+    let discard = Arc::new(AtomicBool::new(false));
+    let in_game = Arc::new(AtomicBool::new(!request.pregame));
+    let window = Arc::new(AtomicIsize::new(window.0 as isize));
     let started_at = now_ms();
-    let window = window.0 as isize;
     let thread = {
-        let stop = Arc::clone(&stop);
+        let shared = Shared { stop: Arc::clone(&stop), discard: Arc::clone(&discard), window: Arc::clone(&window), in_game: Arc::clone(&in_game) };
         let path = path.clone();
         let request = request.clone();
         thread::Builder::new()
             .name("recorder".into())
             .spawn(move || {
-                let outcome = record(&request, HWND(window as *mut core::ffi::c_void), &path, &stop, &stamp, started_at);
+                let outcome = record(&request, &shared, &path, &stamp, started_at);
                 shutdown();
                 outcome
             })?
     };
-    Ok(Recording { stop, thread: Some(thread), path, account: request.account, started_at })
+    Ok(Recording { stop, discard, window, in_game, thread: Some(thread), path, account: request.account, started_at })
 }
 
-fn record(request: &RecordRequest, window: HWND, path: &Path, stop: &AtomicBool, stamp: &str, started_at: u64) -> Outcome {
+struct Shared {
+    stop: Arc<AtomicBool>,
+    discard: Arc<AtomicBool>,
+    window: Arc<AtomicIsize>,
+    in_game: Arc<AtomicBool>,
+}
+
+/// Where the recording is: on the client window, moving to the game, or in the game.
+enum Stage {
+    Pregame { since: Instant, looked: Instant },
+    /// Game window open; `first` = its first picture, `start` = transition start.
+    Switch { opened: Instant, first: Option<Instant>, start: Option<Instant> },
+    Game,
+}
+
+fn record(request: &RecordRequest, shared: &Shared, path: &Path, stamp: &str, started_at: u64) -> Outcome {
+    let outcome = record_inner(request, shared, path, stamp, started_at);
+    if shared.discard.load(Ordering::Relaxed) && !shared.in_game.load(Ordering::Relaxed) {
+        let _ = std::fs::remove_file(path);
+        return Outcome::Failed("recorder_cancelled");
+    }
+    outcome
+}
+
+fn record_inner(request: &RecordRequest, shared: &Shared, path: &Path, stamp: &str, started_at: u64) -> Outcome {
+    let stop = &*shared.stop;
+    let window = HWND(shared.window.load(Ordering::Relaxed) as *mut core::ffi::c_void);
     if startup().is_err() {
         return Outcome::Failed("recorder_media");
     }
@@ -166,7 +230,9 @@ fn record(request: &RecordRequest, window: HWND, path: &Path, stop: &AtomicBool,
     let mut mixer = AudioMixer::new(sources);
     let audio_tracks = mixer.tracks();
     let fps = settings.fps.clamp(10, 120);
-    let (width, height) = output_size(capture.size(), settings.max_height);
+    // Champ select: the video takes the game's size (the monitor), not the client's.
+    let source_size = if request.pregame { monitor_size(window).unwrap_or(capture.size()) } else { capture.size() };
+    let (width, height) = output_size(source_size, settings.max_height);
     let encoder_settings = EncoderSettings {
         width,
         height,
@@ -221,10 +287,45 @@ fn record(request: &RecordRequest, window: HWND, path: &Path, stop: &AtomicBool,
     let mut tick: u64 = 0;
     let mut failed = false;
     let mut idle_since = Instant::now();
+    let now = Instant::now();
+    let mut stage = if request.pregame { Stage::Pregame { since: now, looked: now } } else { Stage::Game };
+    // Video seconds where the game picture takes over (champ select before it).
+    let mut game_from = 0.0;
     loop {
-        if stop.load(Ordering::Relaxed) || !capture.is_alive() {
+        if stop.load(Ordering::Relaxed) {
             break;
         }
+        if let Stage::Pregame { since, looked } = &mut stage {
+            if since.elapsed() > PREGAME_LIMIT {
+                shared.discard.store(true, Ordering::Relaxed);
+                break;
+            }
+            if looked.elapsed() >= Duration::from_secs(1) {
+                *looked = Instant::now();
+                if let Some(game) = find_game_window() {
+                    if let Ok(opened) = Capture::open(&gpu, game, settings.screen) {
+                        // The game's own sound from now on, on the same track.
+                        if settings.game_audio {
+                            if let Ok(source) = audio::game_sound(window_process_id(game)) {
+                                mixer.replace(source);
+                            }
+                        }
+                        stage = if encoder.hold().is_ok() {
+                            Stage::Switch { opened: Instant::now(), first: None, start: None }
+                        } else {
+                            game_from = tick as f64 / f64::from(fps);
+                            Stage::Game
+                        };
+                        capture = opened;
+                        shared.window.store(game.0 as isize, Ordering::Relaxed);
+                        shared.in_game.store(true, Ordering::Relaxed);
+                    }
+                }
+            }
+        } else if !capture.is_alive() {
+            break;
+        }
+        let pregame = matches!(stage, Stage::Pregame { .. });
         match capture.latest() {
             Ok(Some(frame)) => {
                 if encoder.set_input(&frame.texture, frame.region).is_err() {
@@ -233,14 +334,17 @@ fn record(request: &RecordRequest, window: HWND, path: &Path, stop: &AtomicBool,
                 }
             }
             Ok(None) => {}
+            // The client window can hide or close while the game starts: keep its last picture.
+            Err(_) if pregame => {}
             Err(_) => {
                 failed = true;
                 break;
             }
         }
         if !encoder.has_input() {
-            // Nothing to show yet (loading); give up if the window never draws.
-            if idle_since.elapsed() > Duration::from_secs(120) {
+            // Nothing to show yet (loading); give up if the window never draws
+            // (the client can stay minimized during champ select: no limit there).
+            if !pregame && idle_since.elapsed() > Duration::from_secs(120) {
                 break;
             }
             thread::sleep(Duration::from_millis(50));
@@ -253,7 +357,27 @@ fn record(request: &RecordRequest, window: HWND, path: &Path, stop: &AtomicBool,
             now
         });
         let time = (tick * 10_000_000 / u64::from(fps)) as i64;
-        if encoder.write_frame(time).is_err() {
+        let written = match &mut stage {
+            Stage::Switch { opened, first, start } => {
+                if first.is_none() && encoder.has_live_input() {
+                    *first = Some(Instant::now());
+                }
+                let ready = first.is_some_and(|first| first.elapsed() >= GAME_SETTLE) || opened.elapsed() >= GAME_NO_PICTURE;
+                if start.is_none() && ready {
+                    *start = Some(Instant::now());
+                    game_from = tick as f64 / f64::from(fps) + transition::SECONDS / 2.0;
+                }
+                let progress = start.map_or(0.0, |start| start.elapsed().as_secs_f64() / transition::SECONDS);
+                let result = encoder.write_transition(time, progress.min(1.0) as f32);
+                if progress >= 1.0 {
+                    encoder.release_hold();
+                    stage = Stage::Game;
+                }
+                result
+            }
+            _ => encoder.write_frame(time),
+        };
+        if written.is_err() {
             failed = true;
             break;
         }
@@ -311,6 +435,7 @@ fn record(request: &RecordRequest, window: HWND, path: &Path, stop: &AtomicBool,
         started_at,
         duration,
         game_start: facts.offset,
+        champ_select: game_from,
         width,
         height,
         fps,

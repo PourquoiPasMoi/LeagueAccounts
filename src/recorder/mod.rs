@@ -14,6 +14,7 @@ pub mod metrics;
 pub mod moments;
 pub mod queues;
 pub mod session;
+pub mod transition;
 
 use library::{Entry, RecordingMeta, CLIPS};
 use std::collections::HashMap;
