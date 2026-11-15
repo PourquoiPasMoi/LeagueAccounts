@@ -66,13 +66,13 @@ td.gi-items > * { display: inline-block; margin-right: 2px; vertical-align: midd
 .gi-overview h4 { margin: 0 0 10px; font: 600 15px/1 var(--font-display); color: var(--text); }
 .gi-gold { width: 100%; height: auto; display: block; }
 .gi-gold text { fill: var(--text-3); font-size: 11px; font-family: var(--font-text); }
-.gi-grid { stroke: var(--on-accent); stroke-width: 1; }
+.gi-grid { stroke: var(--line); stroke-width: 1; }
 .gi-area.is-blue { fill: rgb(var(--win-rgb) / 0.251); }
 .gi-area.is-red { fill: rgb(var(--loss-rgb) / 0.251); }
 .gi-line { fill: none; stroke-width: 2; }
 .gi-line.is-blue { stroke: var(--win); }
 .gi-line.is-red { stroke: var(--loss); }
-.gi-gold circle { stroke: var(--on-accent); stroke-width: 1; }
+.gi-gold circle { stroke: var(--s1); stroke-width: 1; }
 .gi-gold circle.is-blue, .gi-map circle.is-blue { fill: var(--win); }
 .gi-gold circle.is-red, .gi-map circle.is-red { fill: var(--loss); }
 .gi-strip { display: grid; grid-template-columns: 1fr; margin-top: 6px; padding: 4px 10px 8px 44px; }
@@ -85,12 +85,12 @@ td.gi-items > * { display: inline-block; margin-right: 2px; vertical-align: midd
 .gi-strip.is-blue i { background: var(--win); }
 .gi-strip.is-red i { background: var(--loss); }
 .gi-map svg { width: 100%; height: auto; display: block; border: 1px solid var(--line-2); border-radius: var(--r); }
-.gi-map-ground { fill: var(--on-accent); }
+.gi-map-ground { fill: var(--s2); }
 .gi-map-river { stroke: rgb(var(--win-rgb) / 0.2); stroke-width: 26; }
 .gi-map-lane { fill: none; stroke: var(--text-4); stroke-width: 10; stroke-linecap: square; }
 .gi-map-base.is-blue { fill: rgb(var(--win-rgb) / 0.2); stroke: var(--win); }
 .gi-map-base.is-red { fill: rgb(var(--loss-rgb) / 0.2); stroke: var(--loss); }
-.gi-map circle:not(.gi-map-base) { stroke: var(--on-accent); stroke-width: 1.5; }
+.gi-map circle:not(.gi-map-base) { stroke: var(--s1); stroke-width: 1.5; }
 .gi-map-team { display: flex; justify-content: space-between; margin-top: 10px; }
 .gi-map-team button, .gi-rune-pick button { padding: 2px; border: 1px solid transparent; border-radius: 50%; opacity: .7; }
 .gi-map-team button:hover, .gi-rune-pick button:hover { opacity: 1; }
