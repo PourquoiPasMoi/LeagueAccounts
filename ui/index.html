@@ -4,30 +4,32 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>League Companion</title>
-    <!-- Startup screen styles; must precede the app module. See startup.css. -->
+    <!-- Startup screen styles; a linked file because Tauri's CSP nonce on <style> would disable inline style attributes. -->
     <link rel="stylesheet" href="/startup.css" />
   </head>
   <body aria-busy="true">
     <div id="startup-loader" role="status" aria-label="Loading League Companion">
-      <div id="startup-animation" aria-hidden="true"></div>
+      <div id="startup-animation" aria-hidden="true"><span class="startup-ring"></span></div>
       <div id="startup-error" hidden>
         <p>League Companion couldn't finish loading.</p>
         <button id="startup-retry" type="button">Try again</button>
       </div>
     </div>
-    <div class="backdrop" aria-hidden="true"></div>
+    <div class="backdrop" aria-hidden="true">
+      <span class="orb orb-a"></span>
+      <span class="orb orb-b"></span>
+    </div>
 
     <header class="titlebar" data-tauri-drag-region>
       <div class="brand" data-tauri-drag-region>
-        <img src="/icon.png" alt="" class="brand-icon" width="36" height="36" />
+        <img src="/icon.png" alt="" class="brand-icon" width="22" height="22" />
         <span class="brand-name" data-tauri-drag-region>League Companion</span>
       </div>
       <div class="mode-switch" role="tablist">
         <span class="mode-pill" aria-hidden="true"></span>
-        <button role="tab" data-mode="lol" class="mode-btn"><img src="/league/icons/lol.png" alt="" width="23" height="23" /><span data-i18n="mode.lol"></span></button>
-        <button role="tab" data-mode="tft" class="mode-btn"><img src="/league/icons/tft.svg" alt="" width="23" height="23" /><span data-i18n="mode.tft"></span></button>
+        <button role="tab" data-mode="lol" class="mode-btn"><img src="/league/icons/lol.png" alt="" width="16" height="16" /><span data-i18n="mode.lol"></span></button>
+        <button role="tab" data-mode="tft" class="mode-btn"><img src="/league/icons/tft.svg" alt="" width="16" height="16" /><span data-i18n="mode.tft"></span></button>
       </div>
-      <!-- The client's riotclient-app-controls, plus maximize (the client has none). -->
       <div class="window-controls">
         <button class="win-btn win-hide" data-win="minimize" data-i18n-aria="win.minimize"></button>
         <button class="win-btn win-max" data-win="maximize" data-i18n-aria="win.maximize"></button>
@@ -42,19 +44,19 @@
           <kbd>Ctrl N</kbd>
         </button>
 
+        <nav class="side-tiles">
+          <button class="side-tile" id="builds-tile" data-action="builds" hidden><span data-icon="swords"></span><span data-i18n="side.builds"></span></button>
+          <button class="side-tile" id="recordings-tile" data-action="recordings"><span data-icon="video"></span><span data-i18n="side.recordings"></span></button>
+          <button class="side-tile" data-action="game-settings"><span data-icon="sliders"></span><span data-i18n="side.gameSettings"></span></button>
+          <button class="side-tile" data-action="settings"><span data-icon="settings"></span><span data-i18n="side.settings"></span></button>
+        </nav>
+
         <section class="side-section">
           <h3 class="side-title" data-i18n="side.distribution"></h3>
           <div id="distribution" class="distribution"></div>
         </section>
 
         <section class="side-section side-bottom">
-          <!-- One full-width row per page, like the client's navigation; the total value below. -->
-          <nav class="side-tiles">
-            <button class="side-tile" id="builds-tile" data-action="builds" hidden><span data-icon="swords"></span><span data-i18n="side.builds"></span></button>
-            <button class="side-tile" id="recordings-tile" data-action="recordings"><span data-icon="video"></span><span data-i18n="side.recordings"></span></button>
-            <button class="side-tile" data-action="game-settings"><span data-icon="sliders"></span><span data-i18n="side.gameSettings"></span></button>
-            <button class="side-tile" data-action="settings"><span data-icon="settings"></span><span data-i18n="side.settings"></span></button>
-          </nav>
           <button id="total-value" class="side-value" hidden data-i18n-title="finder.title">
             <span class="side-value-label"><span data-icon="gem"></span><span data-i18n="value.total"></span></span>
             <span class="side-value-amount"></span>
@@ -71,12 +73,10 @@
             <h1 data-i18n="page.title"></h1>
           </div>
           <div class="collection-summary">
-            <!-- The client's ranked "Next ladder update" countdown; clicking refreshes now. -->
             <button class="ladder-update" id="schedule" data-i18n-title="refresh.idle" data-i18n-aria="refresh.idle">
               <span class="ladder-update-label"></span><span class="ladder-update-time"></span>
               <span class="ladder-update-icon" data-icon="refresh-cw"></span>
             </button>
-            <!-- One line, with the button's space always reserved, so filtering never moves the layout. -->
             <div class="summary-count">
               <button id="clear-filters" class="text-button" data-i18n="empty.clear" hidden></button>
               <span id="account-count" role="status"></span>
