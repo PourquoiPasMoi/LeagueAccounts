@@ -760,6 +760,8 @@ export interface RecorderPrefs {
   micDevice: string;
   /** 0 = no limit. */
   diskLimitGb: number;
+  /** Start when a match is found (champ select), then follow into the game. */
+  champSelect: boolean;
 }
 
 export interface RecorderPrefsView extends RecorderPrefs {

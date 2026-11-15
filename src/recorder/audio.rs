@@ -318,6 +318,17 @@ impl AudioMixer {
         }
     }
 
+    /// Put `source` in place of the source with the same label (same track),
+    /// e.g. the game's sound after the League client's during champ select.
+    pub fn replace(&mut self, source: AudioSource) -> bool {
+        let Some(slot) = self.sources.iter_mut().find(|current| current.label == source.label) else { return false };
+        let mut source = source;
+        source.pump();
+        source.queue.clear();
+        *slot = source;
+        true
+    }
+
     /// Track time 0 is now (the first video frame).
     pub fn start(&mut self) {
         for source in &mut self.sources {

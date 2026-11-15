@@ -19,16 +19,20 @@ use windows::Win32::Graphics::Dxgi::{
     CreateDXGIFactory1, IDXGIAdapter, IDXGIDevice, IDXGIFactory1, IDXGIOutput1, IDXGIOutputDuplication, IDXGIResource,
     DXGI_ERROR_ACCESS_LOST, DXGI_ERROR_WAIT_TIMEOUT, DXGI_OUTDUPL_FRAME_INFO,
 };
-use windows::Win32::Graphics::Gdi::{ClientToScreen, MonitorFromWindow, MONITOR_DEFAULTTONEAREST};
+use windows::Win32::Graphics::Gdi::{ClientToScreen, GetMonitorInfoW, MonitorFromWindow, MONITORINFO, MONITOR_DEFAULTTONEAREST};
 use windows::Win32::System::WinRT::Direct3D11::{CreateDirect3D11DeviceFromDXGIDevice, IDirect3DDxgiInterfaceAccess};
 use windows::Win32::System::WinRT::Graphics::Capture::IGraphicsCaptureItemInterop;
 pub use windows::Win32::Foundation::HWND as WindowHandle;
 use windows::Win32::UI::WindowsAndMessaging::{
-    EnumWindows, FindWindowW, GetClientRect, GetWindowTextW, GetWindowThreadProcessId, IsIconic, IsWindow, IsWindowVisible,
+    EnumWindows, FindWindowW, GetClassNameW, GetClientRect, GetWindowTextW, GetWindowThreadProcessId, IsIconic, IsWindow, IsWindowVisible,
 };
 
 /// The League game window's class (the client uses another one).
 pub const GAME_WINDOW_CLASS: &str = "RiotWindowClass";
+/// The League client's window class (lobby, champ select). The Riot Client
+/// uses its own windows; the client's main window has the title below.
+pub const CLIENT_WINDOW_CLASS: &str = "RCLIENT";
+const CLIENT_WINDOW_TITLE: &str = "League of Legends";
 
 fn fail() -> windows::core::Error {
     windows::core::Error::from(E_FAIL)
@@ -327,6 +331,55 @@ pub fn window_process_id(window: HWND) -> u32 {
 /// The League game window, when a game is running.
 pub fn find_game_window() -> Option<HWND> {
     find_window_by_class(GAME_WINDOW_CLASS)
+}
+
+/// The League client's visible main window (where champ select happens).
+pub fn find_client_window() -> Option<HWND> {
+    struct Search {
+        found: Option<(HWND, i64)>,
+    }
+    unsafe extern "system" fn visit(window: HWND, data: LPARAM) -> windows::core::BOOL {
+        let search = unsafe { &mut *(data.0 as *mut Search) };
+        if unsafe { !IsWindowVisible(window).as_bool() } {
+            return true.into();
+        }
+        let mut class = [0u16; 64];
+        let length = unsafe { GetClassNameW(window, &mut class) }.max(0) as usize;
+        if String::from_utf16_lossy(&class[..length]) != CLIENT_WINDOW_CLASS {
+            return true.into();
+        }
+        let mut title = [0u16; 128];
+        let length = unsafe { GetWindowTextW(window, &mut title) }.max(0) as usize;
+        if String::from_utf16_lossy(&title[..length]) != CLIENT_WINDOW_TITLE {
+            return true.into();
+        }
+        let mut client = RECT::default();
+        unsafe {
+            let _ = GetClientRect(window, &mut client);
+        }
+        let area = i64::from(client.right) * i64::from(client.bottom);
+        if area > search.found.map_or(0, |(_, best)| best) {
+            search.found = Some((window, area));
+        }
+        true.into()
+    }
+    let mut search = Search { found: None };
+    unsafe {
+        let _ = EnumWindows(Some(visit), LPARAM(&mut search as *mut Search as isize));
+    }
+    search.found.map(|(window, _)| window)
+}
+
+/// Size of the monitor a window is on (the game usually fills it).
+pub fn monitor_size(window: HWND) -> Option<(u32, u32)> {
+    let monitor = unsafe { MonitorFromWindow(window, MONITOR_DEFAULTTONEAREST) };
+    let mut info = MONITORINFO { cbSize: std::mem::size_of::<MONITORINFO>() as u32, ..Default::default() };
+    if !unsafe { GetMonitorInfoW(monitor, &mut info) }.as_bool() {
+        return None;
+    }
+    let rect = info.rcMonitor;
+    let size = ((rect.right - rect.left).max(0) as u32, (rect.bottom - rect.top).max(0) as u32);
+    (size.0 >= 2 && size.1 >= 2).then_some(size)
 }
 
 pub fn find_window_by_class(class: &str) -> Option<HWND> {

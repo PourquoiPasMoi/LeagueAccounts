@@ -6,7 +6,7 @@
 use crate::refresh::Shared;
 use crate::views::{fail, fail_with, CommandResult};
 use leagueaccounts::logging::{self, Event, Reason};
-use leagueaccounts::recorder::capture::find_game_window;
+use leagueaccounts::recorder::capture::{find_client_window, find_game_window};
 use leagueaccounts::recorder::library::{self, Entry, UNKNOWN};
 use leagueaccounts::recorder::session::{self, Outcome, RecordRequest, RecordSettings, Recording};
 use leagueaccounts::riot_client;
@@ -44,6 +44,8 @@ pub struct RecorderPrefs {
     pub mic_device: String,
     /// Gigabytes for all recordings; 0 = no limit.
     pub disk_limit_gb: u32,
+    /// Start when a match is found (champ select on the client), then follow into the game.
+    pub champ_select: bool,
 }
 
 impl Default for RecorderPrefs {
@@ -62,6 +64,7 @@ impl Default for RecorderPrefs {
             discord: false,
             mic_device: String::new(),
             disk_limit_gb: 100,
+            champ_select: true,
         }
     }
 }
@@ -138,7 +141,6 @@ pub struct RecorderStatus {
 
 struct Active {
     recording: Recording,
-    window: isize,
 }
 
 static ACTIVE: Mutex<Option<Active>> = Mutex::new(None);
@@ -193,7 +195,7 @@ fn queue_name(session: &Value) -> (i64, String) {
     (id.max(0), name)
 }
 
-fn start_recording(app: &AppHandle, window: leagueaccounts::recorder::capture::WindowHandle, prefs: &RecorderPrefs) {
+fn start_recording(app: &AppHandle, window: leagueaccounts::recorder::capture::WindowHandle, prefs: &RecorderPrefs, pregame: bool) {
     let client = riot_client::league_client();
     let summoner = client.as_ref().and_then(|client| client.get_json("/lol-summoner/v1/current-summoner")).unwrap_or(Value::Null);
     let session_info = client.as_ref().and_then(|client| client.get_json("/lol-gameflow/v1/session")).unwrap_or(Value::Null);
@@ -219,6 +221,7 @@ fn start_recording(app: &AppHandle, window: leagueaccounts::recorder::capture::W
             discord: prefs.discord,
             microphone_device: prefs.mic_device.clone(),
         },
+        pregame,
     };
     match session::start(request, window) {
         Ok(recording) => {
@@ -226,7 +229,7 @@ fn start_recording(app: &AppHandle, window: leagueaccounts::recorder::capture::W
             let relative = recording.path.strip_prefix(prefs.root()).map(|path| path.to_string_lossy().replace('\\', "/")).unwrap_or_default();
             set_status(app, RecorderStatus { enabled: true, recording: true, account, started_at: recording.started_at, path: relative, error: String::new() });
             if let Ok(mut active) = ACTIVE.lock() {
-                *active = Some(Active { recording, window: window.0 as isize });
+                *active = Some(Active { recording });
             }
         }
         Err(_) => {
@@ -247,6 +250,8 @@ fn finish(app: &AppHandle, active: Active) {
             saved = Some(entry.path);
             String::new()
         }
+        // Match declined or dodged before the game: nothing kept, nothing to report.
+        Outcome::Failed("recorder_cancelled") => String::new(),
         Outcome::Failed(code) => {
             logging::record(Event::RecordingFailed, Reason::None);
             code.to_owned()
@@ -288,10 +293,42 @@ fn finish(app: &AppHandle, active: Active) {
     }
 }
 
-fn in_game_phase() -> Option<bool> {
+fn gameflow_phase() -> Option<String> {
     let client = riot_client::league_client()?;
-    let phase = client.get_json("/lol-gameflow/v1/gameflow-phase")?;
-    Some(matches!(phase.as_str(), Some("GameStart" | "InProgress" | "Reconnect")))
+    client.get_json("/lol-gameflow/v1/gameflow-phase")?.as_str().map(str::to_owned)
+}
+
+fn in_game_phase() -> Option<bool> {
+    Some(matches!(gameflow_phase()?.as_str(), "GameStart" | "InProgress" | "Reconnect"))
+}
+
+/// Champ select recording: start when a match is found, drop it when the
+/// match does not happen (declined ready check, dodge, left the lobby).
+fn watch_champ_select(app: &AppHandle, prefs: &RecorderPrefs) {
+    let pregame = ACTIVE.lock().ok().and_then(|active| active.as_ref().map(|active| !active.recording.in_game()));
+    match pregame {
+        // Recording the game already.
+        Some(false) => {}
+        Some(true) => {
+            if let Some("None" | "Lobby" | "Matchmaking") = gameflow_phase().as_deref() {
+                if let Ok(active) = ACTIVE.lock() {
+                    if let Some(active) = active.as_ref() {
+                        active.recording.discard();
+                    }
+                }
+            }
+        }
+        None => {
+            if find_game_window().is_some() {
+                return;
+            }
+            if let Some("ReadyCheck" | "ChampSelect") = gameflow_phase().as_deref() {
+                if let Some(window) = find_client_window() {
+                    start_recording(app, window, prefs, true);
+                }
+            }
+        }
+    }
 }
 
 /// Checks every 2 seconds while the recorder is on (nothing at all when off).
@@ -424,7 +461,11 @@ pub fn spawn(app: AppHandle) {
                 if done { active.take() } else { None }
             });
             if let Some(active) = active {
-                finished_window = Some(active.window);
+                if !prefs.enabled {
+                    // Turned off during champ select: no half recording.
+                    active.recording.discard();
+                }
+                finished_window = Some(active.recording.window());
                 finish(&app, active);
             }
             let recording = ACTIVE.lock().is_ok_and(|active| active.is_some());
@@ -440,6 +481,10 @@ pub fn spawn(app: AppHandle) {
                 thread::sleep(Duration::from_secs(3));
                 continue;
             }
+            if prefs.champ_select {
+                watch_champ_select(&app, &prefs);
+            }
+            let recording = ACTIVE.lock().is_ok_and(|active| active.is_some());
             let window = find_game_window();
             if window.map(|window| window.0 as isize) != finished_window {
                 if window.is_none() {
@@ -448,7 +493,7 @@ pub fn spawn(app: AppHandle) {
                 if let (Some(window), false) = (window, recording) {
                     // A game window with the client in game (not a replay).
                     if in_game_phase().unwrap_or(false) {
-                        start_recording(&app, window, &prefs);
+                        start_recording(&app, window, &prefs, false);
                     }
                 }
             }

@@ -34,6 +34,8 @@ pub struct RecordingMeta {
     pub duration: f64,
     /// Video seconds at game time 0.
     pub game_start: Option<f64>,
+    /// Video seconds where the game picture starts (champ select before it); 0 = none.
+    pub champ_select: f64,
     pub width: u32,
     pub height: u32,
     pub fps: u32,

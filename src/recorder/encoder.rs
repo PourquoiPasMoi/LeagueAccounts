@@ -6,6 +6,7 @@
 //! H.264 encoder) reads the NV12 frame back once per frame.
 
 use super::capture::Gpu;
+use super::transition::{self, Blender, Picture};
 use std::mem::ManuallyDrop;
 use std::path::Path;
 use windows::core::{Interface, Result, GUID, HSTRING};
@@ -41,7 +42,6 @@ const RING: usize = 8;
 
 struct Slot {
     texture: ID3D11Texture2D,
-    view: Option<ID3D11VideoProcessorOutputView>,
 }
 
 struct Input {
@@ -49,6 +49,23 @@ struct Input {
     size: (u32, u32),
     processor: ID3D11VideoProcessor,
     view: ID3D11VideoProcessorInputView,
+    /// One output view per ring slot (views belong to their processor).
+    outputs: Vec<ID3D11VideoProcessorOutputView>,
+    /// For the transition shader.
+    shader_view: ID3D11ShaderResourceView,
+}
+
+/// The last champ select picture, kept while the game picture comes in.
+struct Held {
+    view: ID3D11ShaderResourceView,
+    size: (u32, u32),
+    _texture: ID3D11Texture2D,
+}
+
+/// Output-size picture the transition is drawn into, then encoded.
+struct Canvas {
+    input: Input,
+    target: ID3D11RenderTargetView,
 }
 
 pub struct VideoEncoder {
@@ -62,6 +79,9 @@ pub struct VideoEncoder {
     _manager: Option<IMFDXGIDeviceManager>,
     settings: EncoderSettings,
     input: Option<Input>,
+    held: Option<Held>,
+    canvas: Option<Canvas>,
+    blender: Option<Blender>,
     ring: Vec<Slot>,
     next: usize,
     staging: Option<ID3D11Texture2D>,
@@ -196,7 +216,7 @@ impl VideoEncoder {
         let video_context: ID3D11VideoContext = gpu.context.cast()?;
         let mut ring = Vec::with_capacity(RING);
         for _ in 0..RING {
-            ring.push(Slot { texture: texture(&gpu.device, width, height, DXGI_FORMAT_NV12, D3D11_BIND_RENDER_TARGET.0 as u32, false)?, view: None });
+            ring.push(Slot { texture: texture(&gpu.device, width, height, DXGI_FORMAT_NV12, D3D11_BIND_RENDER_TARGET.0 as u32, false)? });
         }
         let staging = if hardware { None } else { Some(texture(&gpu.device, width, height, DXGI_FORMAT_NV12, 0, true)?) };
         Ok(Self {
@@ -210,6 +230,9 @@ impl VideoEncoder {
             _manager: manager,
             settings: settings.clone(),
             input: None,
+            held: None,
+            canvas: None,
+            blender: None,
             ring,
             next: 0,
             staging,
@@ -244,8 +267,57 @@ impl VideoEncoder {
         Ok(())
     }
 
+    /// Something to encode: a live picture, or the held one during a transition.
     pub fn has_input(&self) -> bool {
+        self.input.is_some() || self.held.is_some()
+    }
+
+    /// A live picture arrived (after `hold`: the new window's first picture).
+    pub fn has_live_input(&self) -> bool {
         self.input.is_some()
+    }
+
+    /// Keep the current picture for a transition and wait for the next
+    /// window's pictures. Fails (nothing changed) when the GPU cannot run the
+    /// transition shader; the caller then simply cuts.
+    pub fn hold(&mut self) -> Result<()> {
+        if self.input.is_none() {
+            return Err(fail());
+        }
+        if self.blender.is_none() {
+            self.blender = Some(Blender::new(&self.device, &self.context)?);
+        }
+        if self.canvas.is_none() {
+            let size = (self.settings.width, self.settings.height);
+            let input = self.build_input(size)?;
+            let target = transition::target(&self.device, &input.texture)?;
+            self.canvas = Some(Canvas { input, target });
+        }
+        let input = self.input.as_ref().ok_or_else(fail)?;
+        let bind = D3D11_BIND_SHADER_RESOURCE.0 as u32;
+        let copy = texture(&self.device, input.size.0, input.size.1, DXGI_FORMAT_B8G8R8A8_UNORM, bind, false)?;
+        unsafe { self.context.CopyResource(&copy, &input.texture) };
+        let view = transition::view(&self.device, &copy)?;
+        self.held = Some(Held { view, size: input.size, _texture: copy });
+        self.input = None;
+        Ok(())
+    }
+
+    /// The transition is over: forget the held picture.
+    pub fn release_hold(&mut self) {
+        self.held = None;
+    }
+
+    /// Encode the transition at `t` (0..1) from the held picture to the live one.
+    pub fn write_transition(&mut self, time: i64, t: f32) -> Result<()> {
+        let (Some(held), Some(canvas), Some(blender)) = (self.held.as_ref(), self.canvas.as_ref(), self.blender.as_ref()) else {
+            return self.write_frame(time);
+        };
+        let output = (self.settings.width, self.settings.height);
+        let from = Picture { view: &held.view, rect: fit(held.size, output) };
+        let to = self.input.as_ref().map(|input| Picture { view: &input.shader_view, rect: fit(input.size, output) });
+        blender.draw(&canvas.target, output, &from, to.as_ref(), t);
+        self.encode(true, time)
     }
 
     fn build_input(&mut self, size: (u32, u32)) -> Result<Input> {
@@ -277,11 +349,13 @@ impl VideoEncoder {
                 ViewDimension: D3D11_VPOV_DIMENSION_TEXTURE2D,
                 Anonymous: D3D11_VIDEO_PROCESSOR_OUTPUT_VIEW_DESC_0 { Texture2D: D3D11_TEX2D_VPOV { MipSlice: 0 } },
             };
-            for slot in &mut self.ring {
+            let mut outputs = Vec::with_capacity(self.ring.len());
+            for slot in &self.ring {
                 let mut output = None;
                 self.video_device.CreateVideoProcessorOutputView(&slot.texture, &enumerator, &output_desc, Some(&mut output))?;
-                slot.view = output;
+                outputs.push(output.ok_or_else(fail)?);
             }
+            let shader_view = transition::view(&self.device, &source)?;
             let context = &self.video_context;
             context.VideoProcessorSetStreamFrameFormat(&processor, 0, D3D11_VIDEO_FRAME_FORMAT_PROGRESSIVE);
             context.VideoProcessorSetStreamAutoProcessingMode(&processor, 0, false);
@@ -293,18 +367,25 @@ impl VideoEncoder {
             context.VideoProcessorSetOutputTargetRect(&processor, true, Some(&whole));
             let black = D3D11_VIDEO_COLOR { Anonymous: D3D11_VIDEO_COLOR_0 { YCbCr: D3D11_VIDEO_COLOR_YCbCrA { Y: 16.0 / 255.0, Cb: 0.5, Cr: 0.5, A: 1.0 } } };
             context.VideoProcessorSetOutputBackgroundColor(&processor, true, &black);
-            Ok(Input { texture: source, size, processor, view: view.ok_or_else(fail)? })
+            Ok(Input { texture: source, size, processor, view: view.ok_or_else(fail)?, outputs, shader_view })
         }
     }
 
     /// Encode the newest picture at `time` (100 ns units from the start).
     /// Called once per frame tick; an unchanged picture is simply encoded again.
     pub fn write_frame(&mut self, time: i64) -> Result<()> {
-        let Some(input) = self.input.as_ref() else { return Ok(()) };
-        let output = (self.settings.width, self.settings.height);
-        let slot = &self.ring[self.next];
+        self.encode(false, time)
+    }
+
+    /// Convert the live picture (or the transition canvas) to NV12 and encode it.
+    fn encode(&mut self, canvas: bool, time: i64) -> Result<()> {
+        let index = self.next;
         self.next = (self.next + 1) % self.ring.len();
-        let view = slot.view.as_ref().ok_or_else(fail)?;
+        let input = if canvas { self.canvas.as_ref().map(|canvas| &canvas.input) } else { self.input.as_ref() };
+        let Some(input) = input else { return Ok(()) };
+        let output = (self.settings.width, self.settings.height);
+        let slot = &self.ring[index];
+        let view = input.outputs.get(index).ok_or_else(fail)?;
         unsafe {
             let source = RECT { left: 0, top: 0, right: input.size.0 as i32, bottom: input.size.1 as i32 };
             let target = fit(input.size, output);
