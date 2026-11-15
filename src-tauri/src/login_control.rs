@@ -2,7 +2,7 @@
 //! loop alive until native cleanup and admitted storage work have finished.
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
-use tauri::{plugin::TauriPlugin, AppHandle, RunEvent, WindowEvent, Wry};
+use tauri::{plugin::TauriPlugin, AppHandle, RunEvent, Wry};
 
 #[derive(Default)]
 struct State {
@@ -147,14 +147,10 @@ fn defer_exit(app: &AppHandle, control: &Arc<LoginControl>, code: i32) -> bool {
 
 pub fn plugin(control: Arc<LoginControl>) -> TauriPlugin<Wry> {
     tauri::plugin::Builder::new("login-cleanup")
+        // Closing the main window only hides it to the tray (main.rs), so it is not
+        // an exit: treating it as one closed login admission for good, and every
+        // later login failed with `login_busy` until the app was quit.
         .on_event(move |app, event| match event {
-            RunEvent::WindowEvent {
-                label,
-                event: WindowEvent::CloseRequested { api, .. },
-                ..
-            } if label == "main" && defer_exit(app, &control, 0) => {
-                api.prevent_close();
-            }
             RunEvent::ExitRequested { api, code, .. }
                 if defer_exit(app, &control, code.unwrap_or(0)) =>
             {
