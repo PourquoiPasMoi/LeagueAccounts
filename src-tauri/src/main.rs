@@ -1208,12 +1208,12 @@ async fn open_logs_folder() -> CommandResult<()> {
     }).await
 }
 
-/// Windows 11 rounds undecorated windows that keep a shadow; the League client's
-/// frame is square, so opt out of DWM corner rounding. Earlier Windows ignore it.
-fn square_corners(window: &tauri::WebviewWindow) {
-    use windows_sys::Win32::Graphics::Dwm::{DwmSetWindowAttribute, DWMWA_WINDOW_CORNER_PREFERENCE, DWMWCP_DONOTROUND};
+/// Rounded window corners on Windows 11 (the system's standard radius), set
+/// explicitly so an undecorated window always gets them. Earlier Windows ignore it.
+fn round_corners(window: &tauri::WebviewWindow) {
+    use windows_sys::Win32::Graphics::Dwm::{DwmSetWindowAttribute, DWMWA_WINDOW_CORNER_PREFERENCE, DWMWCP_ROUND};
     let Ok(hwnd) = window.hwnd() else { return };
-    let preference = DWMWCP_DONOTROUND;
+    let preference = DWMWCP_ROUND;
     // SAFETY: `hwnd` is this process's live window and the attribute value is a
     // DWM_WINDOW_CORNER_PREFERENCE that outlives the call.
     unsafe {
@@ -1524,7 +1524,7 @@ fn main() {
             app.handle().plugin(login_control::plugin(Arc::clone(&shared.login)))?;
             app.handle().plugin(updater::plugin(Arc::clone(&shared)))?;
             if let Some(window) = app.get_webview_window("main") {
-                square_corners(&window);
+                round_corners(&window);
                 // The window opens at its configured size, which is 100%.
                 scale::apply(&window, 100, ui_scale);
                 // Started with Windows and "start minimized": only the tray icon

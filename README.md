@@ -24,7 +24,7 @@ This fork, now called League Companion, adds a profile page for each account and
 
 ### A profile for every account
 
-Double-click a card (or press Enter, or use Profile in the card menu) and the account opens full screen, styled like the League client. The page also opens by itself after you log in.
+Double-click a card (or press Enter, or use Profile in the card menu) and the account opens full screen. The page also opens by itself after you log in.
 
 <img src="docs/screenshots/profile-overview.png" alt="Account overview with ranked cards, rank history and recent games" width="960" />
 
@@ -139,7 +139,7 @@ Off by default. Turn it on in Settings › Experimental. It is still under devel
 - Closing the window keeps the app in the system tray; quit from the tray icon's menu.
 - Settings opens on side tabs like the League client, and the sidebar lists Recordings, Game settings and Settings above the total value.
 - The account that is signed in right now gets a teal frame and a Connected or Playing badge, and its Log in button is disabled.
-- The selected card has an animated gold frame, and rank crests glow in their tier color.
+- Since v5.0.0 the app has a new look: dark, minimal and rounded, with one blue accent (purple in TFT mode), glass menus, and soft motion. Cards lift and catch a light under the mouse, and rank crests glow in their tier color. (Screenshots below still show the look before v5.0.0.)
 - Champion and skin pictures are downloaded the first time you see them and then load from disk.
 
 ## Everything from the original

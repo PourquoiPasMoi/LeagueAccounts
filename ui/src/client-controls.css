@@ -1,166 +1,49 @@
-/* Controls inspected in the live client: Collection, Profile, TFT and Settings.
-   Native HTML semantics remain intact; artwork is pinned in league/manifest.json. */
-:root {
-  --client-gold-border: linear-gradient(to top, #785b28 0%, #c89c3c 55%, #c8a355 71%, #c8aa6e 100%);
-  --client-gold-hover: linear-gradient(to top, #c89c3c, #dcc188 50%, #e1c998 71%, #f0e6d8);
-}
+/* shared controls (dropdowns, menus, tooltips, spinners). */
+
 .native-icon { display: inline-block; flex-shrink: 0; background: currentColor; mask: var(--icon) center / var(--icon-mask-size, contain) no-repeat; }
-::-webkit-scrollbar { width: 11px; height: 11px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { border: 3px solid transparent; border-radius: 0; background: #785a28; background-clip: padding-box; min-height: 32px; }
-::-webkit-scrollbar-thumb:hover { background-color: #c8aa6e; }
-::-webkit-scrollbar-thumb:active { background-color: #463714; }
 
-/* The flat button's beveled edges and brief text glow, without continuous shine. */
-.btn { border: 2px solid transparent; border-image: var(--client-gold-border) 1; border-radius: 0; min-height: 32px; background: #1e2328; color: #cdbe91; box-shadow: 0 0 0 1px #010a13, inset 0 0 0 1px #010a13; transition: color 160ms, background 160ms; }
-.btn-primary { background: linear-gradient(#5a401f, #332717); }
-.btn:is(:hover, :focus-visible):not(:disabled) { border-image: var(--client-gold-hover) 1; background: linear-gradient(0deg, #766133cc -40%, #1e232a 60%); color: #f0e6d2; box-shadow: 0 0 0 1px #010a13, inset 0 0 0 1px #010a13; filter: none; transform: none; animation: client-text-glow 600ms cubic-bezier(0,0,.33,1); }
-.btn-primary:is(:hover, :focus-visible):not(:disabled) { background: linear-gradient(#604522, #846745); }
-.btn:active:not(:disabled) { border-image: linear-gradient(#463817, #694f27) 1; color: #5c5b57; transform: none; }
-.btn:disabled { border-image: none; border-color: #3c3c41; background: #1e2328; color: #5b5a56; box-shadow: none; }
-.btn-danger { color: #ed9b86; background: #30201d; }
-.btn-danger:is(:hover, :focus-visible):not(:disabled) { color: #ffd6c5; background: #49302a; }
-.btn-play { border-image: linear-gradient(to top, #005a82, #0596aa 50%, #08b1b2) 1; background: #1e2328; color: #a3c7c7; }
-.btn-play:is(:hover, :focus-visible):not(:disabled) { border-image: linear-gradient(to top, #3097c6, #0ecaba 50%, #cdfafa) 1; background: linear-gradient(0deg, #005a8255, #1e2328); color: #cdfafa; }
-.btn-play::after { display: none; }
-.btn.is-client-click:not(:disabled) { animation: client-click 130ms linear, client-text-glow 400ms linear; }
-.btn.is-client-click::before { content: ''; position: absolute; inset: 0; pointer-events: none; background: url('/league/controls/sheen.png') left -25px top -25px / 48px 48px no-repeat, url('/league/controls/sheen.png') right -25px bottom -25px / 48px 48px no-repeat; animation: client-flare 400ms cubic-bezier(0,0,.33,1) both; }
-.btn.is-client-click::after { content: ''; display: block; position: absolute; inset: 0 auto auto 0; width: 100%; height: 150%; pointer-events: none; background: linear-gradient(transparent, #ffffff26 92%, transparent); filter: blur(2px); transition: none; animation: client-sheen 330ms linear both; }
-@keyframes client-click { from { transform: scale(.94); } to { transform: scale(1); } }
-@keyframes client-sheen { from { transform: translateY(-100%) rotate(0); } 10% { transform: translateY(-80%) rotate(-5deg); } to { transform: translateY(100%) rotate(0); } }
-@keyframes client-flare { from, to { opacity: 0; } 25% { opacity: .6; } 50% { opacity: .3; } }
-/* lol-uikit-flat-button-secondary-content: Spiegel 700, #cdbe91. */
-.btn-ghost { font-family: Spiegel, NotoCJK, sans-serif; font-weight: 700; color: #cdbe91; text-transform: none; letter-spacing: .025em; border-width: 1px; }
-.icon-btn, .view-toggle, .view-toggle button { border-radius: 0; }
-@keyframes client-text-glow { from { text-shadow: 0 0 4px #f0e6d8; } 50% { text-shadow: 0 0 4px #f0e6d880; } to { text-shadow: 0 0 4px #f0e6d800; } }
-
-/* Collection search and framed dropdowns. The select keeps native keyboard behavior. */
-.search { border: 1px solid #785a28; border-radius: 0; background: #000b; box-shadow: 0 0 0 1px #0004, inset 0 0 0 1px #0004; color: #a09b8c; }
-.search:focus-within { border-color: #c8aa6e; box-shadow: 0 0 0 1px #0004; }
-.search input { color: #f0e6d2; font-size: 12px; }
-.search input::placeholder { color: #a09b8c; letter-spacing: .1em; }
-.search > .icon, .search > span .icon { color: #c8aa6e; }
-/* Framed dropdown: rcp-fe-lol-uikit framed-dropdown, harvested from the live client.
-   dropdown.ts renders it over the visually hidden native select, which stays the source of truth. */
+/* Dropdown. dropdown.ts renders it over the visually hidden native select, which stays the source of truth. */
 .framed-native { position: absolute; width: 1px; height: 1px; margin: 0; padding: 0; border: 0; opacity: 0; pointer-events: none; clip-path: inset(50%); }
-.select-wrap { height: 32px; padding: 0 0 0 12px; gap: 0; border: 1px solid transparent; border-image: linear-gradient(to top, #695625 0%, #a9852d 23%, #b88d35 93%, #c8aa6e 100%) 1; border-radius: 0; background: rgba(30, 35, 40, .5); color: #a09b8c; cursor: pointer; transition: none; }
-.select-wrap:not(.is-open, .is-disabled):is(:hover, :has(.framed-dropdown-current:focus-visible)) { border-image: linear-gradient(to top, #c89b3c, #f0e6d2) 1; background: linear-gradient(to top, rgba(88, 83, 66, .5), rgba(30, 35, 40, .5)); }
-.select-wrap.is-open { border-image: none; border-color: #463714; background: rgba(30, 35, 40, .5); }
-.select-wrap.is-disabled { border-image: none; border-color: #3c3c41; cursor: default; }
-.select-label { padding-right: 8px; font: 12px/16px Spiegel, NotoCJK, sans-serif; letter-spacing: .025em; color: #5b5a56; }
-.select-wrap.is-open .select-label { color: #463714; }
+.select-wrap { height: 34px; padding: 0 0 0 12px; gap: 0; color: var(--text-2); cursor: pointer; transition: background .2s, border-color .2s, box-shadow .2s; }
+.select-wrap:not(.is-open, .is-disabled):is(:hover, :has(.framed-dropdown-current:focus-visible)) { background: var(--fill-2); }
+.select-wrap:has(.framed-dropdown-current:focus-visible), .select-wrap.is-open { border-color: rgb(var(--accent-rgb) / .7); box-shadow: 0 0 0 3.5px rgb(var(--accent-rgb) / .22); }
+.select-wrap.is-disabled { opacity: .5; cursor: default; }
+.select-label { padding-right: 8px; font: 12.5px/16px var(--font-text); color: var(--text-3); }
 .field .select-wrap { min-width: 140px; }
 .framed-dropdown { position: relative; display: flex; align-items: center; align-self: stretch; flex: 1 1 auto; min-width: 0; }
-.framed-dropdown-current { flex: 1; min-width: 0; padding: 0 29px 0 0; font: 400 12px/30px Spiegel, NotoCJK, sans-serif; letter-spacing: .025em; color: #a09b8c; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; outline: 0; cursor: pointer; user-select: none; }
-.framed-dropdown-current::after { content: ''; position: absolute; right: 8px; top: 50%; width: 13px; height: 18px; transform: translateY(-50%); background: url('/league/controls/up-down-arrow.png') center no-repeat; }
-.framed-dropdown.is-open .framed-dropdown-current { color: #463714; }
-.framed-dropdown.is-open .framed-dropdown-current::after { background-image: url('/league/controls/up-down-arrow-locked.png'); }
-.framed-dropdown.is-disabled .framed-dropdown-current { color: #3c3c41; cursor: default; }
-.framed-dropdown.is-disabled .framed-dropdown-current::after { filter: grayscale(100%); opacity: .35; }
+.framed-dropdown-current { flex: 1; min-width: 0; padding: 0 28px 0 0; font: 500 13px/32px var(--font-text); color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; outline: 0; cursor: pointer; user-select: none; }
+.framed-dropdown-current::after { content: ''; position: absolute; right: 9px; top: 50%; width: 10px; height: 14px; transform: translateY(-50%); background: var(--text-3); mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 14' fill='none' stroke='%23000' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2 5l3-3 3 3M2 9l3 3 3-3'/%3E%3C/svg%3E") center / contain no-repeat; transition: background .2s; }
+.select-wrap:hover .framed-dropdown-current::after { background: var(--text); }
+.framed-dropdown.is-disabled .framed-dropdown-current { color: var(--text-4); cursor: default; }
 /* Friend elo: the division only exists once a tier with divisions is picked. */
 #friend-wrap .framed-dropdown.is-disabled { display: none; }
 #friend-wrap .framed-dropdown + .framed-native + .framed-dropdown { flex: 0 0 auto; margin-left: 2px; }
-/* The flyout opens flush under the frame at its width and reveals over 400ms; closing is
-   instant. The frame clips the reveal and only the inner list scrolls, so no scrollbar
-   flashes while it grows. */
-/* Position and size come from `place()` in dropdown.ts, which measures the
-   room above and below the frame: CSS anchor positioning can pick a side but
-   cannot keep a near-bottom flyout inside the viewport. */
-.framed-dropdown-options { position: fixed; inset: auto; left: anchor(left); width: anchor-size(width); box-sizing: border-box; margin: 0; padding: 0; max-height: 0; overflow: hidden; border: 1px solid transparent; border-image: linear-gradient(to top, #695625, #463714) 1; background: #010a13; color: #cdbe91; }
-.framed-dropdown-options:popover-open { transition: max-height 400ms; }
-
-@starting-style { .framed-dropdown-options:popover-open { max-height: 0; } }
-/* The flyout sets the ceiling (see `place()`); the inner list fills it. */
-.framed-dropdown-scroll { position: relative; max-height: inherit; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; }
-.framed-dropdown-option { position: relative; min-height: 30px; padding: 2px 9px 2px 7px; border-top: 1px solid #1f2123; font: 400 12px/30px Spiegel, NotoCJK, sans-serif; letter-spacing: .025em; color: #cdbe91; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; user-select: none; }
-.framed-dropdown-option[aria-selected="true"] { padding-right: 31px; }
-.framed-dropdown-option[aria-selected="true"]::after { content: ''; position: absolute; right: 13px; top: 50%; width: 14px; height: 11px; transform: translateY(-50%); background: url('/league/controls/dropdown-check.png') center no-repeat; }
-.framed-dropdown-option.is-active { color: #f0e6d2; background: #1e2328; }
-.framed-dropdown-option:active { color: #463714; background: rgba(30, 35, 40, .5); }
-.framed-dropdown-option[aria-disabled="true"] { color: #888; background: none; cursor: default; }
+/* Position and size come from `place()` in dropdown.ts; the frame clips the reveal and only the inner list scrolls. */
+.framed-dropdown-options { position: fixed; inset: auto; left: anchor(left); width: anchor-size(width); min-width: 150px; box-sizing: border-box; margin: 6px 0 0; padding: 0; max-height: 0; overflow: hidden; border: 1px solid var(--line-2); border-radius: 12px; background: var(--glass); backdrop-filter: blur(30px) saturate(180%); box-shadow: var(--shadow-2); color: var(--text); opacity: 0; }
+.framed-dropdown-options:popover-open { opacity: 1; transition: max-height 320ms var(--ease), opacity 160ms; }
+@starting-style { .framed-dropdown-options:popover-open { max-height: 0; opacity: 0; } }
+.framed-dropdown-scroll { position: relative; max-height: inherit; padding: 5px; box-sizing: border-box; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; }
+.framed-dropdown-option { position: relative; min-height: 30px; padding: 0 10px; border-radius: 7px; font: 500 13px/30px var(--font-text); color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; user-select: none; }
+.framed-dropdown-option[aria-selected="true"] { padding-right: 30px; }
+.framed-dropdown-option[aria-selected="true"]::after { content: ''; position: absolute; right: 10px; top: 50%; width: 12px; height: 12px; transform: translateY(-50%); background: currentColor; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' fill='none' stroke='%23000' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2.2 6.4l2.6 2.6 5-5.6'/%3E%3C/svg%3E") center / contain no-repeat; }
+.framed-dropdown-option.is-active { color: #fff; background: var(--accent); }
+.framed-dropdown-option[aria-disabled="true"] { color: var(--text-4); background: none; cursor: default; }
 @media (prefers-reduced-motion: reduce) { .framed-dropdown-options:popover-open { transition: none; } }
 
-/* lol-uikit-flat-input: focus brightens the gold rail and the fill; no halo. */
-.field input, .field textarea, .input-wrap { border-radius: 0; border-color: #785a28; background: #0007; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .25), 0 0 0 1px rgba(0, 0, 0, .25); transition: none; }
-.field input:focus, .field textarea:focus, .input-wrap:focus-within { border-color: #c8aa6e; border-image: linear-gradient(to bottom, #785a28, #c8aa6e) 1 stretch; background: linear-gradient(to bottom, rgba(7, 16, 25, .7), rgba(32, 39, 44, .7)); }
-.field input.invalid, .field input.invalid:focus { border-image: none; border-color: var(--danger); box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .25); }
-
-/* Keyboard focus uses the client's brighter hover sprites. */
-.toggle-row, .radio-row { gap: 12px; border-radius: 0; }
-.toggle-row .switch, .toggle-row input:checked + .switch { order: -1; width: 14px; height: 14px; margin: 3px; border: 0; border-radius: 0; box-shadow: none; background: url('/league/controls/checkbox-spritesheet.png') 0 0 no-repeat; transition: none; }
-.toggle-row .switch::after { display: none; }
-.toggle-row:hover .switch, .toggle-row input:focus-visible + .switch { background-position-y: -14px; }
-.toggle-row input:checked + .switch { background-position-y: -28px; }
-.toggle-row:hover input:checked + .switch, .toggle-row input:checked:focus-visible + .switch { background-position-y: -42px; }
-.toggle-row input:disabled + .switch { filter: brightness(.5); }
-.radio-row input { appearance: none; border: 0; border-radius: 0; width: 20px; height: 20px; padding: 0; background: url('/league/controls/radio.png') 0 0 / 20px auto no-repeat; }
-.radio-row:hover input, .radio-row input:focus-visible { background-position-y: -20px; }
-.radio-row input:active { background-position-y: -40px; }
-.radio-row input:disabled { background-position-y: -60px; }
-.radio-row input:checked { background-position-y: -80px; }
-.radio-row:hover input:checked, .radio-row input:checked:focus-visible { background-position-y: -100px; }
-.radio-row input:checked:active { background-position-y: -120px; }
-/* Client settings rows: labels Spiegel 12px .1em grey, hints 10px 700 gold. */
-.toggle-text strong { font-size: 12px; font-weight: 400; letter-spacing: .1em; color: #a09b8c; }
-.toggle-row:hover .toggle-text strong, .radio-row:hover .toggle-text strong { color: #f0e6d2; }
-.toggle-text span { font-size: 11px; font-weight: 400; letter-spacing: .025em; color: #7d786c; }
-.interval-presets button { border-radius: 0; }
-
-/* League's pointer marks selection; its gold navigation light brightens for
-   hover and keyboard focus, including when the tab is already selected. */
-.mode-pill, .tab-pill { display: none; }
-.mode-btn { position: relative; }
-.mode-btn[aria-selected='true'] { background: linear-gradient(0deg, #cdbe9126, transparent 55%); }
-.mode-btn[aria-selected='true']::before { content: ''; position: absolute; top: 1px; left: 0; right: 0; height: 15px; background: url('/league/controls/nav-pointer.png') center / contain no-repeat; pointer-events: none; }
-/* The gold rail the pointer hangs from; the pointer's dark core notches it. */
-.titlebar::before { content: ''; position: absolute; z-index: 0; inset: 0 0 auto; height: 2px; background: #785a28; pointer-events: none; }
-.mode-btn::after { content: ''; position: absolute; height: 24px; bottom: 0; left: 0; right: 0; background: url('/league/controls/nav-highlight.png') center bottom / 100% 100% no-repeat; opacity: 0; pointer-events: none; }
-.mode-btn[aria-selected='true']::after { opacity: .65; }
-.mode-btn:is(:hover, :focus-visible) { color: #f0e6d2; background: linear-gradient(0deg, #cdbe914d, transparent 65%); }
-.mode-btn:is(:hover, :focus-visible)::after { opacity: 1; }
-/* riotclient-app-controls (rcp-fe-lol-navigation): 18px masks 15px apart, pinned to the
-   top-right corner. The buttons pad the hit area around the client's glyph. */
-.window-controls { align-self: start; height: auto; padding: 4px 6px 0 0; }
-.win-btn { width: 33px; height: 30px; background: none; color: #a09b8c; }
-.win-btn::before { content: ''; display: block; width: 18px; height: 18px; margin: auto; background: currentColor; mask: var(--icon) center / contain no-repeat; }
-.win-hide { --icon: url('/league/icons/control-hide.png'); }
-.win-close { --icon: url('/league/icons/control-close.png'); }
-/* No client artwork exists for maximize: drawn on the same 72px grid as hide and close
-   (40px wide, 8px strokes). */
-.win-max { --icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 72 72' fill='none' stroke='%23000' stroke-width='8'%3E%3Crect x='20' y='20' width='32' height='32'/%3E%3C/svg%3E"); }
-.win-max.is-maximized { --icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 72 72' fill='none' stroke='%23000' stroke-width='8'%3E%3Crect x='20' y='30' width='22' height='22'/%3E%3Cpath d='M30 26V20H52V42H46'/%3E%3C/svg%3E"); }
-.win-btn:is(:hover, :focus-visible), .win-close:hover { background: none; color: #f0e6d2; }
-.win-btn:active { color: #5b5a56; }
-.tabs { padding: 0; border: 0; border-bottom: 1px solid #463714; border-radius: 0; background: none; }
-.tabs button { font-family: Beaufort, WenKai, NotoCJK, serif; text-transform: uppercase; letter-spacing: .075em; border-radius: 0; position: relative; }
-.tabs button[aria-selected='true'] { color: #f0e6d2; background: linear-gradient(0deg, #cdbe9126, transparent); }
-.tabs button[aria-selected='true']::after { content: ''; position: absolute; height: 1px; left: 0; right: 0; bottom: -1px; background: linear-gradient(90deg, transparent, #cdbe91, transparent); }
-
-/* Replace generic CSS spinners and pulsing skeletons with the client's texture. */
-.login-steps li.active .step-icon { border: 0; background: url('/league/controls/spinner.png') center / 140% 140% no-repeat; mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 1px)); animation: client-spin 4s linear infinite; }
-.login-steps li.done .step-icon { background: none; color: #c8aa6e; animation: client-fade 200ms linear; }
-.rank-block.is-pending::after { inset: auto; top: calc(50% - 12px); left: calc(50% - 12px); width: 24px; height: 24px; background: url('/league/controls/spinner.png') center / contain no-repeat; animation: client-spin 4s linear infinite; }
-.card.apex::after { animation: none; }
-.card.enter-stagger, .card.enter, .accounts.mode-swap .rank-block, .accounts.mode-swap .emblem-wrap, .card.rank-arrived .rank-block, .card.rank-arrived .emblem-wrap, .tab-panel, .login-stage, .login-steps li { animation: client-fade 200ms linear both; }
-.card.card-out { animation: fade-out 200ms linear forwards; }
-.modal { animation: client-fade 200ms linear both; }
-.overlay-out .modal { animation: fade-out 200ms linear forwards; }
-/* lol-uikit context-menu (live: friend-list right-click): flush 29px rows, 18px gold
-   glyphs, danger rows in the client's red. */
-.menu { min-width: 127px; padding: 0; border: 2px solid transparent; border-image: linear-gradient(to bottom, #463714, #785a28) 1; border-radius: 0; background: #010a13; box-shadow: 0 0 1px #000, 0 0 1px #000; backdrop-filter: none; animation: client-fade 160ms linear; }
-.menu-item { justify-content: flex-start; height: 29px; padding: 0 10px; gap: 8px; border-radius: 0; font: 12px/29px Spiegel, NotoCJK, sans-serif; letter-spacing: normal; text-align: left; color: #cdbe91; white-space: nowrap; transition: none; }
+/* Context menu: glass sheet, rows highlight in the accent color. */
+.menu { min-width: 190px; padding: 5px; border: 1px solid var(--line-2); border-radius: 12px; background: var(--glass); backdrop-filter: blur(30px) saturate(180%); box-shadow: var(--shadow-2); animation: menu-in .22s var(--ease) both; }
+.menu-item { justify-content: flex-start; height: 30px; padding: 0 10px; gap: 9px; border-radius: 7px; font: 500 13px/30px var(--font-text); text-align: left; color: var(--text); white-space: nowrap; transition: none; }
 .menu-item > span:not(.icon) { flex: 1 1 auto; text-align: left; }
-/* 18px slot as in the client; these PNG glyphs fill their canvas, so mask them smaller. */
-.menu-item .icon { flex: none; --icon-size: 18px; --icon-mask-size: 12px; color: #c8aa6e; }
-.menu-item:is(:hover, :focus-visible) { color: #f0e6d2; background: #1e2328; outline: none; }
-.menu-item:is(:hover, :focus-visible) .icon { color: #f0e6d2; }
-.menu-item.danger, .menu-item.danger .icon { color: #ff2345; }
-.menu-item.danger:is(:hover, :focus-visible), .menu-item.danger:is(:hover, :focus-visible) .icon { color: #ff4461; background: #1e2328; }
-.menu-item.danger:active, .menu-item.danger:active .icon { color: #ff062c; }
-.toast { border-radius: 0; background: #010a13; border-color: #785a28; }
-.client-tooltip { position: fixed; z-index: 20000; pointer-events: none; box-sizing: border-box; max-width: min(280px, calc(100vw - 16px)); max-height: calc(100vh - 32px); overflow-wrap: anywhere; padding: 10px 12px; border: 2px solid transparent; border-image: linear-gradient(to top, #785a28, #463714 50%) 1; background: #1a1c21; box-shadow: 0 0 0 1px #010a137a, 0 0 10px 1px #0008; color: #cdbe91; font: 12px/18px Spiegel, NotoCJK, sans-serif; letter-spacing: .025em; animation: client-fade 160ms linear; }
-.client-tooltip::after { content: ''; position: absolute; width: 16px; height: 11px; left: calc(var(--caret-x) - 10px); bottom: -11px; background: url('/league/frame/tooltip-system-caret.png') center / contain no-repeat; }
-.client-tooltip[data-position='bottom'] { border-image: linear-gradient(to bottom, #785a28, #463714 50%) 1; }
-.client-tooltip[data-position='bottom']::after { top: -11px; bottom: auto; transform: rotate(180deg); }
+.menu-item .icon { flex: none; --icon-size: 16px; --icon-mask-size: 13px; color: var(--text-2); }
+.menu-item:is(:hover, :focus-visible) { color: #fff; background: var(--accent); outline: none; }
+.menu-item:is(:hover, :focus-visible) .icon { color: #fff; }
+.menu-item.danger, .menu-item.danger .icon { color: var(--loss); }
+.menu-item.danger:is(:hover, :focus-visible), .menu-item.danger:is(:hover, :focus-visible) .icon { color: #fff; background: var(--danger); }
+
+/* Tooltip. */
+.client-tooltip { position: fixed; z-index: 20000; pointer-events: none; box-sizing: border-box; max-width: min(280px, calc(100vw - 16px)); max-height: calc(100vh - 32px); overflow-wrap: anywhere; padding: 7px 10px; border: 1px solid var(--line-2); border-radius: 9px; background: rgb(44 44 48 / .96); box-shadow: 0 10px 30px -8px rgb(0 0 0 / .7); color: var(--text-soft); font: 12px/17px var(--font-text); animation: tooltip-in 160ms var(--ease); }
+@keyframes tooltip-in { from { opacity: 0; transform: translateY(3px) scale(.97); } }
+
+/* Shared keyframes the other stylesheets refer to. */
 @keyframes client-spin { to { transform: rotate(1turn); } }
 @keyframes client-fade { from { opacity: 0; } to { opacity: 1; } }

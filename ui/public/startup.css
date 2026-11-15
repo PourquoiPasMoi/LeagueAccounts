@@ -1,12 +1,12 @@
-/* Startup screen, loaded before the app module (Vite loads development styles
-   through JS). A linked file, not a <style> block: Tauri gives <style> elements
-   a CSP nonce, which disables the inline style attributes the interface uses. */
-html, body { margin: 0; min-height: 100%; background: #060e17; }
+/* Startup screen, loaded before the app module. */
+html, body { margin: 0; min-height: 100%; background: #0b0b0d; }
 body:not(.ready) { overflow: hidden; }
 body:not(.ready) > :not(#startup-loader) { visibility: hidden !important; pointer-events: none !important; }
-body:not(.ready) *, body:not(.ready) *::before, body:not(.ready) *::after { animation: none !important; transition: none !important; }
-#startup-loader { position: fixed; inset: 0; z-index: 2147483647; display: grid; place-items: center; background: #060e17; color: #cdbe91; font: 14px/1.5 "Segoe UI", sans-serif; }
-#startup-animation { width: min(300px, 45vmin); aspect-ratio: 1; grid-area: 1 / 1; pointer-events: none; }
+body:not(.ready) > :not(#startup-loader) *, body:not(.ready) > :not(#startup-loader) *::before, body:not(.ready) > :not(#startup-loader) *::after { animation: none !important; transition: none !important; }
+#startup-loader { position: fixed; inset: 0; z-index: 2147483647; display: grid; place-items: center; background: #0b0b0d; color: #a1a1aa; font: 14px/1.5 "Segoe UI Variable Text", "Segoe UI", sans-serif; }
+#startup-animation { grid-area: 1 / 1; display: grid; place-items: center; pointer-events: none; }
+.startup-ring, .spinner-ring { width: 28px; height: 28px; border-radius: 50%; border: 2.5px solid rgb(255 255 255 / .12); border-top-color: #f5f5f7; animation: startup-spin .8s linear infinite; }
 #startup-loader[data-failed] #startup-animation { display: none; }
 #startup-error { grid-area: 1 / 1; max-width: 360px; padding: 24px; text-align: center; }
-#startup-retry { margin-top: 16px; padding: 8px 24px; border: 1px solid #785a28; background: #1e2328; color: #f0e6d2; font: inherit; cursor: pointer; }
+#startup-retry { margin-top: 16px; padding: 8px 22px; border: 0; border-radius: 999px; background: #f5f5f7; color: #0b0b0d; font: inherit; font-weight: 600; cursor: pointer; }
+@keyframes startup-spin { to { transform: rotate(1turn); } }

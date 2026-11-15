@@ -1,0 +1,100 @@
+/* final layer. Imported last in main.ts, so it can restyle anything the
+   screen stylesheets define. Keep screen-specific work in that screen's file. */
+
+/* ------------------------------------------------------------------ sidebar */
+
+.side-tiles { gap: 2px; }
+.side-tile { height: 34px; gap: 10px; padding: 0 10px; border: 0; border-radius: var(--r-sm); background: none; color: var(--text-soft); font: 500 13.5px/1 var(--font-text); transition: background .2s, color .2s, transform .2s var(--ease); }
+.side-tile::before { content: none; }
+.side-tile .icon { color: var(--text-2); }
+.side-tile:is(:hover, :focus-visible) { border: 0; background: var(--fill-1); color: var(--text); }
+.side-tile:is(:hover, :focus-visible) .icon { color: var(--text); }
+.side-tile:active { transform: scale(.98); background: var(--fill-2); }
+.side-tile.is-recording { color: var(--loss); }
+.side-tile.is-recording .icon { color: var(--loss); }
+
+.side-value { gap: 3px; margin-top: 0; padding: 13px 14px 12px; border: 1px solid var(--line); border-radius: var(--r-lg); background: radial-gradient(180px 120px at var(--mx, 0%) var(--my, 0%), rgb(var(--accent-rgb) / .16), transparent 70%), rgb(255 255 255 / .035); transition: border-color .25s, transform .3s var(--ease); }
+.side-value:hover { border-color: var(--line-2); transform: translateY(-1px); }
+.side-value-label { font: 500 12px/1 var(--font-text); color: var(--text-2); }
+.side-value-amount { font: 700 24px/1.15 var(--font-display); letter-spacing: -.025em; color: var(--text); text-shadow: none; }
+.side-value-detail { font-size: 11.5px; color: var(--text-3); }
+.side-bottom .side-value { margin: 0; }
+
+.card.connected { border-color: rgb(48 209 88 / .55); box-shadow: 0 0 0 3px rgb(48 209 88 / .13); }
+
+/* ------------------------------------------------------------------ check boxes */
+
+.rec-pick, .gi-check input {
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border: 1.5px solid var(--line-3);
+  border-radius: 5px;
+  background: rgb(0 0 0 / .25) center / 10px no-repeat;
+  transition: background-color .15s, border-color .15s;
+}
+.rec-row:hover .rec-pick, .gi-check:hover input { border-color: rgb(255 255 255 / .5); }
+.rec-row.is-picked .rec-pick, .gi-check input:checked {
+  border-color: var(--accent);
+  background-color: var(--accent);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' fill='none' stroke='%23fff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2.2 6.4l2.6 2.6 5-5.6'/%3E%3C/svg%3E");
+}
+
+/* ------------------------------------------------------------------ side navigation inside windows
+   Settings, Game settings and Recordings share one look: rounded rows, the current one filled. */
+
+.settings-nav, .gs-nav, .rec-nav { gap: 2px; padding: 12px 10px; }
+.settings-nav-group { padding: 14px 10px 6px; font: 600 11.5px/1.2 var(--font-text); color: var(--text-3); }
+.settings-nav button, .gs-nav button, .rec-nav button { padding: 8px 10px; border-radius: var(--r-sm); font: 500 13px/1.2 var(--font-text); color: var(--text-soft); transition: background .18s, color .18s; }
+.settings-nav button::before, .gs-nav button[aria-selected="true"]::after, .rec-nav button[aria-selected="true"]::after { content: none; }
+.settings-nav button:hover, .gs-nav button:hover, .rec-nav button:hover { background: var(--fill-1); color: var(--text); }
+.settings-nav button[aria-selected="true"], .gs-nav button[aria-selected="true"], .rec-nav button[aria-selected="true"] { background: var(--fill-2); color: var(--text); }
+.gs-nav button .icon { color: var(--text-2); }
+.gs-nav button[aria-selected="true"] .icon { color: var(--text); }
+.settings-layout { border-top-color: var(--line); }
+.settings-nav { border-right-color: var(--line); }
+.settings-pages { padding: 20px 30px 14px; }
+.settings-page { animation: page-in .3s var(--ease) both; }
+.settings-page-title { margin: 0 0 12px; padding-bottom: 0; border-bottom: 0; font: 700 19px/1.2 var(--font-display); letter-spacing: -.018em; color: var(--text); }
+.settings-modal .modal-body { padding-bottom: 14px; }
+@keyframes page-in { from { opacity: 0; transform: translateY(6px); } }
+
+/* ------------------------------------------------------------------ segmented controls */
+
+.segmented { padding: 2px; gap: 2px; border: 0; border-radius: 9px; background: var(--fill-1); box-shadow: inset 0 0 0 1px var(--line); }
+.segmented button { padding: 5px 11px; border-radius: 7px; font-size: 12px; font-weight: 500; color: var(--text-2); transition: background .18s, color .18s; }
+.segmented button + button { border-left: 0; }
+.segmented button[aria-pressed="true"] { color: var(--text); background: rgb(255 255 255 / .14); box-shadow: 0 1px 2px rgb(0 0 0 / .35); }
+
+/* ------------------------------------------------------------------ account page */
+
+.profile-overlay { background: rgb(var(--bg-rgb) / .7); backdrop-filter: blur(26px) saturate(150%); animation: client-fade .25s ease both; }
+.profile-page { border: 1px solid var(--line-2); border-radius: var(--r-xl); overflow: hidden; background: radial-gradient(ellipse 60% 240px at 12% 0%, color-mix(in srgb, var(--tier, var(--accent)) 14%, transparent), transparent), rgb(24 24 27 / .96); box-shadow: var(--shadow-2); animation: modal-in .45s var(--spring) both; }
+.profile-tabs button { border-radius: var(--r-sm) var(--r-sm) 0 0; font-weight: 500; }
+.profile-tabs button[aria-selected="true"] { background: none; }
+.profile-tabs button[aria-selected="true"]::after { height: 2px; border-radius: 2px; background: var(--accent); }
+.ranked-card { border-radius: var(--r-lg); border-color: var(--line); background-color: rgb(255 255 255 / .03); transition: border-color .2s, transform .3s var(--ease), box-shadow .3s; }
+.ranked-card[data-chart-mode]:hover { transform: translateY(-2px); }
+.ranked-card.is-shown { border-color: rgb(var(--accent-rgb) / .7); box-shadow: 0 0 0 3px rgb(var(--accent-rgb) / .16); }
+
+/* ------------------------------------------------------------------ recordings */
+
+.rec-kind-tab { border-radius: var(--r) var(--r) 0 0; }
+.rec-kind-tab em { border-radius: 99px; padding: 3px 7px; }
+.rec-kind-tab[aria-selected="true"] { box-shadow: inset 0 -2px 0 var(--accent); background: none; border-color: transparent; }
+.rec-kind-tab.is-clip[aria-selected="true"] { box-shadow: inset 0 -2px 0 var(--accent); }
+.rec-modes button, .rec-filters button { border-radius: 99px; }
+.rec-modes button[aria-pressed="true"], .rec-filters button[aria-pressed="true"] { background: var(--fill-2); border-color: transparent; }
+.rec-row { border-radius: var(--r); background: rgb(255 255 255 / .03); transition: border-color .2s, background .2s, transform .3s var(--ease); }
+.rec-row:hover { transform: translateY(-1px); background: rgb(255 255 255 / .05); }
+.rec-row.is-selected, .rec-row.is-picked { background: rgb(var(--accent-rgb) / .08); border-color: rgb(var(--accent-rgb) / .6); box-shadow: none; }
+.rec-mode-tag, .rec-clip-tag { border-radius: 5px; }
+.rec-side-row { border-radius: var(--r-sm); }
+.rec-state { border-radius: 99px; }
+
+/* ------------------------------------------------------------------ motion */
+
+/* Windows open with a soft spring; closing stays quick. */
+.overlay .modal { transform-origin: 50% 60%; }
+.drawer { animation: drawer-in .55s var(--ease) both; }
+.toast { animation: toast-in .5s var(--spring) both; }

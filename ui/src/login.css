@@ -7,9 +7,8 @@
   display: grid;
   place-items: center;
   overflow: hidden;
-  background:
-    radial-gradient(600px 420px at 50% 38%, color-mix(in srgb, var(--accent) 20%, transparent), transparent 70%),
-    rgba(4, 6, 11, 0.92);
+  background: radial-gradient(600px 420px at 50% 38%, color-mix(in srgb, var(--accent) 20%, transparent), transparent 70%),
+    rgb(var(--s1-rgb) / 0.92);
   backdrop-filter: blur(14px);
   animation: fade-in 0.35s ease both;
 }
@@ -68,10 +67,9 @@
 
 .login-title {
   margin: 0;
-  font-family: Beaufort, WenKai, NotoCJK, serif;
+  font-family: var(--font-display);
   font-weight: 600;
   font-size: 26px;
-  letter-spacing: 0.06em;
   text-align: center;
 }
 .login-account {
@@ -85,15 +83,16 @@
   height: 8px;
   padding: 1px;
   margin-bottom: 24px;
-  border: 1px solid #463714;
-  background: #010a13;
+  border: 1px solid var(--line);
+  background: var(--s1);
   overflow: hidden;
+  border-radius: var(--r);
 }
 .login-progress span {
   display: block;
   height: 100%;
   width: 100%;
-  background: linear-gradient(90deg, #785a28, #c8aa6e 70%, #f0e6d2);
+  background: linear-gradient(90deg, var(--fill-3), var(--accent) 70%, var(--accent));
   transform: scaleX(var(--login-progress));
   transform-origin: left;
   transition: transform 240ms ease-out;
@@ -113,11 +112,10 @@
   align-items: center;
   gap: 12px;
   padding: 8px 12px;
-  border-radius: 0;
+  border-radius: var(--r);
   color: var(--faint);
   font-weight: 500;
-  transition:
-    color 0.3s,
+  transition: color 0.3s,
     background 0.3s,
     opacity 0.3s;
   animation: rise 0.45s var(--ease) both;
@@ -132,8 +130,7 @@
   height: 20px;
   border-radius: 50%;
   border: 1.5px solid rgba(255, 255, 255, 0.18);
-  transition:
-    background 0.3s,
+  transition: background 0.3s,
     border-color 0.3s;
 }
 .login-steps li.active {
@@ -151,12 +148,12 @@
 .login-steps li.done .step-icon {
   border-color: transparent;
   background: var(--success);
-  color: #06210f;
+  color: var(--on-accent);
   animation: pop 0.4s var(--spring);
 }
 .login-steps li.error {
-  color: #ff8a8a;
-  background: rgba(240, 82, 82, 0.1);
+  color: var(--loss);
+  background: rgb(var(--loss-rgb) / 0.1);
 }
 .login-steps li.error .step-icon {
   border-color: transparent;
@@ -181,7 +178,7 @@
   gap: 2px;
   margin-top: 12px;
   text-align: center;
-  color: #c8aa6e;
+  color: var(--emph);
   font-variant-numeric: tabular-nums;
   line-height: 1.4;
 }
@@ -215,10 +212,10 @@
 }
 .login-overlay.is-error .login-orbit .ring {
   animation-play-state: paused;
-  border-color: rgba(240, 82, 82, 0.35) !important;
+  border-color: rgb(var(--loss-rgb) / 0.35) !important;
 }
 .login-overlay.is-error .login-title {
-  color: #ff8a8a;
+  color: var(--loss);
 }
 .login-overlay.is-info .ring-1,
 .login-overlay.is-info .ring-2 {
@@ -233,9 +230,9 @@
 
 /* Danger variant of the warning box (closing a running match). */
 .warning.danger {
-  color: #ff8a8a;
-  background: rgba(240, 82, 82, 0.08);
-  border-color: rgba(240, 82, 82, 0.3);
+  color: var(--loss);
+  background: rgb(var(--loss-rgb) / 0.08);
+  border-color: rgb(var(--loss-rgb) / 0.3);
 }
 
 /* ------------------------------------------------------------------ update banner */
@@ -249,12 +246,11 @@
   align-items: center;
   gap: 12px;
   padding: 10px 10px 10px 14px;
-  border-radius: 0;
-  background: rgba(22, 28, 42, 0.97);
+  border-radius: var(--r);
+  background: rgb(var(--s2-rgb) / 0.97);
   backdrop-filter: blur(16px);
   border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
-  box-shadow:
-    0 20px 50px -14px rgba(0, 0, 0, 0.7),
+  box-shadow: 0 20px 50px -14px rgba(0, 0, 0, 0.7),
     0 0 0 4px color-mix(in srgb, var(--accent) 10%, transparent);
   transform: translateX(-50%);
   animation: banner-in 0.6s var(--spring) both;
@@ -317,7 +313,6 @@
    lol-loading-screen: Beaufort caps in #c8aa6e over a 200×16 progress bar. */
 .update-screen {
   position: absolute;
-  /* The loader's art spans about 60px around the centre of its 300px box. */
   top: calc(50% + 64px);
   left: 50%;
   display: flex;
@@ -330,25 +325,24 @@
 }
 .update-screen-title {
   margin: 0;
-  font-family: Beaufort, WenKai, NotoCJK, serif;
+  font-family: var(--font-display);
   font-size: 18px;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: #c8aa6e;
+  font-weight: 600;
+  color: var(--emph);
 }
 .update-meter {
   box-sizing: border-box;
   width: 200px;
   height: 16px;
   padding: 3px;
-  border: 1px solid #785a28;
-  background: #010a13;
+  border: 1px solid var(--line-2);
+  background: var(--s1);
+  border-radius: var(--r);
 }
 .update-meter span {
   display: block;
   height: 100%;
-  background: linear-gradient(to right, #785a28, #c8aa6e);
+  background: linear-gradient(to right, var(--fill-3), var(--accent));
   transform: scaleX(0);
   transform-origin: left;
   transition: transform 0.2s linear;
@@ -357,7 +351,7 @@
   min-height: 18px;
   margin: 0;
   font-size: 12px;
-  color: #a09b8c;
+  color: var(--text-2);
   font-variant-numeric: tabular-nums;
 }
 @media (prefers-reduced-motion: reduce) {

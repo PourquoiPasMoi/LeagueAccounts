@@ -15,6 +15,8 @@ import { skinsValue } from "./prices";
 import { openGameSettings } from "./gamesettings";
 import "./recordings.css";
 import "./gameinfo.css";
+// Final layer of the design: must stay the last stylesheet.
+import "./polish.css";
 import { openRecordings } from "./recordings";
 import type { DiscordWebhook, RecorderPrefs, RecorderStatus } from "./api";
 import { experimentalOn, initBuilds, openCurrentBuild, resumeChampSelect, setExperimental, trackGames } from "./builds";
