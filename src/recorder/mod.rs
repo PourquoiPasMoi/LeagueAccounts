@@ -33,6 +33,92 @@ pub fn shutdown() {
     let _ = unsafe { MFShutdown() };
 }
 
+/// AV1 averaging 60 % of the H.264 bitrate: measured on a real 46-min 1080p60
+/// game recorded in H.264 at 10 Mbps (VMAF against that file: AV1 94.6 in
+/// fights, 95.9 on calm parts; H.264 at 10 Mbps encoded again: 95.9), about 36 %
+/// smaller. See devdocs/07-RECORDER.md.
+const AV1_SHARE: f64 = 0.6;
+
+/// What this PC can do with AV1 (checked once).
+#[derive(Clone, Copy, Debug, Default, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Formats {
+    /// The GPU can record in AV1.
+    pub av1_encoder: bool,
+    /// AV1 recordings can be decoded for Exact and Discord clips.
+    pub av1_decoder: bool,
+}
+
+pub fn formats() -> Formats {
+    static FORMATS: std::sync::OnceLock<Formats> = std::sync::OnceLock::new();
+    *FORMATS.get_or_init(|| {
+        // Its own thread: Media Foundation is started and stopped there.
+        std::thread::spawn(|| {
+            if startup().is_err() {
+                return Formats::default();
+            }
+            let formats = Formats {
+                av1_encoder: encoder::hardware_encoder(encoder::Codec::Av1),
+                av1_decoder: encoder::decoder_available(encoder::Codec::Av1),
+            };
+            shutdown();
+            formats
+        })
+        .join()
+        .unwrap_or_default()
+    })
+}
+
+/// The recording's picture is AV1 already.
+pub fn is_av1(meta: Option<&RecordingMeta>) -> bool {
+    meta.is_some_and(|meta| if meta.codec.is_empty() { meta.encoder.contains("AV1") } else { meta.codec == "av1" })
+}
+
+/// Encode an H.264 recording again as AV1 to save space. Sound tracks, moments
+/// and every companion file stay as they are; only the `.mp4` is replaced,
+/// and only when the new one is complete and smaller. Returns the sizes before
+/// and after. `progress` (0..1) returns false to stop.
+pub fn convert_to_av1(file: &Path, progress: impl FnMut(f64) -> bool) -> Result<(u64, u64), &'static str> {
+    let before = std::fs::metadata(file).map_err(|_| "recording_missing")?.len();
+    let seconds = clip::duration(file).max(1.0);
+    let directory = file.parent().ok_or("recording_missing")?.join(".convert");
+    std::fs::create_dir_all(&directory).map_err(|_| "file_write")?;
+    let temporary = directory.join(file.file_name().ok_or("recording_missing")?);
+    // The same picture: AV1 averaging 60 % of the old bitrate (measured best).
+    let bitrate = ((before as f64 * 8.0 / seconds) * AV1_SHARE) as u32;
+    let result = clip::convert(file, &temporary, encoder::Codec::Av1, bitrate.max(1_000_000), encoder::Rate::Variable, progress);
+    let after = std::fs::metadata(&temporary).map(|metadata| metadata.len()).unwrap_or(0);
+    let outcome = match result {
+        Err(_) => Err("convert_failed"),
+        Ok(()) if after == 0 || after >= before => Err("convert_no_gain"),
+        Ok(()) => std::fs::rename(&temporary, file).map_err(|_| "convert_in_use"),
+    };
+    let _ = std::fs::remove_file(&temporary);
+    let _ = std::fs::remove_dir(&directory);
+    outcome?;
+    // The sound is the same: keep the separate sound files and the waves (they
+    // count as outdated when older than the video, which would mean reading
+    // the whole recording again).
+    let now = std::time::SystemTime::now();
+    let mut kept: Vec<std::path::PathBuf> = library::SOURCES.iter().map(|source| library::track_file(file, source)).collect();
+    kept.push(library::waves_file(file));
+    for companion in kept {
+        if let Ok(handle) = std::fs::File::options().write(true).open(&companion) {
+            let _ = handle.set_modified(now);
+        }
+    }
+    let mut meta = library::read_meta(file).unwrap_or_default();
+    meta.codec = "av1".into();
+    meta.encoder = "AV1 (converted)".into();
+    let _ = library::write_meta(file, &meta);
+    Ok((before, after))
+}
+
+/// AV1 bitrate for the same picture as H.264 at `bitrate` (constant bitrate).
+pub fn av1_bitrate(bitrate: u32) -> u32 {
+    (f64::from(bitrate) * AV1_SHARE) as u32
+}
+
 /// The video size for a window: the window's own size when it is not taller
 /// than `max_height` (0 = no limit), otherwise scaled down to it. Even numbers.
 pub fn output_size(window: (u32, u32), max_height: u32) -> (u32, u32) {
@@ -309,6 +395,10 @@ pub fn save_clip(root: &Path, relative: &str, parts: &[(f64, f64)], mode: ClipMo
         // One track in a clip.
         audio_tracks: Vec::new(),
         started_at: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |time| time.as_millis() as u64),
+        // Fast keeps the source's picture; Exact and Discord write H.264.
+        codec: if mode == ClipMode::Fast { original.codec.clone() } else { "h264".into() },
+        champ_select: 0.0,
+        post_game: 0.0,
         ..original
     };
     let _ = library::write_meta(&target, &meta);

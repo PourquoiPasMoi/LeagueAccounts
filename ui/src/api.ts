@@ -504,6 +504,10 @@ export const api = {
   liveStats: () => call<LiveStats | null>("live_stats"),
   recorderPrefs: () => call<RecorderPrefsView>("recorder_prefs"),
   setRecorderPrefs: (prefs: RecorderPrefs) => call<RecorderPrefsView>("set_recorder_prefs", { prefs }),
+  convertInfo: () => call<ConvertStatus>("convert_info"),
+  /** All recordings not in AV1 yet, or only `paths`. */
+  startConvert: (paths: string[] | null = null) => call<ConvertStatus>("start_convert", { paths }),
+  stopConvert: () => call<void>("stop_convert"),
   pickRecordingsFolder: (title: string) => call<string | null>("pick_recordings_folder", { title }),
   recorderStatus: () => call<RecorderStatus>("recorder_status"),
   microphones: () => call<{ id: string; name: string; console: boolean; communications: boolean }[]>("microphones"),
@@ -762,11 +766,54 @@ export interface RecorderPrefs {
   diskLimitGb: number;
   /** Start when a match is found (champ select), then follow into the game. */
   champSelect: boolean;
+  /** After the game, keep recording the end-of-game screen until the player leaves it. */
+  postGame: boolean;
+  /** Video format: h264 plays everywhere, av1 is about half the size (GPUs with an AV1 encoder). */
+  codec: "h264" | "av1";
+  /** constant = always the preset's bitrate; variable = same quality, less when little moves. */
+  rate: "constant" | "variable";
+  /** One rule per mode group, most important first (the disk limit deletes from the end first). */
+  modes: ModeRule[];
+}
+
+/** Recording rule of one mode group (see `queues::GROUPS`). */
+export interface ModeRule {
+  key: string;
+  record: boolean;
+  /** Hours a recording is kept; 0 = until the disk limit. */
+  keepHours: number;
+}
+
+/** What this PC can do with AV1. */
+export interface VideoFormats {
+  av1Encoder: boolean;
+  av1Decoder: boolean;
 }
 
 export interface RecorderPrefsView extends RecorderPrefs {
   /** The folder actually used. */
   root: string;
+  formats: VideoFormats;
+}
+
+/** The "Save space" job converting recordings to AV1. */
+export interface ConvertStatus {
+  running: boolean;
+  paused: boolean;
+  /** Waiting while a recording plays. */
+  watching: boolean;
+  done: number;
+  total: number;
+  current: string;
+  progress: number;
+  savedBytes: number;
+  failed: number;
+  totalBytes: number;
+  doneBytes: number;
+  /** Estimated seconds left (0 = not known yet). */
+  etaSeconds: number;
+  remaining: number;
+  remainingBytes: number;
 }
 
 export interface RecorderStatus {
@@ -805,6 +852,8 @@ export interface RecordingMeta {
   height: number;
   fps: number;
   encoder: string;
+  /** "h264" or "av1"; empty in older files (H.264). */
+  codec?: string;
   capture: string;
   audio: boolean;
   audioSource: string;
@@ -893,6 +942,9 @@ export const events = {
   /** The recorder started or stopped recording, or its settings changed. */
   onRecorderStatus: (handler: (status: RecorderStatus) => void): Promise<UnlistenFn> =>
     listen<RecorderStatus>("recorder-status", (event) => handler(event.payload)),
+  /** Progress of the AV1 conversion job. */
+  onConvertStatus: (handler: (status: ConvertStatus) => void): Promise<UnlistenFn> =>
+    listen<ConvertStatus>("convert-status", (event) => handler(event.payload)),
   /** A recording or clip was saved or deleted. */
   onRecordingsChanged: (handler: () => void): Promise<UnlistenFn> => listen("recordings-changed", () => handler()),
   /** A game recording's end-of-game details were saved (its path). */

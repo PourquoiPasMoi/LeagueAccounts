@@ -9,8 +9,8 @@
 //! short GPU transition (`transition.rs`), all in one file.
 
 use super::audio::{self, AudioMixer};
-use super::capture::{find_game_window, monitor_size, window_process_id, Capture, Gpu};
-use super::encoder::{EncoderSettings, VideoEncoder};
+use super::capture::{find_client_window, find_game_window, monitor_size, window_process_id, Capture, Gpu};
+use super::encoder::{AudioFile, Codec, EncoderSettings, Rate, VideoEncoder};
 use super::library::{self, Entry, RecordingMeta, GAMES};
 use super::moments::MomentTracker;
 use super::{output_size, shutdown, startup, transition};
@@ -38,6 +38,11 @@ pub struct RecordSettings {
     pub microphone: bool,
     /// Windows endpoint id of the microphone; empty = the default communication device.
     pub microphone_device: String,
+    /// H.264, or AV1 when the GPU has an AV1 encoder (falls back to H.264).
+    pub codec: Codec,
+    pub rate: Rate,
+    /// After the game, go back to the League client's end-of-game screen.
+    pub post_game: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -59,6 +64,11 @@ pub struct RecordRequest {
 const PREGAME_LIMIT: Duration = Duration::from_secs(20 * 60);
 /// The game window's first pictures can be black: wait a moment before the transition.
 const GAME_SETTLE: Duration = Duration::from_millis(1800);
+/// Longest time on the end-of-game screen (the watcher usually stops sooner,
+/// when the player leaves that screen).
+const POSTGAME_LIMIT: Duration = Duration::from_secs(10 * 60);
+/// How long the game window may refuse window capture before screen capture is used.
+const WINDOW_CAPTURE_PATIENCE: Duration = Duration::from_secs(10);
 /// A game window that never draws: transition anyway (into the dark colour).
 const GAME_NO_PICTURE: Duration = Duration::from_secs(15);
 
@@ -75,6 +85,8 @@ pub struct Recording {
     window: Arc<AtomicIsize>,
     /// The game window is being recorded (always true without champ select).
     in_game: Arc<AtomicBool>,
+    /// Back on the League client after the game.
+    after: Arc<AtomicBool>,
     thread: Option<JoinHandle<Outcome>>,
     /// The file being written.
     pub path: PathBuf,
@@ -99,6 +111,11 @@ impl Recording {
 
     pub fn in_game(&self) -> bool {
         self.in_game.load(Ordering::Relaxed)
+    }
+
+    /// On the end-of-game screen (the watcher stops it when the player leaves).
+    pub fn after_game(&self) -> bool {
+        self.after.load(Ordering::Relaxed)
     }
 
     pub fn window(&self) -> isize {
@@ -135,9 +152,10 @@ pub fn start(request: RecordRequest, window: HWND) -> std::io::Result<Recording>
     let discard = Arc::new(AtomicBool::new(false));
     let in_game = Arc::new(AtomicBool::new(!request.pregame));
     let window = Arc::new(AtomicIsize::new(window.0 as isize));
+    let after = Arc::new(AtomicBool::new(false));
     let started_at = now_ms();
     let thread = {
-        let shared = Shared { stop: Arc::clone(&stop), discard: Arc::clone(&discard), window: Arc::clone(&window), in_game: Arc::clone(&in_game) };
+        let shared = Shared { stop: Arc::clone(&stop), discard: Arc::clone(&discard), window: Arc::clone(&window), in_game: Arc::clone(&in_game), after: Arc::clone(&after) };
         let path = path.clone();
         let request = request.clone();
         thread::Builder::new()
@@ -148,7 +166,7 @@ pub fn start(request: RecordRequest, window: HWND) -> std::io::Result<Recording>
                 outcome
             })?
     };
-    Ok(Recording { stop, discard, window, in_game, thread: Some(thread), path, account: request.account, started_at })
+    Ok(Recording { stop, discard, window, in_game, after, thread: Some(thread), path, account: request.account, started_at })
 }
 
 struct Shared {
@@ -156,14 +174,18 @@ struct Shared {
     discard: Arc<AtomicBool>,
     window: Arc<AtomicIsize>,
     in_game: Arc<AtomicBool>,
+    after: Arc<AtomicBool>,
 }
 
 /// Where the recording is: on the client window, moving to the game, or in the game.
 enum Stage {
     Pregame { since: Instant, looked: Instant },
-    /// Game window open; `first` = its first picture, `start` = transition start.
-    Switch { opened: Instant, first: Option<Instant>, start: Option<Instant> },
+    /// New window open (the game's, or the client's again after the game);
+    /// `first` = its first picture, `start` = transition start.
+    Switch { opened: Instant, first: Option<Instant>, start: Option<Instant>, to_client: bool },
     Game,
+    /// The client's end-of-game screen.
+    After { since: Instant },
 }
 
 fn record(request: &RecordRequest, shared: &Shared, path: &Path, stamp: &str, started_at: u64) -> Outcome {
@@ -243,8 +265,18 @@ fn record_inner(request: &RecordRequest, shared: &Shared, path: &Path, stamp: &s
         // (Fragmented MP4 made the player read the whole file before showing anything.)
         fragmented: false,
         audio_tracks: mixer.tracks().len(),
+        codec: settings.codec,
+        rate: settings.rate,
     };
     let Ok(mut encoder) = VideoEncoder::new(&gpu, path, encoder_settings) else { return Outcome::Failed("recorder_encoder") };
+    // Each source also goes to its own small file now (player volume per source).
+    let mut source_files: Vec<Option<AudioFile>> = Vec::new();
+    if audio_tracks.len() >= 2 {
+        if let Some(directory) = path.parent().map(|parent| parent.join(library::TRACKS)) {
+            let _ = std::fs::create_dir_all(&directory);
+            source_files = audio_tracks.iter().skip(1).map(|label| AudioFile::create(&library::track_file(path, label)).ok()).collect();
+        }
+    }
 
     // Key moments: their own light thread, so a slow answer never delays frames.
     let video_start: Arc<OnceLock<Instant>> = Arc::new(OnceLock::new());
@@ -291,6 +323,9 @@ fn record_inner(request: &RecordRequest, shared: &Shared, path: &Path, stamp: &s
     let mut stage = if request.pregame { Stage::Pregame { since: now, looked: now } } else { Stage::Game };
     // Video seconds where the game picture takes over (champ select before it).
     let mut game_from = 0.0;
+    let mut game_seen: Option<Instant> = None;
+    // Video seconds where the end-of-game screen starts (0 = not recorded).
+    let mut post_from = 0.0;
     loop {
         if stop.load(Ordering::Relaxed) {
             break;
@@ -303,7 +338,13 @@ fn record_inner(request: &RecordRequest, shared: &Shared, path: &Path, stamp: &s
             if looked.elapsed() >= Duration::from_secs(1) {
                 *looked = Instant::now();
                 if let Some(game) = find_game_window() {
-                    if let Ok(opened) = Capture::open(&gpu, game, settings.screen) {
+                    let first_seen = *game_seen.get_or_insert_with(Instant::now);
+                    let opened = if first_seen.elapsed() < WINDOW_CAPTURE_PATIENCE {
+                        Capture::open_strict(&gpu, game, settings.screen)
+                    } else {
+                        Capture::open(&gpu, game, settings.screen)
+                    };
+                    if let Ok(opened) = opened {
                         // The game's own sound from now on, on the same track.
                         if settings.game_audio {
                             if let Ok(source) = audio::game_sound(window_process_id(game)) {
@@ -311,7 +352,7 @@ fn record_inner(request: &RecordRequest, shared: &Shared, path: &Path, stamp: &s
                             }
                         }
                         stage = if encoder.hold().is_ok() {
-                            Stage::Switch { opened: Instant::now(), first: None, start: None }
+                            Stage::Switch { opened: Instant::now(), first: None, start: None, to_client: false }
                         } else {
                             game_from = tick as f64 / f64::from(fps);
                             Stage::Game
@@ -323,9 +364,38 @@ fn record_inner(request: &RecordRequest, shared: &Shared, path: &Path, stamp: &s
                 }
             }
         } else if !capture.is_alive() {
-            break;
+            // The game ended: back to the client's end-of-game screen, with the
+            // same transition, when asked; otherwise the recording ends here.
+            let mut moved = false;
+            if matches!(stage, Stage::Game) && settings.post_game {
+                if let Some(client) = find_client_window() {
+                    if let Ok(opened) = Capture::open(&gpu, client, settings.screen) {
+                        if encoder.hold().is_ok() {
+                            if settings.game_audio {
+                                if let Ok(source) = audio::game_sound(window_process_id(client)) {
+                                    mixer.replace(source);
+                                }
+                            }
+                            capture = opened;
+                            shared.window.store(client.0 as isize, Ordering::Relaxed);
+                            shared.after.store(true, Ordering::Relaxed);
+                            stage = Stage::Switch { opened: Instant::now(), first: None, start: None, to_client: true };
+                            moved = true;
+                        }
+                    }
+                }
+            }
+            if !moved {
+                break;
+            }
         }
-        let pregame = matches!(stage, Stage::Pregame { .. });
+        if let Stage::After { since } = &stage {
+            if since.elapsed() > POSTGAME_LIMIT {
+                break;
+            }
+        }
+        // On the client (champ select, end of game): its window may hide or close.
+        let pregame = matches!(stage, Stage::Pregame { .. }) || shared.after.load(Ordering::Relaxed);
         match capture.latest() {
             Ok(Some(frame)) => {
                 if encoder.set_input(&frame.texture, frame.region).is_err() {
@@ -358,20 +428,26 @@ fn record_inner(request: &RecordRequest, shared: &Shared, path: &Path, stamp: &s
         });
         let time = (tick * 10_000_000 / u64::from(fps)) as i64;
         let written = match &mut stage {
-            Stage::Switch { opened, first, start } => {
+            Stage::Switch { opened, first, start, to_client } => {
+                let to_client = *to_client;
                 if first.is_none() && encoder.has_live_input() {
                     *first = Some(Instant::now());
                 }
                 let ready = first.is_some_and(|first| first.elapsed() >= GAME_SETTLE) || opened.elapsed() >= GAME_NO_PICTURE;
                 if start.is_none() && ready {
                     *start = Some(Instant::now());
-                    game_from = tick as f64 / f64::from(fps) + transition::SECONDS / 2.0;
+                    let middle = tick as f64 / f64::from(fps) + transition::SECONDS / 2.0;
+                    if to_client {
+                        post_from = middle;
+                    } else {
+                        game_from = middle;
+                    }
                 }
                 let progress = start.map_or(0.0, |start| start.elapsed().as_secs_f64() / transition::SECONDS);
                 let result = encoder.write_transition(time, progress.min(1.0) as f32);
                 if progress >= 1.0 {
                     encoder.release_hold();
-                    stage = Stage::Game;
+                    stage = if to_client { Stage::After { since: Instant::now() } } else { Stage::Game };
                 }
                 result
             }
@@ -384,6 +460,9 @@ fn record_inner(request: &RecordRequest, shared: &Shared, path: &Path, stamp: &s
         if let Some((tracks, audio_time)) = mixer.take() {
             for (track, samples) in tracks.iter().enumerate() {
                 let _ = encoder.write_audio(track, samples, audio_time);
+                if let Some(Some(file)) = track.checked_sub(1).and_then(|index| source_files.get_mut(index)) {
+                    let _ = file.write(samples, audio_time);
+                }
             }
         }
         tick += 1;
@@ -399,13 +478,30 @@ fn record_inner(request: &RecordRequest, shared: &Shared, path: &Path, stamp: &s
     moments_done.store(true, Ordering::Relaxed);
     let encoder_name = encoder.name.clone();
     let hardware = encoder.hardware;
+    let codec = encoder.codec;
     let has_audio = encoder.has_audio();
     let wrote = clock.is_some();
     let finished = encoder.finish().is_ok();
+    // After the video, so the sound files count as up to date (newer than it).
+    let mut written_sources = Vec::new();
+    for (label, file) in audio_tracks.iter().skip(1).zip(source_files) {
+        if let Some(file) = file {
+            if file.finish().is_ok() {
+                written_sources.push(*label);
+            } else {
+                let _ = std::fs::remove_file(library::track_file(path, label));
+            }
+        }
+    }
     let screen = capture.is_screen();
     drop(capture);
     drop(mixer);
     let live = moments.join().unwrap_or_default();
+    if !wrote || shared.discard.load(Ordering::Relaxed) {
+        for label in &written_sources {
+            let _ = std::fs::remove_file(library::track_file(path, label));
+        }
+    }
     if !wrote {
         let _ = std::fs::remove_file(path);
         return Outcome::Failed(if failed { "recorder_capture" } else { "recorder_no_frames" });
@@ -423,6 +519,9 @@ fn record_inner(request: &RecordRequest, shared: &Shared, path: &Path, stamp: &s
     let directory = path.parent().map(Path::to_path_buf).unwrap_or_default();
     let final_path = library::unique_file(&directory, &library::safe_name(&title));
     let final_path = if std::fs::rename(path, &final_path).is_ok() { final_path } else { path.to_path_buf() };
+    for label in &written_sources {
+        let _ = std::fs::rename(library::track_file(path, label), library::track_file(&final_path, label));
+    }
     let meta = RecordingMeta {
         kind: "game".into(),
         account: request.account.clone(),
@@ -436,6 +535,8 @@ fn record_inner(request: &RecordRequest, shared: &Shared, path: &Path, stamp: &s
         duration,
         game_start: facts.offset,
         champ_select: game_from,
+        post_game: post_from,
+        codec: codec.name().into(),
         width,
         height,
         fps,

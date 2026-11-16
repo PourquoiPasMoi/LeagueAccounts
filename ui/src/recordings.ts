@@ -1,7 +1,7 @@
 // Recordings page: full games and clips per account, a player whose timeline
 // shows the key moments (click one to jump there), and a start/end range that
 // is saved as a clip in the account's Clips folder.
-import { ApiError, api, events, gameImage, type Waves, type Moment, type RecorderStatus, type Recording, type RecordingsView } from "./api";
+import { ApiError, api, events, gameImage, type ConvertStatus, type Waves, type Moment, type RecorderStatus, type Recording, type RecordingsView } from "./api";
 import { errorText, localeTag, t, type MessageKey } from "./i18n";
 import { $, esc, fragment, leave, modal, toast } from "./dom";
 import { icon } from "./icons";
@@ -89,6 +89,99 @@ export function clock(seconds: number): string {
   const m = Math.floor((total % 3600) / 60);
   const s = String(total % 60).padStart(2, "0");
   return h ? `${h}:${String(m).padStart(2, "0")}:${s}` : `${m}:${s}`;
+}
+
+/** Share of the size AV1 keeps for the same picture (measured on a real game: 64 %). */
+const AV1_KEEPS = 0.64;
+
+/** The recording's picture is AV1 already (converted or recorded so). */
+function isAv1(entry: Recording): boolean {
+  const meta = entry.meta;
+  if (!meta) return false;
+  return meta.codec ? meta.codec === "av1" : /AV1/.test(meta.encoder ?? "");
+}
+
+/** Share of all the bytes to convert that is done. */
+function overallShare(status: ConvertStatus): number {
+  return status.totalBytes ? Math.min(1, status.doneBytes / status.totalBytes) : 0;
+}
+
+/** "45 min", "1 h 20 min" in the interface language. */
+function duration(seconds: number): string {
+  const minutes = Math.max(1, Math.round(seconds / 60));
+  const unit = (value: number, name: "hour" | "minute") => new Intl.NumberFormat(localeTag(), { style: "unit", unit: name, unitDisplay: "short" }).format(value);
+  return minutes < 60 ? unit(minutes, "minute") : `${unit(Math.floor(minutes / 60), "hour")} ${unit(minutes % 60, "minute")}`;
+}
+
+/** "Save space": convert recordings that are not AV1 yet, in the background. */
+async function openConvert(): Promise<void> {
+  let state = await api.convertInfo().catch(() => null);
+  if (!state) return;
+  // Progress events can arrive before the answer to "start": keep the newest.
+  let heard = false;
+  const listening: { stop?: () => void; closed?: boolean } = {};
+  const body = () => {
+    const current = state!;
+    if (current.running) {
+      const line = current.paused
+        ? t("rec.convertPaused")
+        : current.watching
+          ? t("rec.convertWatching")
+        : t("rec.convertProgress", { done: String(Math.min(current.done + 1, current.total)), total: String(current.total), name: current.current });
+      const overall = overallShare(current);
+      const amount = t("rec.convertAmount", { done: bytes(current.doneBytes), total: bytes(current.totalBytes) });
+      const eta = current.etaSeconds > 0 && !current.paused && !current.watching ? ` ${t("rec.convertEta", { time: duration(current.etaSeconds) })}` : "";
+      return `<p class="rec-convert-line">${esc(line)}</p>
+        <div class="rec-convert-meter" style="--convert: ${overall.toFixed(4)}"><span></span></div>
+        <p class="rec-convert-sub">${esc(amount + eta)}</p>
+        <p class="rec-convert-sub">${esc(t("rec.convertSaved", { saved: bytes(current.savedBytes) }))}${current.failed ? ` ${esc(t("rec.convertFailed", { count: String(current.failed) }))}` : ""}</p>
+        <div class="rec-convert-actions"><button type="button" class="btn btn-ghost" data-convert="stop">${esc(t("rec.convertStop"))}</button></div>`;
+    }
+    const finished = current.done
+      ? `<p class="settings-note">${esc(t("rec.convertDone", { saved: bytes(current.savedBytes) }))}${current.failed ? ` ${esc(t("rec.convertFailed", { count: String(current.failed) }))}` : ""}</p>`
+      : "";
+    if (!current.remaining) return `<p>${esc(t("rec.convertIntro"))}</p>${finished}<p class="rec-convert-line">${esc(t("rec.convertNone"))}</p>`;
+    return `<p>${esc(t("rec.convertIntro"))}</p>
+      <p class="rec-convert-line">${esc(t("rec.convertCount", { count: String(current.remaining), size: bytes(current.remainingBytes), saved: bytes(current.remainingBytes * (1 - AV1_KEEPS)) }))}</p>
+      <p class="rec-convert-sub">${esc(t("rec.convertHow"))} ${esc(t("rec.convertPickHint"))}</p>${finished}
+      <div class="rec-convert-actions"><button type="button" class="btn btn-primary" data-convert="start">${esc(t("rec.convertStart"))}</button></div>`;
+  };
+  await modal({
+    title: t("rec.convertTitle"),
+    body: `<div class="rec-convert-body" data-convert-body>${body()}</div>`,
+    actions: [{ label: t("common.close"), value: "close" }],
+    className: "rec-convert-modal",
+    onOpen: (root) => {
+      const area = root.querySelector<HTMLElement>("[data-convert-body]")!;
+      const paint = () => {
+        area.innerHTML = body();
+      };
+      void events.onConvertStatus((next) => {
+        heard = true;
+        state = next;
+        paint();
+      }).then((stop) => {
+        if (listening.closed) stop();
+        else listening.stop = stop;
+      });
+      area.addEventListener("click", (event) => {
+        const action = (event.target as HTMLElement).closest<HTMLElement>("[data-convert]")?.dataset.convert;
+        event.preventDefault();
+        if (action === "start") {
+          void api
+            .startConvert()
+            .then((next) => {
+              if (!heard) state = next;
+              paint();
+            })
+            .catch((error) => toast("error", t("rec.convertTitle"), describe(error)));
+        }
+        if (action === "stop") void api.stopConvert();
+      });
+    },
+  });
+  listening.closed = true;
+  listening.stop?.();
 }
 
 function bytes(value: number): string {
@@ -299,6 +392,23 @@ export async function openRecordings(): Promise<void> {
 
   // ------------------------------------------------------------ rendering
 
+  /** AV1 conversion ("Save space"): shown when the GPU can encode AV1. */
+  let convert: ConvertStatus | null = null;
+  let canConvert = false;
+  const convertButton = () => {
+    if (!canConvert || !convert) return "";
+    if (convert.running) {
+      const label = convert.paused
+        ? t("rec.convertPausedShort")
+        : convert.watching
+          ? t("rec.convertWatchingShort")
+        : t("rec.converting", { done: String(Math.min(convert.done + 1, convert.total)), total: String(convert.total), percent: String(Math.round(overallShare(convert) * 100)) });
+      return `<button class="btn btn-ghost rec-convert is-running" data-rec="save-space">${icon("minimize", 14)}<span>${esc(label)}</span></button>`;
+    }
+    if (!convert.remaining) return "";
+    return `<button class="btn btn-ghost rec-convert" data-rec="save-space">${icon("minimize", 14)}<span>${esc(t("rec.saveSpace"))}</span></button>`;
+  };
+
   const renderHead = () => {
     const state = status.recording
       ? `<span class="rec-state is-live">${icon("video", 14)}<b>${esc(t("rec.recordingNow", { account: accountLabel(status.account) }))}</b></span>`
@@ -309,6 +419,7 @@ export async function openRecordings(): Promise<void> {
     const usage = view.limitBytes ? t("rec.usedOf", { used: bytes(view.totalBytes), limit: bytes(view.limitBytes) }) : t("rec.used", { used: bytes(view.totalBytes) });
     head.innerHTML = `${state}${failed}
       <span class="rec-usage">${esc(usage)}</span>
+      ${convertButton()}
       <button class="btn btn-ghost" data-rec="folder" data-tooltip="${esc(view.root)}">${icon("folder-open", 14)}<span>${esc(t("rec.openFolder"))}</span></button>`;
   };
 
@@ -347,7 +458,7 @@ export async function openRecordings(): Promise<void> {
     const date = new Date(started(entry)).toLocaleString(localeTag(), { dateStyle: "medium", timeStyle: "short" });
     const result = meta?.result === "Win" ? `<span class="rec-result is-win">${esc(t("rec.win"))}</span>` : meta?.result === "Loss" ? `<span class="rec-result is-loss">${esc(t("rec.loss"))}</span>` : "";
     const live = isRecording(entry) ? `<span class="rec-result is-live">${esc(t("rec.inProgress"))}</span>` : "";
-    const details = [date, meta?.duration ? clock(meta.duration) : "", bytes(entry.size), account ? "" : accountLabel(entry.account)].filter(Boolean).join(" · ");
+    const details = [date, meta?.duration ? clock(meta.duration) : "", bytes(entry.size), isAv1(entry) ? "AV1" : "", account ? "" : accountLabel(entry.account)].filter(Boolean).join(" · ");
     const score = entry.kind === "game" ? kda(entry) : "";
     const tag =
       entry.kind === "clip"
@@ -399,6 +510,7 @@ export async function openRecordings(): Promise<void> {
               ? `<span class="rec-picked-count">${esc(t("rec.selectedCount", { count: picked.size }))}</span>
                  <div class="segmented rec-select-group">
                    <button data-rec="select-all" aria-pressed="false">${esc(t(picked.size === entries.length && entries.length ? "rec.selectNone" : "rec.selectAll"))}</button>
+                   ${canConvert ? `<button data-rec="convert-picked" aria-pressed="false"${picked.size ? "" : " disabled"}>${esc(t("rec.convertPicked", { count: picked.size }))}</button>` : ""}
                    <button class="rec-delete-many" data-rec="delete-picked" aria-pressed="false"${picked.size ? "" : " disabled"}>${esc(t("rec.deleteSelected", { count: picked.size }))}</button>
                    <button data-rec="select-done" aria-pressed="true">${esc(t("common.cancel"))}</button>
                  </div>`
@@ -1229,9 +1341,15 @@ export async function openRecordings(): Promise<void> {
     }
     const previous = selected?.path;
     const previousVersion = selected ? `${selected.size}:${selected.modified}` : "";
+    const before = selected;
     selected = keepSelection ? (view.entries.find((entry) => entry.path === previous) ?? null) : null;
+    // Renamed on disk (the result is added a few minutes after a game): the same
+    // recording under its new name, so the player keeps going.
+    if (keepSelection && !selected && before?.meta?.startedAt) {
+      selected = view.entries.find((entry) => entry.kind === before.kind && entry.account === before.account && entry.meta?.startedAt === before.meta?.startedAt) ?? null;
+    }
     // The same recording rewritten on disk (e.g. made seekable): load the new file.
-    const changed = selected !== null && `${selected.size}:${selected.modified}` !== previousVersion;
+    const changed = selected !== null && (`${selected.size}:${selected.modified}` !== previousVersion || selected.path !== previous);
     if (account && !view.entries.some((entry) => entry.account === account)) account = "";
     renderHead();
     renderNav();
@@ -1275,6 +1393,23 @@ export async function openRecordings(): Promise<void> {
     makingDiscord = false;
     if (button?.isConnected) button.disabled = false;
     await reload();
+  };
+
+  /** Convert the ticked recordings to AV1 (those not AV1 yet), then show the progress. */
+  const convertPicked = async () => {
+    const chosen = view.entries.filter((entry) => picked.has(entry.path));
+    const paths = chosen.filter((entry) => !isAv1(entry)).map((entry) => entry.path);
+    if (!paths.length) return toast("info", t("rec.convertTitle"), t("rec.convertPickedNone"));
+    try {
+      convert = await api.startConvert(paths);
+    } catch (error) {
+      return toast("error", t("rec.convertTitle"), describe(error));
+    }
+    picked.clear();
+    selecting = false;
+    renderHead();
+    renderList();
+    void openConvert();
   };
 
   /** Delete every ticked recording after one confirmation. */
@@ -1406,6 +1541,7 @@ export async function openRecordings(): Promise<void> {
       filter = chosenFilter;
       return renderMoments();
     }
+    if (action === "save-space") return void openConvert();
     if (action === "folder") {
       // The Games or Clips folder of the account shown (or of the only account).
       const names = accounts();
@@ -1428,6 +1564,7 @@ export async function openRecordings(): Promise<void> {
       return renderList();
     }
     if (action === "delete-picked") return void removeMany();
+    if (action === "convert-picked") return void convertPicked();
     if (selecting && row) {
       const path = row.dataset.recPath!;
       picked.has(path) ? picked.delete(path) : picked.add(path);
@@ -1764,6 +1901,10 @@ export async function openRecordings(): Promise<void> {
     events.onRecordingGame((path) => {
       if (selected?.path === path && gameState !== "ready") void loadGame(selected, false);
     }),
+    events.onConvertStatus((next) => {
+      convert = next;
+      renderHead();
+    }),
     events.onRecorderStatus((next) => {
       status = next;
       renderHead();
@@ -1772,5 +1913,13 @@ export async function openRecordings(): Promise<void> {
   ];
 
   render();
+  void api
+    .recorderPrefs()
+    .then(async (prefs) => {
+      canConvert = prefs.formats.av1Encoder;
+      if (canConvert) convert = await api.convertInfo();
+      renderHead();
+    })
+    .catch(() => undefined);
   await reload(false);
 }

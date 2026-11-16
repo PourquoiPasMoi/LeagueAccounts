@@ -18,6 +18,130 @@ use windows::Win32::Graphics::Dxgi::Common::{
 };
 use windows::Win32::Media::MediaFoundation::*;
 
+/// Video format of a recording.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Codec {
+    /// Plays everywhere; any GPU (or the CPU) can encode it.
+    #[default]
+    H264,
+    /// About half the size for the same picture; needs a GPU with an AV1
+    /// encoder (NVIDIA RTX 40+, AMD RX 7000+, Intel Arc / Core Ultra).
+    Av1,
+}
+
+impl Codec {
+    pub fn from_name(name: &str) -> Self {
+        if name.eq_ignore_ascii_case("av1") { Self::Av1 } else { Self::H264 }
+    }
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::H264 => "h264",
+            Self::Av1 => "av1",
+        }
+    }
+
+    pub fn subtype(self) -> GUID {
+        match self {
+            Self::H264 => MFVideoFormat_H264,
+            Self::Av1 => MFVideoFormat_AV1,
+        }
+    }
+}
+
+/// How the encoder spends its bits.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Rate {
+    /// Always the chosen bitrate: predictable size, also for still pictures.
+    #[default]
+    Constant,
+    /// The same average, but up to twice the bitrate in fights and less when
+    /// little moves (peak-constrained VBR).
+    Variable,
+    /// Constant quality 0-100 (tests only: on live gameplay NVIDIA's quality
+    /// mode spent 7-16 Mbps in AV1, more than H.264 at 10, and ignores a cap).
+    Quality(u32),
+}
+
+/// A GPU encoder for `codec` is installed (Media Foundation must be started).
+pub fn hardware_encoder(codec: Codec) -> bool {
+    let output = MFT_REGISTER_TYPE_INFO { guidMajorType: MFMediaType_Video, guidSubtype: codec.subtype() };
+    let mut list = std::ptr::null_mut();
+    let mut count = 0u32;
+    let flags = MFT_ENUM_FLAG_HARDWARE | MFT_ENUM_FLAG_SORTANDFILTER;
+    if unsafe { MFTEnumEx(MFT_CATEGORY_VIDEO_ENCODER, flags, None, Some(&output), &mut list, &mut count) }.is_err() || list.is_null() {
+        return false;
+    }
+    unsafe {
+        for index in 0..count as usize {
+            drop((*list.add(index)).take());
+        }
+        windows::Win32::System::Com::CoTaskMemFree(Some(list as *const core::ffi::c_void));
+    }
+    count > 0
+}
+
+/// A decoder for `codec` is installed (any kind). AV1 decoding comes with
+/// Microsoft's free "AV1 Video Extension" (Microsoft Store).
+pub fn decoder_available(codec: Codec) -> bool {
+    let input = MFT_REGISTER_TYPE_INFO { guidMajorType: MFMediaType_Video, guidSubtype: codec.subtype() };
+    let mut list = std::ptr::null_mut();
+    let mut count = 0u32;
+    let flags = MFT_ENUM_FLAG_SYNCMFT | MFT_ENUM_FLAG_ASYNCMFT | MFT_ENUM_FLAG_HARDWARE | MFT_ENUM_FLAG_SORTANDFILTER;
+    if unsafe { MFTEnumEx(MFT_CATEGORY_VIDEO_DECODER, flags, Some(&input), None, &mut list, &mut count) }.is_err() || list.is_null() {
+        return false;
+    }
+    unsafe {
+        for index in 0..count as usize {
+            drop((*list.add(index)).take());
+        }
+        windows::Win32::System::Com::CoTaskMemFree(Some(list as *const core::ffi::c_void));
+    }
+    count > 0
+}
+
+/// Encoder settings for the rate control and a keyframe every `gop` frames.
+pub(crate) fn rate_parameters(rate: Rate, bitrate: u32, gop: u32) -> Result<IMFAttributes> {
+    let parameters = attributes(4)?;
+    unsafe {
+        match rate {
+            Rate::Constant => parameters.SetUINT32(&CODECAPI_AVEncCommonRateControlMode, eAVEncCommonRateControlMode_CBR.0 as u32)?,
+            Rate::Variable => {
+                parameters.SetUINT32(&CODECAPI_AVEncCommonRateControlMode, eAVEncCommonRateControlMode_PeakConstrainedVBR.0 as u32)?;
+                parameters.SetUINT32(&CODECAPI_AVEncCommonMaxBitRate, bitrate.saturating_mul(2))?;
+            }
+            Rate::Quality(quality) => {
+                parameters.SetUINT32(&CODECAPI_AVEncCommonRateControlMode, eAVEncCommonRateControlMode_Quality.0 as u32)?;
+                parameters.SetUINT32(&CODECAPI_AVEncCommonQuality, quality.min(100))?;
+            }
+        }
+        if gop > 0 {
+            parameters.SetUINT32(&CODECAPI_AVEncMPVGOPSize, gop)?;
+        }
+    }
+    Ok(parameters)
+}
+
+/// The compressed video type for the sink writer.
+pub(crate) fn video_output_type(codec: Codec, bitrate: u32, size: u64, rate: u64) -> Result<IMFMediaType> {
+    unsafe {
+        let output = MFCreateMediaType()?;
+        output.SetGUID(&MF_MT_MAJOR_TYPE, &MFMediaType_Video)?;
+        output.SetGUID(&MF_MT_SUBTYPE, &codec.subtype())?;
+        output.SetUINT32(&MF_MT_AVG_BITRATE, bitrate)?;
+        output.SetUINT32(&MF_MT_INTERLACE_MODE, MFVideoInterlace_Progressive.0 as u32)?;
+        output.SetUINT64(&MF_MT_FRAME_SIZE, size)?;
+        output.SetUINT64(&MF_MT_FRAME_RATE, rate)?;
+        output.SetUINT64(&MF_MT_PIXEL_ASPECT_RATIO, pack(1, 1))?;
+        if codec == Codec::H264 {
+            output.SetUINT32(&MF_MT_MPEG2_PROFILE, eAVEncH264VProfile_High.0 as u32)?;
+        }
+        output.SetUINT32(&MF_MT_YUV_MATRIX, MFVideoTransferMatrix_BT709.0 as u32)?;
+        output.SetUINT32(&MF_MT_VIDEO_NOMINAL_RANGE, MFNominalRange_16_235.0 as u32)?;
+        Ok(output)
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct EncoderSettings {
     pub width: u32,
@@ -31,6 +155,8 @@ pub struct EncoderSettings {
     pub fragmented: bool,
     /// AAC tracks to add (48 kHz stereo, fed with `write_audio`); 0 = no sound.
     pub audio_tracks: usize,
+    pub codec: Codec,
+    pub rate: Rate,
 }
 
 /// Audio format of `write_audio`: 16-bit stereo PCM at 48 kHz.
@@ -87,6 +213,8 @@ pub struct VideoEncoder {
     staging: Option<ID3D11Texture2D>,
     /// The encoder Media Foundation picked, e.g. "NVIDIA H.264 Encoder MFT".
     pub name: String,
+    /// The video format really written.
+    pub codec: Codec,
     pub hardware: bool,
 }
 
@@ -135,6 +263,17 @@ fn fit(content: (u32, u32), output: (u32, u32)) -> RECT {
 impl VideoEncoder {
     /// Hardware encoder when asked and available, otherwise software.
     pub fn new(gpu: &Gpu, path: &Path, settings: EncoderSettings) -> Result<Self> {
+        if settings.codec == Codec::Av1 {
+            // AV1 only exists on the GPU; without it the recording is H.264.
+            if let Ok(encoder) = Self::create(gpu, path, &settings, true) {
+                if encoder.hardware {
+                    return Ok(encoder);
+                }
+                drop(encoder);
+            }
+            let _ = std::fs::remove_file(path);
+            return Self::new(gpu, path, EncoderSettings { codec: Codec::H264, ..settings });
+        }
         if settings.hardware {
             if let Ok(encoder) = Self::create(gpu, path, &settings, true) {
                 if encoder.hardware {
@@ -172,17 +311,7 @@ impl VideoEncoder {
         let writer = unsafe { MFCreateSinkWriterFromURL(&HSTRING::from(path.as_os_str()), None::<&IMFByteStream>, &writer_attributes)? };
 
         let stream = unsafe {
-            let output = MFCreateMediaType()?;
-            output.SetGUID(&MF_MT_MAJOR_TYPE, &MFMediaType_Video)?;
-            output.SetGUID(&MF_MT_SUBTYPE, &MFVideoFormat_H264)?;
-            output.SetUINT32(&MF_MT_AVG_BITRATE, settings.bitrate)?;
-            output.SetUINT32(&MF_MT_INTERLACE_MODE, MFVideoInterlace_Progressive.0 as u32)?;
-            output.SetUINT64(&MF_MT_FRAME_SIZE, pack(width, height))?;
-            output.SetUINT64(&MF_MT_FRAME_RATE, pack(fps, 1))?;
-            output.SetUINT64(&MF_MT_PIXEL_ASPECT_RATIO, pack(1, 1))?;
-            output.SetUINT32(&MF_MT_MPEG2_PROFILE, eAVEncH264VProfile_High.0 as u32)?;
-            output.SetUINT32(&MF_MT_YUV_MATRIX, MFVideoTransferMatrix_BT709.0 as u32)?;
-            output.SetUINT32(&MF_MT_VIDEO_NOMINAL_RANGE, MFNominalRange_16_235.0 as u32)?;
+            let output = video_output_type(settings.codec, settings.bitrate, pack(width, height), pack(fps, 1))?;
             let stream = writer.AddStream(&output)?;
 
             let input = MFCreateMediaType()?;
@@ -196,10 +325,8 @@ impl VideoEncoder {
             input.SetUINT32(&MF_MT_YUV_MATRIX, MFVideoTransferMatrix_BT709.0 as u32)?;
             input.SetUINT32(&MF_MT_VIDEO_NOMINAL_RANGE, MFNominalRange_16_235.0 as u32)?;
 
-            // Constant bitrate (predictable file size) and a keyframe every second (fast clip cuts).
-            let parameters = attributes(2)?;
-            parameters.SetUINT32(&CODECAPI_AVEncCommonRateControlMode, eAVEncCommonRateControlMode_CBR.0 as u32)?;
-            parameters.SetUINT32(&CODECAPI_AVEncMPVGOPSize, fps)?;
+            // The chosen rate control and a keyframe every second (fast clip cuts).
+            let parameters = rate_parameters(settings.rate, settings.bitrate, fps)?;
             if writer.SetInputMediaType(stream, &input, &parameters).is_err() {
                 writer.SetInputMediaType(stream, &input, None::<&IMFAttributes>)?;
             }
@@ -237,6 +364,7 @@ impl VideoEncoder {
             next: 0,
             staging,
             name,
+            codec: settings.codec,
             hardware: hardware && uses_hardware,
         })
     }
@@ -452,25 +580,7 @@ impl VideoEncoder {
     /// at `time` (100 ns units).
     pub fn write_audio(&mut self, track: usize, samples: &[i16], time: i64) -> Result<()> {
         let Some(&stream) = self.audio_streams.get(track) else { return Ok(()) };
-        if samples.is_empty() {
-            return Ok(());
-        }
-        let bytes = std::mem::size_of_val(samples);
-        unsafe {
-            let buffer = MFCreateMemoryBuffer(bytes as u32)?;
-            let mut target = std::ptr::null_mut();
-            buffer.Lock(&mut target, None, None)?;
-            std::ptr::copy_nonoverlapping(samples.as_ptr() as *const u8, target, bytes);
-            buffer.Unlock()?;
-            buffer.SetCurrentLength(bytes as u32)?;
-            let sample = MFCreateSample()?;
-            sample.AddBuffer(&buffer)?;
-            sample.SetSampleTime(time)?;
-            let frames = (samples.len() / AUDIO_CHANNELS as usize) as i64;
-            sample.SetSampleDuration(frames * 10_000_000 / i64::from(AUDIO_RATE))?;
-            self.writer.WriteSample(stream, &sample)?;
-        }
-        Ok(())
+        write_pcm(&self.writer, stream, samples, time)
     }
 
     pub fn has_audio(&self) -> bool {
@@ -478,6 +588,58 @@ impl VideoEncoder {
     }
 
     /// Finish the file (writes the index so players can seek).
+    pub fn finish(self) -> Result<()> {
+        unsafe { self.writer.Finalize() }
+    }
+}
+
+fn write_pcm(writer: &IMFSinkWriter, stream: u32, samples: &[i16], time: i64) -> Result<()> {
+    if samples.is_empty() {
+        return Ok(());
+    }
+    let bytes = std::mem::size_of_val(samples);
+    unsafe {
+        let buffer = MFCreateMemoryBuffer(bytes as u32)?;
+        let mut target = std::ptr::null_mut();
+        buffer.Lock(&mut target, None, None)?;
+        std::ptr::copy_nonoverlapping(samples.as_ptr() as *const u8, target, bytes);
+        buffer.Unlock()?;
+        buffer.SetCurrentLength(bytes as u32)?;
+        let sample = MFCreateSample()?;
+        sample.AddBuffer(&buffer)?;
+        sample.SetSampleTime(time)?;
+        let frames = (samples.len() / AUDIO_CHANNELS as usize) as i64;
+        sample.SetSampleDuration(frames * 10_000_000 / i64::from(AUDIO_RATE))?;
+        writer.WriteSample(stream, &sample)?;
+    }
+    Ok(())
+}
+
+/// One sound source written to its own audio-only MP4 while recording (for the
+/// player's volume per source), so nothing has to read the whole recording
+/// again after the game (slow on hard disks, and it starved the player).
+pub struct AudioFile {
+    writer: IMFSinkWriter,
+    stream: u32,
+}
+
+impl AudioFile {
+    pub fn create(path: &Path) -> Result<Self> {
+        let options = attributes(2)?;
+        unsafe {
+            options.SetGUID(&MF_TRANSCODE_CONTAINERTYPE, &MFTranscodeContainerType_MPEG4)?;
+            options.SetUINT32(&MF_SINK_WRITER_DISABLE_THROTTLING, 1)?;
+            let writer = MFCreateSinkWriterFromURL(&HSTRING::from(path.as_os_str()), None::<&IMFByteStream>, &options)?;
+            let stream = add_audio(&writer)?;
+            writer.BeginWriting()?;
+            Ok(Self { writer, stream })
+        }
+    }
+
+    pub fn write(&mut self, samples: &[i16], time: i64) -> Result<()> {
+        write_pcm(&self.writer, self.stream, samples, time)
+    }
+
     pub fn finish(self) -> Result<()> {
         unsafe { self.writer.Finalize() }
     }
