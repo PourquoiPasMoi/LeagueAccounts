@@ -7,6 +7,7 @@ use crate::refresh::Shared;
 use crate::views::{fail, fail_with, CommandResult};
 use leagueaccounts::logging::{self, Event, Reason};
 use leagueaccounts::recorder::capture::{find_client_window, find_game_window};
+use leagueaccounts::recorder::encoder::{Codec, Rate};
 use leagueaccounts::recorder::library::{self, Entry, UNKNOWN};
 use leagueaccounts::recorder::session::{self, Outcome, RecordRequest, RecordSettings, Recording};
 use leagueaccounts::riot_client;
@@ -46,6 +47,48 @@ pub struct RecorderPrefs {
     pub disk_limit_gb: u32,
     /// Start when a match is found (champ select on the client), then follow into the game.
     pub champ_select: bool,
+    /// After the game, keep recording the client's end-of-game screen until the player leaves it.
+    pub post_game: bool,
+    /// Video format: h264 (plays everywhere) or av1 (smaller; GPUs with an AV1 encoder).
+    pub codec: String,
+    /// constant (always the preset's bitrate) or variable (less when little moves).
+    pub rate: String,
+    /// One rule per mode group, most important first (the disk limit deletes
+    /// from the end of the list first).
+    pub modes: Vec<ModeRule>,
+}
+
+/// What to do with the games of one mode group (`queues::GROUPS`).
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct ModeRule {
+    pub key: String,
+    pub record: bool,
+    /// Hours a recording of this mode is kept; 0 = until the disk limit.
+    pub keep_hours: u32,
+}
+
+impl Default for ModeRule {
+    fn default() -> Self {
+        Self { key: String::new(), record: true, keep_hours: 0 }
+    }
+}
+
+/// Every group once, in the saved order, missing ones added at the end.
+fn complete_modes(modes: Vec<ModeRule>) -> Vec<ModeRule> {
+    use leagueaccounts::recorder::queues::GROUPS;
+    let mut result: Vec<ModeRule> = Vec::new();
+    for rule in modes {
+        if GROUPS.contains(&rule.key.as_str()) && !result.iter().any(|known| known.key == rule.key) {
+            result.push(ModeRule { keep_hours: rule.keep_hours.min(24 * 365), ..rule });
+        }
+    }
+    for key in GROUPS {
+        if !result.iter().any(|known| known.key == key) {
+            result.push(ModeRule { key: key.into(), ..ModeRule::default() });
+        }
+    }
+    result
 }
 
 impl Default for RecorderPrefs {
@@ -65,11 +108,40 @@ impl Default for RecorderPrefs {
             mic_device: String::new(),
             disk_limit_gb: 100,
             champ_select: true,
+            post_game: true,
+            codec: "h264".into(),
+            rate: "variable".into(),
+            modes: complete_modes(Vec::new()),
         }
     }
 }
 
 impl RecorderPrefs {
+    fn rule(&self, group: &str) -> Option<&ModeRule> {
+        self.modes.iter().find(|rule| rule.key == group)
+    }
+
+    /// Games of this queue are recorded.
+    fn records(&self, queue_id: i64, queue: &str) -> bool {
+        self.rule(leagueaccounts::recorder::queues::group(queue_id, queue)).is_none_or(|rule| rule.record)
+    }
+
+    fn keep_hours(&self, group: &str) -> u32 {
+        self.rule(group).map_or(0, |rule| rule.keep_hours)
+    }
+
+    /// Place in the priority list (higher = deleted sooner at the disk limit).
+    fn rank(&self, group: &str) -> usize {
+        self.modes.iter().position(|rule| rule.key == group).unwrap_or(self.modes.len())
+    }
+
+    /// Delete what is past its keeping time, then apply the disk limit by priority.
+    fn tidy(&self, keep: Option<&std::path::Path>) -> usize {
+        let root = self.root();
+        let expired = library::apply_retention(&root, &|group| self.keep_hours(group), keep);
+        expired + library::enforce_limit_by(&root, u64::from(self.disk_limit_gb) * 1_000_000_000, keep, &|group| self.rank(group))
+    }
+
     /// (max height, fps, Mbps) for the chosen quality.
     fn quality(&self) -> (u32, u32, u32) {
         match self.preset.as_str() {
@@ -97,6 +169,13 @@ impl RecorderPrefs {
         if self.capture != "screen" {
             self.capture = "window".into();
         }
+        if self.codec != "av1" {
+            self.codec = "h264".into();
+        }
+        if self.rate != "constant" {
+            self.rate = "variable".into();
+        }
+        self.modes = complete_modes(std::mem::take(&mut self.modes));
         self.height = self.height.min(4320);
         self.fps = self.fps.clamp(10, 120);
         self.bitrate = self.bitrate.clamp(1, 100);
@@ -195,14 +274,33 @@ fn queue_name(session: &Value) -> (i64, String) {
     (id.max(0), name)
 }
 
+/// Games of the current queue are recorded (Settings › Game modes). Unknown
+/// queue (client not answering): recorded.
+fn queue_recorded(prefs: &RecorderPrefs) -> bool {
+    let Some(session) = riot_client::league_client().and_then(|client| client.get_json("/lol-gameflow/v1/session")) else { return true };
+    let (id, name) = queue_name(&session);
+    prefs.records(id, &name)
+}
+
 fn start_recording(app: &AppHandle, window: leagueaccounts::recorder::capture::WindowHandle, prefs: &RecorderPrefs, pregame: bool) {
     let client = riot_client::league_client();
     let summoner = client.as_ref().and_then(|client| client.get_json("/lol-summoner/v1/current-summoner")).unwrap_or(Value::Null);
     let session_info = client.as_ref().and_then(|client| client.get_json("/lol-gameflow/v1/session")).unwrap_or(Value::Null);
+    if session_info.is_object() {
+        let (id, name) = queue_name(&session_info);
+        if !prefs.records(id, &name) {
+            return;
+        }
+    }
     let text = |value: &Value| value.as_str().unwrap_or_default().to_owned();
     let (account, riot_id) = account_folder(app, &text(&summoner["gameName"]), &text(&summoner["tagLine"]));
     let (max_height, fps, mbps) = prefs.quality();
     let queue = queue_name(&session_info);
+    // AV1 only when the GPU can (otherwise the encoder falls back to H.264 anyway).
+    let codec = if prefs.codec == "av1" && leagueaccounts::recorder::formats().av1_encoder { Codec::Av1 } else { Codec::H264 };
+    let h264_bitrate = mbps * 1_000_000;
+    let bitrate = if codec == Codec::Av1 { leagueaccounts::recorder::av1_bitrate(h264_bitrate) } else { h264_bitrate };
+    let rate = if prefs.rate == "constant" { Rate::Constant } else { Rate::Variable };
     let request = RecordRequest {
         root: prefs.root(),
         account: account.clone(),
@@ -213,13 +311,16 @@ fn start_recording(app: &AppHandle, window: leagueaccounts::recorder::capture::W
         settings: RecordSettings {
             max_height,
             fps,
-            bitrate: mbps * 1_000_000,
+            bitrate,
             hardware: prefs.encoder != "software",
             screen: prefs.capture == "screen",
             game_audio: prefs.game_audio,
             microphone: prefs.microphone,
             discord: prefs.discord,
             microphone_device: prefs.mic_device.clone(),
+            codec,
+            rate,
+            post_game: prefs.post_game,
         },
         pregame,
     };
@@ -257,7 +358,7 @@ fn finish(app: &AppHandle, active: Active) {
             code.to_owned()
         }
     };
-    library::enforce_limit(&prefs.root(), u64::from(prefs.disk_limit_gb) * 1_000_000_000, None);
+    prefs.tidy(None);
     set_status(app, RecorderStatus { enabled: prefs.enabled, error, ..RecorderStatus::default() });
     let _ = app.emit("recordings-changed", ());
     // Each sound source as its own file now (disk reading only), so the
@@ -302,6 +403,26 @@ fn in_game_phase() -> Option<bool> {
     Some(matches!(gameflow_phase()?.as_str(), "GameStart" | "InProgress" | "Reconnect"))
 }
 
+/// End-of-game recording: stop once the player leaves the end-of-game screen
+/// (Play again, back to the lobby, a new queue, or the client closed).
+fn watch_end_of_game() {
+    let after = ACTIVE.lock().ok().is_some_and(|active| active.as_ref().is_some_and(|active| active.recording.after_game()));
+    if !after {
+        return;
+    }
+    let left = match gameflow_phase() {
+        None => riot_client::league_client().is_none(),
+        Some(phase) => !matches!(phase.as_str(), "WaitingForStats" | "PreEndOfGame" | "EndOfGame" | "InProgress" | "GameStart" | "Reconnect"),
+    };
+    if left {
+        if let Ok(active) = ACTIVE.lock() {
+            if let Some(active) = active.as_ref() {
+                active.recording.stop();
+            }
+        }
+    }
+}
+
 /// Champ select recording: start when a match is found, drop it when the
 /// match does not happen (declined ready check, dodge, left the lobby).
 fn watch_champ_select(app: &AppHandle, prefs: &RecorderPrefs) {
@@ -324,7 +445,9 @@ fn watch_champ_select(app: &AppHandle, prefs: &RecorderPrefs) {
             }
             if let Some("ReadyCheck" | "ChampSelect") = gameflow_phase().as_deref() {
                 if let Some(window) = find_client_window() {
-                    start_recording(app, window, prefs, true);
+                    if queue_recorded(prefs) {
+                        start_recording(app, window, prefs, true);
+                    }
                 }
             }
         }
@@ -454,6 +577,8 @@ pub fn spawn(app: AppHandle) {
         // The window of the game that was just recorded: not recorded twice.
         let mut finished_window: Option<isize> = None;
         let mut limit_checked = std::time::Instant::now();
+        // Keeping times: soon after start, then every 10 minutes.
+        let mut tidied = std::time::Instant::now() - Duration::from_secs(9 * 60);
         loop {
             let prefs = prefs();
             let active = ACTIVE.lock().ok().and_then(|mut active| {
@@ -473,7 +598,13 @@ pub fn spawn(app: AppHandle) {
             if recording && limit_checked.elapsed() >= Duration::from_secs(60) {
                 limit_checked = std::time::Instant::now();
                 let current = ACTIVE.lock().ok().and_then(|active| active.as_ref().map(|active| active.recording.path.clone()));
-                if library::enforce_limit(&prefs.root(), u64::from(prefs.disk_limit_gb) * 1_000_000_000, current.as_deref()) > 0 {
+                if prefs.tidy(current.as_deref()) > 0 {
+                    let _ = app.emit("recordings-changed", ());
+                }
+            }
+            if !recording && tidied.elapsed() >= Duration::from_secs(10 * 60) {
+                tidied = std::time::Instant::now();
+                if prefs.tidy(None) > 0 {
                     let _ = app.emit("recordings-changed", ());
                 }
             }
@@ -484,6 +615,7 @@ pub fn spawn(app: AppHandle) {
             if prefs.champ_select {
                 watch_champ_select(&app, &prefs);
             }
+            watch_end_of_game();
             let recording = ACTIVE.lock().is_ok_and(|active| active.is_some());
             let window = find_game_window();
             if window.map(|window| window.0 as isize) != finished_window {
@@ -503,7 +635,9 @@ pub fn spawn(app: AppHandle) {
 }
 
 /// Stop recording when the app quits, so the file is finished properly.
+/// A conversion in progress stops too (the original file stays).
 pub fn stop_now() {
+    CONVERT_STOP.store(true, std::sync::atomic::Ordering::Relaxed);
     let active = ACTIVE.lock().ok().and_then(|mut active| active.take());
     if let Some(active) = active {
         let _ = active.recording.wait();
@@ -519,16 +653,254 @@ pub struct RecorderPrefsView {
     prefs: RecorderPrefs,
     /// The folder actually used (the default when `folder` is empty).
     root: String,
+    /// What the PC can do with AV1.
+    formats: leagueaccounts::recorder::Formats,
 }
 
 fn prefs_view(prefs: RecorderPrefs) -> RecorderPrefsView {
     let root = prefs.root().display().to_string();
-    RecorderPrefsView { prefs, root }
+    RecorderPrefsView { prefs, root, formats: leagueaccounts::recorder::formats() }
 }
 
 #[tauri::command]
 pub async fn recorder_prefs() -> CommandResult<RecorderPrefsView> {
-    Ok(prefs_view(prefs()))
+    tauri::async_runtime::spawn_blocking(|| prefs_view(prefs())).await.map_err(|_| fail("operation_failed"))
+}
+
+// ------------------------------------------------- convert recordings to AV1
+
+/// The "Save space" job: recordings are encoded again as AV1 one at a time,
+/// paused while a game is being recorded.
+#[derive(Clone, Debug, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConvertStatus {
+    pub running: bool,
+    /// Waiting for the game being recorded to end.
+    pub paused: bool,
+    /// Waiting while a recording plays in the player.
+    pub watching: bool,
+    pub done: usize,
+    pub total: usize,
+    /// Name of the recording being converted.
+    pub current: String,
+    /// 0..1 of the current recording.
+    pub progress: f64,
+    pub saved_bytes: u64,
+    pub failed: usize,
+    /// Size of everything to convert, and how much of it is done.
+    pub total_bytes: u64,
+    pub done_bytes: u64,
+    /// Estimated seconds left (0 = not known yet).
+    pub eta_seconds: u64,
+    /// Recordings that are not AV1 yet, and their size (when not running).
+    pub remaining: usize,
+    pub remaining_bytes: u64,
+}
+
+static CONVERT: Mutex<Option<ConvertStatus>> = Mutex::new(None);
+/// When the player last read a recording (Unix ms): the conversion waits so a
+/// hard disk is not shared between both.
+static LAST_PLAYED: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+fn now_ms() -> u64 {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |time| time.as_millis() as u64)
+}
+
+fn player_reading() -> bool {
+    now_ms().saturating_sub(LAST_PLAYED.load(std::sync::atomic::Ordering::Relaxed)) < 5_000
+}
+
+fn recording_now() -> bool {
+    ACTIVE.lock().is_ok_and(|active| active.is_some())
+}
+static CONVERT_STOP: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+/// Recordings picked while a conversion runs: done after the current list.
+static CONVERT_MORE: Mutex<Vec<Entry>> = Mutex::new(Vec::new());
+
+/// Recordings still in H.264 (biggest first), never the one being recorded.
+fn convert_candidates(root: &std::path::Path) -> Vec<Entry> {
+    let mut entries: Vec<Entry> = library::list(root)
+        .into_iter()
+        .filter(|entry| !leagueaccounts::recorder::is_av1(entry.meta.as_ref()))
+        .filter(|entry| library::resolve(root, &entry.path).is_some_and(|path| !is_being_recorded(&path)))
+        .collect();
+    entries.sort_by_key(|entry| std::cmp::Reverse(entry.size));
+    entries
+}
+
+fn convert_status() -> ConvertStatus {
+    let status = CONVERT.lock().ok().and_then(|status| status.clone()).unwrap_or_default();
+    if status.running {
+        return status;
+    }
+    let candidates = convert_candidates(&prefs().root());
+    ConvertStatus { remaining: candidates.len(), remaining_bytes: candidates.iter().map(|entry| entry.size).sum(), ..status }
+}
+
+fn set_convert(app: &AppHandle, change: impl FnOnce(&mut ConvertStatus)) {
+    let snapshot = {
+        let Ok(mut status) = CONVERT.lock() else { return };
+        let status = status.get_or_insert_with(ConvertStatus::default);
+        change(status);
+        status.clone()
+    };
+    let _ = app.emit("convert-status", snapshot);
+}
+
+#[tauri::command]
+pub async fn convert_info() -> CommandResult<ConvertStatus> {
+    tauri::async_runtime::spawn_blocking(convert_status).await.map_err(|_| fail("operation_failed"))
+}
+
+/// Convert every recording that is not AV1 yet, or only `paths` (relative,
+/// from the library's Select mode). While a conversion runs, picked recordings
+/// are added to it.
+#[tauri::command]
+pub async fn start_convert(app: AppHandle, paths: Option<Vec<String>>) -> CommandResult<ConvertStatus> {
+    if !leagueaccounts::recorder::formats().av1_encoder {
+        return Err(fail("av1_unsupported"));
+    }
+    let root = prefs().root();
+    let mut candidates = convert_candidates(&root);
+    if let Some(paths) = &paths {
+        candidates.retain(|entry| paths.contains(&entry.path));
+    }
+    if CONVERT.lock().ok().and_then(|status| status.as_ref().map(|status| status.running)).unwrap_or(false) {
+        if let Ok(mut more) = CONVERT_MORE.lock() {
+            let added: Vec<Entry> = candidates.into_iter().filter(|entry| !more.iter().any(|known| known.path == entry.path)).collect();
+            let (count, size) = (added.len(), added.iter().map(|entry| entry.size).sum::<u64>());
+            more.extend(added);
+            set_convert(&app, |status| {
+                status.total += count;
+                status.total_bytes += size;
+            });
+        }
+        return Ok(convert_status());
+    }
+    if candidates.is_empty() {
+        return Ok(convert_status());
+    }
+    CONVERT_STOP.store(false, std::sync::atomic::Ordering::Relaxed);
+    if let Ok(mut more) = CONVERT_MORE.lock() {
+        more.clear();
+    }
+    let total = candidates.len();
+    let total_bytes: u64 = candidates.iter().map(|entry| entry.size).sum();
+    set_convert(&app, |status| *status = ConvertStatus { running: true, total, total_bytes, ..ConvertStatus::default() });
+    thread::spawn(move || {
+        // Pieces left by a conversion cut short (the app was closed).
+        let mut folders: Vec<std::path::PathBuf> = candidates.iter().filter_map(|entry| library::resolve(&root, &entry.path)?.parent().map(|parent| parent.join(".convert"))).collect();
+        folders.dedup();
+        for folder in folders {
+            let _ = std::fs::remove_dir_all(folder);
+        }
+        let stopped = || CONVERT_STOP.load(std::sync::atomic::Ordering::Relaxed);
+        let mut queue: std::collections::VecDeque<Entry> = candidates.into();
+        // Speed for the time estimate: bytes of recordings per second of converting.
+        let mut finished_bytes = 0u64;
+        let mut busy = Duration::ZERO;
+        loop {
+            let next = queue.pop_front().or_else(|| {
+                let mut more = CONVERT_MORE.lock().ok()?;
+                (!more.is_empty()).then(|| more.remove(0))
+            });
+            let Some(entry) = next else { break };
+            // A game is being recorded (champ select included): the GPU and
+            // the disk are for it.
+            while recording_now() && !stopped() {
+                set_convert(&app, |status| status.paused = true);
+                thread::sleep(Duration::from_secs(3));
+            }
+            if stopped() {
+                break;
+            }
+            let Some(file) = library::resolve(&root, &entry.path) else { continue };
+            let name = entry.meta.as_ref().map(|meta| meta.title.clone()).filter(|title| !title.is_empty()).unwrap_or(entry.name.clone());
+            set_convert(&app, |status| {
+                status.paused = false;
+                status.current = name;
+                status.progress = 0.0;
+            });
+            let _ = leagueaccounts::recorder::startup();
+            let mut last = std::time::Instant::now();
+            let mut interrupted = false;
+            let mut running_since = std::time::Instant::now();
+            let size = entry.size;
+            let result = leagueaccounts::recorder::convert_to_av1(&file, |done| {
+                // A game starts: give this file up now, it is done again later.
+                if recording_now() {
+                    interrupted = true;
+                    return false;
+                }
+                // Someone is watching a recording: wait, the disk is theirs.
+                if player_reading() {
+                    busy += running_since.elapsed();
+                    set_convert(&app, |status| status.watching = true);
+                    while player_reading() && !stopped() && !recording_now() {
+                        thread::sleep(Duration::from_millis(500));
+                    }
+                    set_convert(&app, |status| status.watching = false);
+                    running_since = std::time::Instant::now();
+                }
+                if last.elapsed() >= Duration::from_millis(400) || done >= 1.0 {
+                    last = std::time::Instant::now();
+                    let done_bytes = finished_bytes + (size as f64 * done) as u64;
+                    let seconds = (busy + running_since.elapsed()).as_secs_f64();
+                    let eta = if seconds > 5.0 && done_bytes > 0 {
+                        (total_bytes.saturating_sub(done_bytes) as f64 / (done_bytes as f64 / seconds)) as u64
+                    } else {
+                        0
+                    };
+                    set_convert(&app, |status| {
+                        status.progress = done;
+                        status.done_bytes = done_bytes;
+                        status.eta_seconds = eta;
+                    });
+                }
+                !stopped()
+            });
+            leagueaccounts::recorder::shutdown();
+            // A file given up for a game is done again later: its time and bytes do not count yet.
+            if !interrupted {
+                busy += running_since.elapsed();
+                finished_bytes += size;
+            }
+            if interrupted && !stopped() {
+                queue.push_front(entry);
+                continue;
+            }
+            match result {
+                Ok((before, after)) => set_convert(&app, |status| {
+                    status.done += 1;
+                    status.saved_bytes += before.saturating_sub(after);
+                }),
+                Err(_) if stopped() => break,
+                Err(_) => set_convert(&app, |status| {
+                    status.done += 1;
+                    status.failed += 1;
+                }),
+            }
+            let _ = app.emit("recordings-changed", ());
+        }
+        if let Ok(mut more) = CONVERT_MORE.lock() {
+            more.clear();
+        }
+        set_convert(&app, |status| {
+            status.running = false;
+            status.paused = false;
+            status.watching = false;
+            status.current.clear();
+        });
+        let _ = app.emit("convert-status", convert_status());
+        let _ = app.emit("recordings-changed", ());
+    });
+    Ok(convert_status())
+}
+
+#[tauri::command]
+pub async fn stop_convert() -> CommandResult<()> {
+    CONVERT_STOP.store(true, std::sync::atomic::Ordering::Relaxed);
+    Ok(())
 }
 
 #[tauri::command]
@@ -544,6 +916,16 @@ pub async fn set_recorder_prefs(app: AppHandle, prefs: RecorderPrefs) -> Command
         *cached = Some(prefs.clone());
     }
     let _ = app.emit("recorder-status", status());
+    {
+        let app = app.clone();
+        let prefs = prefs.clone();
+        thread::spawn(move || {
+            let current = ACTIVE.lock().ok().and_then(|active| active.as_ref().map(|active| active.recording.path.clone()));
+            if prefs.tidy(current.as_deref()) > 0 {
+                let _ = app.emit("recordings-changed", ());
+            }
+        });
+    }
     Ok(prefs_view(prefs))
 }
 
@@ -880,6 +1262,7 @@ const CHUNK: u64 = 2 * 1024 * 1024;
 pub fn serve(path: &str, range: Option<&str>) -> tauri::http::Response<Vec<u8>> {
     let not_found = || tauri::http::Response::builder().status(404).body(Vec::new()).unwrap_or_default();
     let Some(file) = library::resolve_url(&prefs().root(), path) else { return not_found() };
+    LAST_PLAYED.store(now_ms(), std::sync::atomic::Ordering::Relaxed);
     let Ok(mut handle) = std::fs::File::open(&file) else { return not_found() };
     let total = handle.metadata().map(|metadata| metadata.len()).unwrap_or(0);
     if total == 0 {

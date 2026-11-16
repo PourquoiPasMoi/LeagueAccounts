@@ -58,3 +58,26 @@ pub fn label(queue_id: i64, game_mode: &str) -> Option<&'static str> {
     };
     (!by_mode.is_empty()).then_some(by_mode)
 }
+
+/// Mode groups for the recording rules (Settings › Game modes), most important
+/// first: the default order of the disk-limit priority.
+pub const GROUPS: [&str; 10] = ["ranked_solo", "ranked_flex", "clash", "normal", "arena", "aram", "aram_mayhem", "rotating", "custom", "other"];
+
+/// The mode group of a recording from its queue id and its readable queue name
+/// (the name alone works for older recordings without an id).
+pub fn group(queue_id: i64, queue: &str) -> &'static str {
+    let named = if queue_id > 0 { label(queue_id, "") } else { None };
+    match named.unwrap_or(queue) {
+        "Ranked Solo/Duo" => "ranked_solo",
+        "Ranked Flex" | "Ranked 5s" => "ranked_flex",
+        "Clash" => "clash",
+        "Normal Draft" | "Normal Blind" | "Swiftplay" | "Quickplay" | "Classic Rift" | "Classic" => "normal",
+        "Arena" | "Arena 3x6" => "arena",
+        "ARAM" | "ARAM Clash" => "aram",
+        "ARAM: Mayhem" => "aram_mayhem",
+        "URF" | "ARURF" | "Snow ARURF" | "ARURF Clash" | "One for All" | "Nexus Blitz" | "Ultimate Spellbook" | "Swarm" | "Brawl" => "rotating",
+        "Custom" | "Classic Rift Custom" | "ARAM Custom" | "Practice Tool" | "Tutorial" | "Co-op vs AI" => "custom",
+        _ => "other",
+    }
+}
+

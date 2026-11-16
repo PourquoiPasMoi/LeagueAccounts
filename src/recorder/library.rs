@@ -36,6 +36,10 @@ pub struct RecordingMeta {
     pub game_start: Option<f64>,
     /// Video seconds where the game picture starts (champ select before it); 0 = none.
     pub champ_select: f64,
+    /// Video seconds where the end-of-game screen starts (after the game); 0 = none.
+    pub post_game: f64,
+    /// Video format: "h264" (also when empty: older files) or "av1".
+    pub codec: String,
     pub width: u32,
     pub height: u32,
     pub fps: u32,
@@ -282,7 +286,42 @@ pub fn total_size(entries: &[Entry]) -> u64 {
 /// Delete the oldest full games until everything fits in `limit` bytes.
 /// Clips and `keep` (the game being recorded) are never deleted. Returns the
 /// number of deleted games.
+/// The mode group of a recording (see `queues::group`).
+pub fn group_of(entry: &Entry) -> &'static str {
+    let (id, queue) = entry.meta.as_ref().map_or((0, ""), |meta| (meta.queue_id, meta.queue.as_str()));
+    super::queues::group(id, queue)
+}
+
+/// Delete game recordings older than their mode's keeping time (`keep_hours`
+/// gives hours per group; 0 or missing = forever). Clips are never deleted.
+pub fn apply_retention(root: &Path, keep_hours: &dyn Fn(&str) -> u32, keep: Option<&Path>) -> usize {
+    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |time| time.as_millis() as u64);
+    let keep = keep.and_then(|path| std::fs::canonicalize(path).ok()).map(plain);
+    let mut deleted = 0;
+    for entry in list(root).iter().filter(|entry| entry.kind == "game") {
+        let hours = keep_hours(group_of(entry));
+        if hours == 0 || now.saturating_sub(started(entry)) < u64::from(hours) * 3_600_000 {
+            continue;
+        }
+        let Some(path) = resolve(root, &entry.path) else { continue };
+        if keep.as_ref().is_some_and(|keep| *keep == path) {
+            continue;
+        }
+        if delete(&path).is_ok() {
+            deleted += 1;
+        }
+    }
+    deleted
+}
+
+/// Over the disk limit: delete game recordings, least important mode first
+/// (`rank` = place in the priority list, higher = deleted sooner), oldest
+/// first within a mode. Clips are never deleted.
 pub fn enforce_limit(root: &Path, limit: u64, keep: Option<&Path>) -> usize {
+    enforce_limit_by(root, limit, keep, &|_| 0)
+}
+
+pub fn enforce_limit_by(root: &Path, limit: u64, keep: Option<&Path>, rank: &dyn Fn(&str) -> usize) -> usize {
     if limit == 0 {
         return 0;
     }
@@ -293,7 +332,7 @@ pub fn enforce_limit(root: &Path, limit: u64, keep: Option<&Path>) -> usize {
     }
     let keep = keep.and_then(|path| std::fs::canonicalize(path).ok()).map(plain);
     let mut games: Vec<&Entry> = entries.iter().filter(|entry| entry.kind == "game").collect();
-    games.sort_by_key(|entry| started(entry));
+    games.sort_by_key(|entry| (std::cmp::Reverse(rank(group_of(entry))), started(entry)));
     let mut deleted = 0;
     for game in games {
         if total <= limit {

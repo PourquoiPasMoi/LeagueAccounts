@@ -6,7 +6,7 @@
 //! (game, mic, Discord) mixed into one track.
 
 use super::capture::Gpu;
-use super::encoder::{AUDIO_CHANNELS, AUDIO_RATE};
+use super::encoder::{rate_parameters, video_output_type, Codec, Rate, AUDIO_CHANNELS, AUDIO_RATE};
 use std::collections::VecDeque;
 use std::mem::ManuallyDrop;
 use std::path::Path;
@@ -145,9 +145,15 @@ pub fn cut_for_size(source: &Path, target: &Path, parts: &[(f64, f64)], max_byte
 
 fn mp4_writer(target: &Path, manager: Option<&IMFDXGIDeviceManager>) -> Result<IMFSinkWriter> {
     let _ = std::fs::remove_file(target);
-    let options = attributes(3)?;
+    let options = attributes(4)?;
     unsafe {
         options.SetGUID(&MF_TRANSCODE_CONTAINERTYPE, &MFTranscodeContainerType_MPEG4)?;
+        // Throttling makes WriteSample wait for the other streams to catch up.
+        // Samples come from one reader on this thread: when the GPU is busy the
+        // picture falls behind, the sound write waits for it, and the picture
+        // can never be read again (a conversion froze this way while a game
+        // was being recorded). The decoder's own surface pool limits memory.
+        options.SetUINT32(&MF_SINK_WRITER_DISABLE_THROTTLING, 1)?;
         if let Some(manager) = manager {
             options.SetUINT32(&MF_READWRITE_ENABLE_HARDWARE_TRANSFORMS, 1)?;
             options.SetUnknown(&MF_SINK_WRITER_D3D_MANAGER, manager)?;
@@ -575,6 +581,78 @@ fn transcode(source: &Path, target: &Path, parts: &[(f64, f64)], video: Video, a
         }
         writer.Finalize()?;
         Ok(landed)
+    }
+}
+
+/// Encode the whole picture of `source` again into `target` (e.g. H.264 to
+/// AV1, to save space) on the GPU, keeping every sound track exactly as it is
+/// and in the same order. `progress` gets the done fraction about once a
+/// second and returns false to stop (the target is then removed).
+pub fn convert(source: &Path, target: &Path, codec: Codec, bitrate: u32, rate: Rate, mut progress: impl FnMut(f64) -> bool) -> Result<()> {
+    let total = duration(source).max(1.0);
+    let result = convert_inner(source, target, codec, bitrate, rate, total, &mut progress);
+    let complete = result.is_ok() && (duration(target) - total).abs() < 2.0;
+    if !complete {
+        let _ = std::fs::remove_file(target);
+        return result.and(Err(fail()));
+    }
+    Ok(())
+}
+
+fn convert_inner(source: &Path, target: &Path, codec: Codec, bitrate: u32, rate: Rate, total: f64, progress: &mut dyn FnMut(f64) -> bool) -> Result<()> {
+    let gpu = Gpu::new()?;
+    unsafe {
+        let mut token = 0;
+        let mut manager = None;
+        MFCreateDXGIDeviceManager(&mut token, &mut manager)?;
+        let manager = manager.ok_or_else(fail)?;
+        manager.ResetDevice(&gpu.device, token)?;
+        let options = attributes(2)?;
+        options.SetUINT32(&MF_READWRITE_ENABLE_HARDWARE_TRANSFORMS, 1)?;
+        options.SetUnknown(&MF_SOURCE_READER_D3D_MANAGER, &manager)?;
+        let reader = MFCreateSourceReaderFromURL(&HSTRING::from(source.as_os_str()), &options)?;
+        let writer = mp4_writer(target, Some(&manager))?;
+        reader.SetStreamSelection(MF_SOURCE_READER_ALL_STREAMS.0 as u32, false)?;
+        let (video_stream, audio_streams) = streams(&reader);
+        let (video_index, native) = video_stream.ok_or_else(fail)?;
+        let size = native.GetUINT64(&MF_MT_FRAME_SIZE)?;
+        let frame_rate = native.GetUINT64(&MF_MT_FRAME_RATE).unwrap_or(pack(30, 1));
+        let fps = ((frame_rate >> 32) as u32 / (frame_rate as u32).max(1)).max(1);
+        reader.SetStreamSelection(video_index, true)?;
+        let decoded = MFCreateMediaType()?;
+        decoded.SetGUID(&MF_MT_MAJOR_TYPE, &MFMediaType_Video)?;
+        decoded.SetGUID(&MF_MT_SUBTYPE, &MFVideoFormat_NV12)?;
+        reader.SetCurrentMediaType(video_index, None, &decoded)?;
+        let stream = writer.AddStream(&video_output_type(codec, bitrate, size, frame_rate)?)?;
+        let input = reader.GetCurrentMediaType(video_index)?;
+        let parameters = rate_parameters(rate, bitrate, fps)?;
+        if writer.SetInputMediaType(stream, &input, &parameters).is_err() {
+            writer.SetInputMediaType(stream, &input, None::<&IMFAttributes>)?;
+        }
+        let mut tracks = vec![Track { reader: video_index, writer: Some(stream), role: Role::Video, done: false }];
+        for (index, native) in &audio_streams {
+            reader.SetStreamSelection(*index, true)?;
+            reader.SetCurrentMediaType(*index, None, native)?;
+            let stream = writer.AddStream(native)?;
+            writer.SetInputMediaType(stream, native, None::<&IMFAttributes>)?;
+            tracks.push(Track { reader: *index, writer: Some(stream), role: Role::Audio, done: false });
+        }
+        writer.BeginWriting()?;
+        // Not i64::MIN: `time - MIN` overflows (wraps in release), and progress
+        // was then never reported before the end of a file.
+        let mut reported: Option<i64> = None;
+        pump(&reader, &mut tracks, |track, sample, time| {
+            if track.role == Role::Video && reported.is_none_or(|last| time.saturating_sub(last) >= 10_000_000) {
+                reported = Some(time);
+                if !progress((time as f64 / UNITS / total).clamp(0.0, 1.0)) {
+                    return Err(fail());
+                }
+            }
+            writer.WriteSample(track.writer.ok_or_else(fail)?, sample)
+        })?;
+        writer.Finalize()?;
+        progress(1.0);
+        Ok(())
     }
 }
 

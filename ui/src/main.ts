@@ -18,7 +18,7 @@ import "./gameinfo.css";
 // Final layer of the design: must stay the last stylesheet.
 import "./polish.css";
 import { openRecordings } from "./recordings";
-import type { DiscordWebhook, RecorderPrefs, RecorderStatus } from "./api";
+import type { DiscordWebhook, ModeRule, RecorderPrefs, RecorderStatus } from "./api";
 import { experimentalOn, initBuilds, openCurrentBuild, resumeChampSelect, setExperimental, trackGames } from "./builds";
 import type { SessionStatus, SkinOwner } from "./api";
 import { LANGUAGES, applyStatic, asLang, en, errorText, fromBrowser, lang, localeTag, localizeRank, needsLanguageChoice, setLang, t, tierName, useLang, type Lang, type MessageKey } from "./i18n";
@@ -921,10 +921,37 @@ async function openSettings(): Promise<void> {
   const fpsOptions = [30, 60, 120]
     .map((fps) => `<option value="${fps}"${fps === recorder.fps ? " selected" : ""}>${fps} fps</option>`)
     .join("");
-  const segmented = (name: string, value: string, options: [string, string][]) => `
+  const segmented = (name: string, value: string, options: [string, string][], disabled: string[] = []) => `
     <div class="segmented" data-rec-group="${name}">${options
-      .map(([option, label]) => `<button type="button" data-rec-option="${option}" aria-pressed="${option === value}">${esc(label)}</button>`)
+      .map(
+        ([option, label]) =>
+          `<button type="button" data-rec-option="${option}" aria-pressed="${option === value}"${disabled.includes(option) ? " disabled" : ""}>${esc(label)}</button>`,
+      )
       .join("")}</div>`;
+  const av1 = recorder.formats.av1Encoder;
+  const keepLabel = (hours: number) => {
+    if (!hours) return t("settings.recKeepForever");
+    const unit = (value: number, name: "hour" | "day") => new Intl.NumberFormat(localeTag(), { style: "unit", unit: name, unitDisplay: "long" }).format(value);
+    return hours < 24 ? unit(hours, "hour") : unit(hours / 24, "day");
+  };
+  const keepChoices = [0, 6, 12, 24, 72, 168, 336, 720];
+  const modeRow = (rule: ModeRule, index: number) => {
+    const choices = [...new Set([...keepChoices, rule.keepHours])].sort((a, b) => (a || Infinity) - (b || Infinity));
+    return `
+      <div class="rec-mode-row" data-mode="${esc(rule.key)}">
+        <span class="rec-mode-rank">${index + 1}</span>
+        <span class="rec-mode-name">${esc(t(`mode.${rule.key}` as MessageKey))}</span>
+        <label class="rec-mode-switch"><input type="checkbox" name="mode-rec-${esc(rule.key)}" ${rule.record ? "checked" : ""} aria-label="${esc(t("settings.recModeRecord"))}"/><span class="switch"></span></label>
+        <div class="select-wrap"><select name="mode-keep-${esc(rule.key)}" aria-label="${esc(t("settings.recModeKeep"))}">${choices
+          .map((hours) => `<option value="${hours}"${hours === rule.keepHours ? " selected" : ""}>${esc(keepLabel(hours))}</option>`)
+          .join("")}</select></div>
+        <span class="rec-mode-move">
+          <button type="button" class="btn btn-ghost rec-mode-up" data-mode-move="-1" data-tooltip="${esc(t("settings.recModeUp"))}" aria-label="${esc(t("settings.recModeUp"))}">${icon("chevron-down", 13)}</button>
+          <button type="button" class="btn btn-ghost" data-mode-move="1" data-tooltip="${esc(t("settings.recModeDown"))}" aria-label="${esc(t("settings.recModeDown"))}">${icon("chevron-down", 13)}</button>
+        </span>
+      </div>`;
+  };
+  const codecNote = !av1 ? t("settings.recAv1Unsupported") : !recorder.formats.av1Decoder ? t("settings.recAv1NoDecoder") : "";
   const languageOptions = LANGUAGES.map(
     (language) => `<option value="${language.code}"${language.code === lang() ? " selected" : ""}>${esc(language.name)}</option>`,
   ).join("");
@@ -956,6 +983,7 @@ async function openSettings(): Promise<void> {
           <button type="button" role="tab" data-settings-tab="tools" aria-selected="${settingsTab === "tools"}">${esc(t("settings.tools"))}</button>
           <span class="settings-nav-group">${esc(t("settings.groupFeatures"))}</span>
           <button type="button" role="tab" data-settings-tab="recorder" aria-selected="${settingsTab === "recorder"}">${esc(t("settings.recorder"))}</button>
+          <button type="button" role="tab" data-settings-tab="recmodes" aria-selected="${settingsTab === "recmodes"}">${esc(t("settings.recModes"))}</button>
           <button type="button" role="tab" data-settings-tab="discord" aria-selected="${settingsTab === "discord"}">${esc(t("settings.discord"))}</button>
           <button type="button" role="tab" data-settings-tab="experimental" aria-selected="${settingsTab === "experimental"}">${esc(t("settings.experimental"))}</button>
         </nav>
@@ -1015,6 +1043,7 @@ async function openSettings(): Promise<void> {
           <div>
             ${toggle("recEnabled", recorder.enabled, t("settings.recOn"), t("settings.recOnHint"))}
             ${toggle("recChampSelect", recorder.champSelect, t("settings.recChampSelect"), t("settings.recChampSelectHint"))}
+            ${toggle("recPostGame", recorder.postGame, t("settings.recPostGame"), t("settings.recPostGameHint"))}
             <div class="rec-folder">
               <span class="toggle-text"><strong>${esc(t("settings.recFolder"))}</strong><span data-rec-folder>${esc(recorder.root)}</span></span>
               <button type="button" class="btn btn-ghost" data-rec-browse>${icon("folder-open", 14)}${esc(t("settings.recBrowse"))}</button>
@@ -1042,6 +1071,15 @@ async function openSettings(): Promise<void> {
             </div>
             ${toggle("recDiscord", recorder.discord, t("settings.recDiscord"), t("settings.recDiscordHint"))}
             <div class="rec-option">
+              <span class="toggle-text"><strong>${esc(t("settings.recCodec"))}</strong><span>${esc(t("settings.recCodecHint"))}</span></span>
+              ${segmented("codec", av1 ? recorder.codec : "h264", [["h264", t("settings.recH264")], ["av1", t("settings.recAv1")]], av1 ? [] : ["av1"])}
+              ${codecNote ? `<p class="settings-note rec-option-note">${esc(codecNote)}</p>` : ""}
+            </div>
+            <div class="rec-option">
+              <span class="toggle-text"><strong>${esc(t("settings.recRate"))}</strong><span>${esc(t("settings.recRateHint"))}</span></span>
+              ${segmented("rate", recorder.rate, [["variable", t("settings.recVariable")], ["constant", t("settings.recConstant")]])}
+            </div>
+            <div class="rec-option">
               <span class="toggle-text"><strong>${esc(t("settings.recEncoder"))}</strong><span>${esc(t("settings.recEncoderHint"))}</span></span>
               ${segmented("encoder", recorder.encoder, [["auto", t("settings.recHardware")], ["software", t("settings.recSoftware")]])}
             </div>
@@ -1051,6 +1089,13 @@ async function openSettings(): Promise<void> {
             </div>
           </div>
         </div>
+        </section>
+        <section class="settings-page" data-settings-page="recmodes" ${settingsTab === "recmodes" ? "" : "hidden"}>
+          <h3 class="settings-page-title">${esc(t("settings.recModes"))}</h3>
+          <p class="settings-note">${esc(t("settings.recModesHint"))}</p>
+          <div class="rec-rules-head"><span>${esc(t("settings.recModePriority"))}</span><span>${esc(t("settings.recModeName"))}</span><span>${esc(t("settings.recModeRecord"))}</span><span>${esc(t("settings.recModeKeep"))}</span><span></span></div>
+          <div class="rec-rules" data-rec-modes>${recorder.modes.map((rule, index) => modeRow(rule, index)).join("")}</div>
+          <input type="hidden" name="recModeOrder" value="${esc(recorder.modes.map((rule) => rule.key).join(","))}"/>
         </section>
         <section class="settings-page" data-settings-page="discord" ${settingsTab === "discord" ? "" : "hidden"} data-settings-ignore>
           <h3 class="settings-page-title">${esc(t("settings.discord"))}</h3>
@@ -1088,6 +1133,24 @@ async function openSettings(): Promise<void> {
       return answer === "close" || answer === "save" ? answer : "stay";
     },
     onOpen: (root) => {
+      // Game modes: move a mode up or down the priority list.
+      root.querySelector("[data-rec-modes]")?.addEventListener("click", (event) => {
+        const button = (event.target as HTMLElement).closest<HTMLElement>("[data-mode-move]");
+        const row = button?.closest<HTMLElement>(".rec-mode-row");
+        if (!button || !row) return;
+        event.preventDefault();
+        const list = row.parentElement!;
+        const rows = [...list.children];
+        const index = rows.indexOf(row) + Number(button.dataset.modeMove);
+        if (index < 0 || index >= rows.length) return;
+        if (Number(button.dataset.modeMove) < 0) list.insertBefore(row, rows[index]);
+        else list.insertBefore(rows[index], row);
+        [...list.children].forEach((child, place) => {
+          const rank = child.querySelector(".rec-mode-rank");
+          if (rank) rank.textContent = String(place + 1);
+        });
+        $<HTMLInputElement>('[name="recModeOrder"]', root).value = [...list.children].map((child) => (child as HTMLElement).dataset.mode).join(",");
+      });
       // Unsaved changes: the form compared with how it opened. Save only when something changed.
       const snapshot = () =>
         JSON.stringify([
@@ -1297,6 +1360,17 @@ async function openSettings(): Promise<void> {
         micDevice: $<HTMLSelectElement>('[name="recMicDevice"]', root).value,
         diskLimitGb: Math.min(100000, Math.max(0, Math.round(Number($<HTMLInputElement>('[name="recLimit"]', root).value) || 0))),
         champSelect: checked("recChampSelect"),
+        postGame: checked("recPostGame"),
+        modes: $<HTMLInputElement>('[name="recModeOrder"]', root)
+          .value.split(",")
+          .filter(Boolean)
+          .map((key) => ({
+            key,
+            record: checked(`mode-rec-${key}`),
+            keepHours: Number(root.querySelector<HTMLSelectElement>(`[name="mode-keep-${key}"]`)?.value ?? 0),
+          })),
+        codec: (recorderChoice(root, "codec") || "h264") as RecorderPrefs["codec"],
+        rate: (recorderChoice(root, "rate") || "variable") as RecorderPrefs["rate"],
       };
       const recorderSaved = await guard(() => api.setRecorderPrefs(recorderPrefs), "toast.settingsFailed");
       if (!recorderSaved.ok) return false;

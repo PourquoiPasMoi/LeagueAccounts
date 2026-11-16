@@ -285,6 +285,16 @@ impl Capture {
         }
     }
 
+    /// Only the asked way, no fallback (the game window can refuse window
+    /// capture for a moment while it starts: better to try again soon).
+    pub fn open_strict(gpu: &Gpu, hwnd: HWND, screen: bool) -> Result<Self> {
+        if screen {
+            ScreenCapture::new(gpu, hwnd).map(Self::Screen)
+        } else {
+            WindowCapture::new(gpu, hwnd).map(Self::Window)
+        }
+    }
+
     pub fn size(&self) -> (u32, u32) {
         match self {
             Self::Window(capture) => capture.size(),

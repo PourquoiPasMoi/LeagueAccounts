@@ -443,6 +443,7 @@
 .rec-kind-tab.is-clip[aria-selected="true"] em { background: var(--win); }
 .rec-order { margin-bottom: 8px; }
 .rec-modes { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 24px 4px 16px; }
+.rec-modes button { flex: 0 0 auto; white-space: nowrap; }
 .rec-modes button { display: inline-flex; align-items: center; gap: 7px; padding: 6px 11px; border: 1px solid transparent; font-size: 12px; color: var(--text-2); border-radius: var(--r); }
 .rec-modes button em { font-style: normal; font-size: 10.5px; color: var(--text-4); }
 .rec-modes button:hover { color: var(--text); border-color: var(--line); }
@@ -650,3 +651,46 @@
 /* Player control */
 .rec-hud-toggle { height: 28px; padding: 0 10px; font: 600 11px/1 var(--font-display); }
 .rec-hud-toggle[aria-pressed="true"] { color: var(--win); border-color: var(--win); }
+
+/* ------------------------------------------------------------- save space (AV1 conversion) */
+
+.rec-option .rec-option-note { flex-basis: 100%; margin: 0; }
+.segmented button:disabled { opacity: 0.4; cursor: not-allowed; }
+.rec-head .rec-convert.is-running { border-color: var(--accent); color: var(--text); }
+.rec-convert-body { display: grid; gap: 10px; }
+.rec-convert-body p { margin: 0; font-size: 13px; line-height: 19px; color: var(--text-2); }
+.rec-convert-body .rec-convert-line { color: var(--text); }
+.rec-convert-body .rec-convert-sub { font-size: 12px; }
+.rec-convert-meter { position: relative; height: 6px; border-radius: var(--r); background: var(--fill-2); overflow: hidden; }
+.rec-convert-meter > span {
+  position: absolute; inset: 0; background: var(--accent);
+  transform: scaleX(var(--convert, 0)); transform-origin: left; transition: transform 400ms var(--ease);
+}
+.rec-convert-actions { display: flex; justify-content: flex-end; }
+
+/* ------------------------------------------------------------- Settings › Game modes */
+
+.rec-rules-head, .rec-mode-row {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) 52px minmax(150px, 190px) 64px;
+  align-items: center;
+  gap: 12px;
+}
+.rec-rules-head { margin-top: 14px; padding: 0 12px 6px; font-size: 11.5px; color: var(--text-3); }
+.rec-rules { display: grid; gap: 4px; }
+.rec-mode-row { padding: 6px 12px; border-radius: var(--r); background: var(--fill-1); transition: background 160ms var(--ease); }
+.rec-mode-row:hover { background: var(--fill-2); }
+.rec-mode-rank { font: 600 12px/1 var(--font-display); color: var(--text-3); text-align: center; }
+.rec-mode-name { font-size: 13px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rec-mode-switch { position: relative; display: inline-flex; cursor: pointer; }
+.rec-mode-switch input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
+.rec-mode-row .select-wrap select { width: 100%; }
+.rec-mode-move { display: inline-flex; gap: 4px; justify-content: flex-end; }
+.rec-mode-move .btn { width: 28px; height: 28px; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
+.rec-mode-up .icon { transform: rotate(180deg); }
+.rec-mode-row:first-child .rec-mode-up, .rec-mode-row:last-child [data-mode-move="1"] { opacity: 0.3; pointer-events: none; }
+.rec-mode-switch input:checked + .switch { background: var(--success); }
+.rec-mode-switch input:checked + .switch::after { transform: translateX(16px); }
+.rec-mode-switch input:focus-visible + .switch { box-shadow: 0 0 0 3px rgb(var(--accent-rgb) / .45); }
+.rec-mode-row:has(input[name^="mode-rec-"]:not(:checked)) .rec-mode-name { color: var(--text-3); }
+.rec-mode-row:has(input[name^="mode-rec-"]:not(:checked)) .select-wrap { opacity: 0.45; }
