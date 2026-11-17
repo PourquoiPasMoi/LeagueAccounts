@@ -5,6 +5,7 @@ import { ApiError, api, events, gameImage, type ConvertStatus, type Waves, type 
 import { errorText, localeTag, t, type MessageKey } from "./i18n";
 import { $, esc, fragment, leave, modal, toast } from "./dom";
 import { icon } from "./icons";
+import { emblem } from "./ranks";
 import { momentIcon } from "./momenticons";
 import { loadGameAssets, renderGameInfo, type GameDetails } from "./gameinfo";
 import { broadcastHud, type Hud, type LiveLog } from "./broadcast";
@@ -41,6 +42,10 @@ function kda(entry: Recording): string {
 const MODE_HINTS: Record<ClipMode, MessageKey> = { fast: "rec.fastHint", exact: "rec.exactHint", discord: "rec.discordHint" };
 /** Seconds shown before a moment when jumping to it (and kept before it in a clip). */
 const LEAD = 6;
+/** Playback speeds the + and - keys step through. */
+const SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2];
+/** Account folder name or Riot ID, compared without case or spaces. */
+const folderKey = (name: string) => name.toLowerCase().replace(/\s+/g, "");
 /** Seconds kept after a moment when a clip is made from it. */
 const TAIL = 4;
 
@@ -393,6 +398,24 @@ export async function openRecordings(): Promise<void> {
   };
 
   /** The moments shown: the player's own, narrowed by the viewer's filter. */
+  /** Solo/Duo tier of each saved account, by folder name (Riot ID). */
+  let tiers = new Map<string, string>();
+  void api
+    .listAccounts()
+    .then((list) => {
+      const named = list.filter((entry) => entry.name);
+      // Full Riot ID first; the game name alone as a fallback (folders saved without the tag).
+      tiers = new Map([
+        ...named.map((entry) => [folderKey(entry.name.split("#")[0]), entry.lol.tier] as [string, string]),
+        ...named.map((entry) => [folderKey(entry.name), entry.lol.tier] as [string, string]),
+      ]);
+      renderNav();
+    })
+    .catch(() => undefined);
+  /** Playback speed (kept for this window only). */
+  let speed = 1;
+  let keysShown = false;
+
   const currentMoments = () => cleanMoments(selected?.meta?.moments ?? []).filter((moment) => matches(moment, filter));
   const isRecording = (entry: Recording) => status.recording && status.path === entry.path;
   const accounts = () => [...new Set(view.entries.map((entry) => entry.account))].sort((a, b) => (a === UNKNOWN ? 1 : b === UNKNOWN ? -1 : a.localeCompare(b)));
@@ -433,8 +456,12 @@ export async function openRecordings(): Promise<void> {
 
   const renderNav = () => {
     const count = (name: string) => view.entries.filter((entry) => !name || entry.account === name).length;
+    const crest = (name: string) => {
+      const tier = tiers.get(folderKey(name));
+      return name && tier ? `<span class="rec-nav-crest" data-tooltip="${esc(tier)}">${emblem(tier, 18)}</span>` : "";
+    };
     nav.innerHTML = [["", t("rec.all")], ...accounts().map((name) => [name, accountLabel(name)])]
-      .map(([name, label]) => `<button role="tab" data-rec-account="${esc(name)}" aria-selected="${name === account}"><span>${esc(label)}</span><em>${count(name)}</em></button>`)
+      .map(([name, label]) => `<button role="tab" data-rec-account="${esc(name)}" aria-selected="${name === account}">${crest(name)}<span>${esc(label)}</span><em>${count(name)}</em></button>`)
       .join("");
   };
 
@@ -635,6 +662,8 @@ export async function openRecordings(): Promise<void> {
       : [];
     player.innerHTML = `
       <div class="rec-screen"><video preload="metadata" crossorigin="anonymous" src="http://larec.localhost/${encodeURIComponent(entry.path)}?v=${entry.modified}"></video>
+        <div class="rec-flash" aria-live="polite"></div>
+        <div class="rec-keys" ${keysShown ? "" : "hidden"}>${keysHtml()}</div>
         <div class="rec-screen-tools">
           <button class="rec-screen-btn" data-rec="mute" aria-pressed="${muted}" aria-label="${esc(t("rec.mute"))}">${icon(silent() ? "volume-x" : "volume", 20)}</button>
           <button class="rec-screen-btn" data-rec="fullscreen" aria-label="${esc(t(document.fullscreenElement ? "rec.exitFullscreen" : "rec.fullscreen"))}">${icon(document.fullscreenElement ? "minimize" : "maximize", 20)}</button>
@@ -656,7 +685,9 @@ export async function openRecordings(): Promise<void> {
       <div class="rec-controls">
         <button class="icon-btn rec-play" data-rec="play" aria-label="${esc(t("rec.play"))}"><span class="rec-play-glyph"></span></button>
         <span class="rec-time"><b data-rec-now>0:00</b> / <span data-rec-total>${clock(meta?.duration ?? 0)}</span></span>
+        <button class="btn btn-ghost rec-speed" data-rec="speed" data-tooltip="${esc(t("rec.speedHint"))}">${esc(speedLabel())}</button>
         <span class="rec-spacer"></span>
+        <button class="icon-btn" data-rec="keys" aria-pressed="${keysShown}" data-tooltip="${esc(t("rec.shortcuts"))}" aria-label="${esc(t("rec.shortcuts"))}">${icon("keyboard", 15)}</button>
         <button class="icon-btn rec-waves-toggle" data-rec="waves" aria-pressed="${wavesShown}" data-tooltip="${esc(t("rec.waves"))}" aria-label="${esc(t("rec.waves"))}">${icon("chart-line", 15)}</button>
         <div class="rec-zoom" data-tooltip="${esc(t("rec.zoomHint"))}">
           <button class="icon-btn" data-rec="zoom-out" aria-label="${esc(t("rec.zoomOut"))}">${icon("minus", 13)}</button>
@@ -691,6 +722,8 @@ export async function openRecordings(): Promise<void> {
       <div class="rec-side-facts">${[entry.name, ...facts].map((fact) => `<span>${esc(String(fact))}</span>`).join("")}</div>`;
     video = $<HTMLVideoElement>("video", player);
     video.addEventListener("loadedmetadata", updateTimeline);
+    video.defaultPlaybackRate = speed;
+    video.playbackRate = speed;
     video.addEventListener("timeupdate", updateTimeline);
     video.addEventListener("play", updatePlayState);
     video.addEventListener("pause", updatePlayState);
@@ -1320,6 +1353,65 @@ export async function openRecordings(): Promise<void> {
     button?.classList.toggle("is-playing", Boolean(video && !video.paused));
   };
 
+  const speedLabel = () => `${speed}×`;
+  /** A short label in the middle of the picture (speed, jumps). */
+  let flashTimer = 0;
+  const flash = (text: string) => {
+    const box = player.querySelector<HTMLElement>(".rec-flash");
+    if (!box) return;
+    box.textContent = text;
+    box.classList.add("is-shown");
+    window.clearTimeout(flashTimer);
+    flashTimer = window.setTimeout(() => box.classList.remove("is-shown"), 700);
+  };
+  const setSpeed = (next: number) => {
+    speed = next;
+    if (video) {
+      video.defaultPlaybackRate = speed;
+      video.playbackRate = speed;
+    }
+    syncTracks();
+    const button = player.querySelector<HTMLElement>('[data-rec="speed"]');
+    if (button) button.textContent = speedLabel();
+    flash(speedLabel());
+  };
+  const stepSpeed = (direction: number) => {
+    const index = SPEEDS.indexOf(speed);
+    const next = SPEEDS[Math.min(SPEEDS.length - 1, Math.max(0, (index < 0 ? SPEEDS.indexOf(1) : index) + direction))];
+    setSpeed(next);
+  };
+  /** One frame back or forward (pauses first). */
+  const stepFrame = (direction: number) => {
+    if (!video) return;
+    video.pause();
+    const fps = selected?.meta?.fps || 30;
+    seek(video.currentTime + direction / fps);
+  };
+  /** The previous or next key moment of the current filter. */
+  const jumpMoment = (direction: number) => {
+    if (!video) return;
+    const now = video.currentTime;
+    const times = currentMoments().map((moment) => Math.max(0, moment.time - LEAD)).sort((a, b) => a - b);
+    const target = direction > 0 ? times.find((time) => time > now + 0.5) : [...times].reverse().find((time) => time < now - 1.5);
+    if (target === undefined) return;
+    seek(target);
+    if (video.paused) void video.play().catch(() => undefined);
+  };
+  const keysHtml = () => {
+    const rows: [string, MessageKey][] = [
+      ["Space", "rec.key.play"], ["← →", "rec.key.seek"], ["J  L", "rec.key.jump"], [",  .", "rec.key.frame"],
+      ["Shift ← →", "rec.key.moment"], ["−  +", "rec.key.speed"], ["0", "rec.key.speedReset"],
+      ["M", "rec.key.mute"], ["F", "rec.key.fullscreen"], ["Tab", "rec.key.hud"], ["?", "rec.key.help"],
+    ];
+    return `<h4>${esc(t("rec.shortcuts"))}</h4>${rows.map(([keys, label]) => `<div><kbd>${esc(keys)}</kbd><span>${esc(t(label))}</span></div>`).join("")}`;
+  };
+  const toggleKeys = () => {
+    keysShown = !keysShown;
+    const panel = player.querySelector<HTMLElement>(".rec-keys");
+    if (panel) panel.hidden = !keysShown;
+    player.querySelector('[data-rec="keys"]')?.setAttribute("aria-pressed", String(keysShown));
+  };
+
   const togglePlay = () => {
     if (!video) return;
     if (video.paused) void video.play().catch(() => undefined);
@@ -1717,6 +1809,8 @@ export async function openRecordings(): Promise<void> {
       renderMixer();
     }
     if (action === "fullscreen") return toggleFullscreen();
+    if (action === "speed") return setSpeed(SPEEDS[(SPEEDS.indexOf(speed) + 1) % SPEEDS.length]);
+    if (action === "keys") return toggleKeys();
     if (action === "mute") {
       muted = !muted;
       try {
@@ -1976,12 +2070,58 @@ export async function openRecordings(): Promise<void> {
       }
       return;
     }
-    if (event.key === " " && !(event.target as HTMLElement).closest?.("[data-rec-path], button")) {
+    // Space plays or pauses, even right after clicking a player button (it would press it again).
+    if (event.key === " " && !(event.target as HTMLElement).closest?.("[data-rec-path]")) {
       event.preventDefault();
+      (event.target as HTMLElement).blur?.();
       togglePlay();
+      return;
     }
-    if (event.key === "ArrowLeft") seek(video.currentTime - 5);
-    if (event.key === "ArrowRight") seek(video.currentTime + 5);
+    if (event.ctrlKey || event.altKey || event.metaKey) return;
+    const key = event.key;
+    const handled = () => event.preventDefault();
+    if (key === "ArrowLeft" || key === "ArrowRight") {
+      handled();
+      const direction = key === "ArrowLeft" ? -1 : 1;
+      if (event.shiftKey) return jumpMoment(direction);
+      seek(video.currentTime + direction * 5);
+      return flash(direction < 0 ? "−5 s" : "+5 s");
+    }
+    if (key === "j" || key === "J" || key === "l" || key === "L") {
+      handled();
+      const direction = key.toLowerCase() === "j" ? -1 : 1;
+      seek(video.currentTime + direction * 10);
+      return flash(direction < 0 ? "−10 s" : "+10 s");
+    }
+    if (key === "," || key === ".") {
+      handled();
+      return stepFrame(key === "," ? -1 : 1);
+    }
+    if (key === "+" || key === "=") {
+      handled();
+      return stepSpeed(1);
+    }
+    if (key === "-" || key === "_") {
+      handled();
+      return stepSpeed(-1);
+    }
+    if (key === "0") {
+      handled();
+      return setSpeed(1);
+    }
+    if (key === "m" || key === "M") {
+      handled();
+      player.querySelector<HTMLElement>('[data-rec="mute"]')?.click();
+      return;
+    }
+    if (key === "f" || key === "F") {
+      handled();
+      return toggleFullscreen();
+    }
+    if (key === "?") {
+      handled();
+      return toggleKeys();
+    }
   };
   document.addEventListener("keydown", onKey, true);
   const resized = new ResizeObserver(() => {
