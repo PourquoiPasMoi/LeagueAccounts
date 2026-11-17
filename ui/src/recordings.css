@@ -729,3 +729,14 @@
 .rec-keys h4 { margin: 0 0 4px; font: 650 13px/1.2 var(--font-display); color: var(--text); }
 .rec-keys div { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--text-2); }
 .rec-keys kbd { min-width: 70px; padding: 2px 7px; border-radius: var(--r-sm); background: var(--fill-2); color: var(--text); font: 600 11px/1.5 var(--font-text); text-align: center; }
+
+/* Sound strips: mute one source. */
+.rec-wave-row.has-mute span { left: 30px; }
+.rec-wave-mute {
+  position: absolute; left: 5px; top: 50%; z-index: 2; transform: translateY(-50%);
+  display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; padding: 0;
+  border: 0; border-radius: var(--r-sm); background: rgb(var(--s1-rgb) / 0.85); color: var(--text-2); cursor: pointer;
+}
+.rec-wave-mute:hover { color: var(--text); background: var(--fill-2); }
+.rec-wave-mute[aria-pressed="true"] { color: var(--loss); }
+.rec-wave-row.is-muted canvas { opacity: 0.3; }

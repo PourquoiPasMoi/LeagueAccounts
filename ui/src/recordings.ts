@@ -76,6 +76,26 @@ let muted = (() => {
   }
 })();
 const silent = () => muted || level("master") === 0;
+/** Sound sources muted one by one from their wave strip (kept between sessions). */
+const SOURCE_MUTED_KEY = "recSourceMuted";
+let sourceMuted = new Set<string>((() => {
+  try {
+    const value = JSON.parse(localStorage.getItem(SOURCE_MUTED_KEY) ?? "[]");
+    return Array.isArray(value) ? value.filter((item) => typeof item === "string") : [];
+  } catch {
+    return [];
+  }
+})());
+function toggleSourceMuted(label: string): void {
+  sourceMuted = new Set(sourceMuted);
+  if (sourceMuted.has(label)) sourceMuted.delete(label);
+  else sourceMuted.add(label);
+  try {
+    localStorage.setItem(SOURCE_MUTED_KEY, JSON.stringify([...sourceMuted]));
+  } catch {
+    // Not kept: fine.
+  }
+}
 
 function setLevel(name: string, value: number): void {
   levels = { ...levels, [name]: value };
@@ -881,7 +901,7 @@ export async function openRecordings(): Promise<void> {
     if (masterGain) masterGain.gain.value = master / 100;
     else if (video) video.volume = Math.min(1, master / 100);
     if (videoSound) videoSound.gain.gain.value = trackState === "ready" ? 0 : 1;
-    tracks.forEach(({ label, gain }) => (gain.gain.value = level(label) / 100));
+    tracks.forEach(({ label, gain }) => (gain.gain.value = sourceMuted.has(label) ? 0 : level(label) / 100));
     const button = player.querySelector<HTMLElement>('[data-rec="mixer"]');
     if (button) button.innerHTML = icon(silent() ? "volume-x" : "volume", 15);
     const mute = player.querySelector<HTMLElement>('[data-rec="mute"]');
@@ -1016,6 +1036,7 @@ export async function openRecordings(): Promise<void> {
     applyLevels();
     syncTracks(true);
     renderMixer();
+    renderWaves();
   };
 
   const renderMixer = () => {
@@ -1160,7 +1181,14 @@ export async function openRecordings(): Promise<void> {
       return;
     }
     box.innerHTML = waves.labels
-      .map((label, index) => `<div class="rec-wave-row" data-rec-wave="${index}" style="height:${waveHeight(label)}px"><canvas></canvas><span>${esc(waveLabel(label))}</span><div class="rec-wave-resize" data-rec-wave-resize="${index}" data-tooltip="${esc(t("rec.waveResize"))}"></div></div>`)
+      .map((label, index) => {
+        const own = trackState === "ready" && tracks.some((track) => track.label === label);
+        const off = own && sourceMuted.has(label);
+        const mute = own
+          ? `<button class="rec-wave-mute" data-rec-wave-mute="${esc(label)}" aria-pressed="${off}" data-tooltip="${esc(t(off ? "rec.unmuteSource" : "rec.muteSource"))}" aria-label="${esc(t(off ? "rec.unmuteSource" : "rec.muteSource"))}">${icon(off ? "volume-x" : "volume", 12)}</button>`
+          : "";
+        return `<div class="rec-wave-row${own ? " has-mute" : ""}${off ? " is-muted" : ""}" data-rec-wave="${index}" style="height:${waveHeight(label)}px"><canvas></canvas>${mute}<span>${esc(waveLabel(label))}</span><div class="rec-wave-resize" data-rec-wave-resize="${index}" data-tooltip="${esc(t("rec.waveResize"))}"></div></div>`;
+      })
       .join("");
     drawWaves();
   };
@@ -1400,7 +1428,7 @@ export async function openRecordings(): Promise<void> {
   const keysHtml = () => {
     const rows: [string, MessageKey][] = [
       ["Space", "rec.key.play"], ["← →", "rec.key.seek"], ["J  L", "rec.key.jump"], [",  .", "rec.key.frame"],
-      ["Shift ← →", "rec.key.moment"], ["−  +", "rec.key.speed"], ["0", "rec.key.speedReset"],
+      ["Shift ← →", "rec.key.moment"], ["↑ ↓", "rec.key.volume"], ["−  +", "rec.key.speed"], ["0", "rec.key.speedReset"],
       ["M", "rec.key.mute"], ["F", "rec.key.fullscreen"], ["Tab", "rec.key.hud"], ["?", "rec.key.help"],
     ];
     return `<h4>${esc(t("rec.shortcuts"))}</h4>${rows.map(([keys, label]) => `<div><kbd>${esc(keys)}</kbd><span>${esc(t(label))}</span></div>`).join("")}`;
@@ -1809,6 +1837,13 @@ export async function openRecordings(): Promise<void> {
       renderMixer();
     }
     if (action === "fullscreen") return toggleFullscreen();
+    const waveMute = target.closest<HTMLElement>("[data-rec-wave-mute]")?.dataset.recWaveMute;
+    if (waveMute) {
+      toggleSourceMuted(waveMute);
+      applyLevels();
+      renderWaves();
+      return flash(`${t(`rec.audio.${waveMute}` as MessageKey)}: ${t(sourceMuted.has(waveMute) ? "rec.mutedShort" : "rec.unmutedShort")}`);
+    }
     if (action === "speed") return setSpeed(SPEEDS[(SPEEDS.indexOf(speed) + 1) % SPEEDS.length]);
     if (action === "keys") return toggleKeys();
     if (action === "mute") {
@@ -1941,7 +1976,7 @@ export async function openRecordings(): Promise<void> {
       return updateTimeline();
     }
     const track = target.closest<HTMLElement>("[data-rec-track]") ?? target.closest<HTMLElement>("[data-rec-waves]");
-    if (!track || !video || target.closest(".rec-marker")) return;
+    if (!track || !video || target.closest(".rec-marker, [data-rec-wave-mute]")) return;
     const handle = target.closest<HTMLElement>("[data-rec-handle]")?.dataset.recHandle as "start" | "end" | undefined;
     const timeAt = (x: number) => {
       const box = track.getBoundingClientRect();
@@ -2108,6 +2143,23 @@ export async function openRecordings(): Promise<void> {
     if (key === "0") {
       handled();
       return setSpeed(1);
+    }
+    if (key === "ArrowUp" || key === "ArrowDown") {
+      handled();
+      const next = Math.min(MAX_MASTER, Math.max(0, level("master") + (key === "ArrowUp" ? 5 : -5)));
+      setLevel("master", next);
+      if (key === "ArrowUp" && muted) {
+        muted = false;
+        try {
+          localStorage.setItem("recMuted", "off");
+        } catch {
+          // Not kept: fine.
+        }
+      }
+      void audio?.resume().catch(() => undefined);
+      applyLevels();
+      renderMixer();
+      return flash(`${t("rec.master")} ${next} %`);
     }
     if (key === "m" || key === "M") {
       handled();
