@@ -705,3 +705,27 @@
 }
 .rec-preview canvas { display: block; width: 192px; height: 108px; border-radius: var(--r-sm); background: var(--s1); }
 .rec-preview span { font: 600 11.5px/1 var(--font-display); color: var(--text); text-align: center; font-variant-numeric: tabular-nums; }
+
+/* ------------------------------------------------------------- account crests, speed, shortcuts */
+
+.rec-nav button > span:not(.rec-nav-crest) { flex: 1 1 auto; min-width: 0; }
+.rec-nav-crest { display: inline-flex; flex: 0 0 auto; }
+.rec-nav-crest .emblem { width: 18px; height: 18px; }
+.rec-speed { min-width: 46px; height: 28px; padding: 0 10px; font-size: 12px; font-variant-numeric: tabular-nums; }
+.rec-flash {
+  position: absolute; left: 50%; top: 50%; z-index: 7; transform: translate(-50%, -50%) scale(.96);
+  padding: 8px 16px; border-radius: var(--r-lg); pointer-events: none; opacity: 0;
+  background: rgb(0 0 0 / .55); backdrop-filter: blur(10px); color: var(--text);
+  font: 650 18px/1 var(--font-display); font-variant-numeric: tabular-nums;
+  transition: opacity 200ms var(--ease), transform 200ms var(--ease);
+}
+.rec-flash.is-shown { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+.rec-keys {
+  position: absolute; right: 16px; top: 16px; z-index: 7; display: grid; gap: 6px; min-width: 260px;
+  padding: 14px 16px; border-radius: var(--r-lg); border: 1px solid var(--line-2);
+  background: rgb(18 18 22 / .82); backdrop-filter: blur(14px); box-shadow: 0 12px 30px rgb(0 0 0 / .45);
+}
+.rec-keys[hidden] { display: none; }
+.rec-keys h4 { margin: 0 0 4px; font: 650 13px/1.2 var(--font-display); color: var(--text); }
+.rec-keys div { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--text-2); }
+.rec-keys kbd { min-width: 70px; padding: 2px 7px; border-radius: var(--r-sm); background: var(--fill-2); color: var(--text); font: 600 11px/1.5 var(--font-text); text-align: center; }
