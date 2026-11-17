@@ -49,6 +49,8 @@ pub struct RecorderPrefs {
     pub champ_select: bool,
     /// After the game, keep recording the client's end-of-game screen until the player leaves it.
     pub post_game: bool,
+    /// Make a highlight reel clip after every recorded game.
+    pub auto_highlights: bool,
     /// Video format: h264 (plays everywhere) or av1 (smaller; GPUs with an AV1 encoder).
     pub codec: String,
     /// constant (always the preset's bitrate) or variable (less when little moves).
@@ -109,6 +111,7 @@ impl Default for RecorderPrefs {
             disk_limit_gb: 100,
             champ_select: true,
             post_game: true,
+            auto_highlights: false,
             codec: "h264".into(),
             rate: "variable".into(),
             modes: complete_modes(Vec::new()),
@@ -368,9 +371,17 @@ fn finish(app: &AppHandle, active: Active) {
     if let Some(path) = saved {
         let root = prefs.root();
         let app = app.clone();
+        let highlights = prefs.auto_highlights;
         thread::spawn(move || {
             let _ = leagueaccounts::recorder::sound_tracks(&root, &path);
             let _ = leagueaccounts::recorder::waves(&root, &path);
+            if highlights {
+                let _ = leagueaccounts::recorder::startup();
+                if leagueaccounts::recorder::save_highlights(&root, &path).is_ok() {
+                    let _ = app.emit("recordings-changed", ());
+                }
+                leagueaccounts::recorder::shutdown();
+            }
             let Some(file) = library::resolve(&root, &path) else { return };
             let meta = library::read_meta(&file).unwrap_or_default();
             if meta.kind != "game" {
@@ -665,6 +676,28 @@ fn prefs_view(prefs: RecorderPrefs) -> RecorderPrefsView {
 #[tauri::command]
 pub async fn recorder_prefs() -> CommandResult<RecorderPrefsView> {
     tauri::async_runtime::spawn_blocking(|| prefs_view(prefs())).await.map_err(|_| fail("operation_failed"))
+}
+
+/// Save a highlight reel clip of a game (kills, multikills, aces, objectives).
+#[tauri::command]
+pub async fn save_highlights(app: AppHandle, path: String) -> CommandResult<Entry> {
+    let root = prefs().root();
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        let _ = leagueaccounts::recorder::startup();
+        let result = leagueaccounts::recorder::save_highlights(&root, &path);
+        leagueaccounts::recorder::shutdown();
+        result
+    })
+    .await
+    .map_err(|_| fail("operation_failed"))?;
+    match result {
+        Ok(entry) => {
+            logging::record(Event::ClipSaved, Reason::None);
+            let _ = app.emit("recordings-changed", ());
+            Ok(entry)
+        }
+        Err(code) => Err(fail(code)),
+    }
 }
 
 // ------------------------------------------------- convert recordings to AV1

@@ -38,6 +38,8 @@ pub struct RecordingMeta {
     pub champ_select: f64,
     /// Video seconds where the end-of-game screen starts (after the game); 0 = none.
     pub post_game: f64,
+    /// Clips: a highlight reel made from the game's moments.
+    pub highlights: bool,
     /// Video format: "h264" (also when empty: older files) or "av1".
     pub codec: String,
     pub width: u32,

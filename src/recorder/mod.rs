@@ -114,6 +114,60 @@ pub fn convert_to_av1(file: &Path, progress: impl FnMut(f64) -> bool) -> Result<
     Ok((before, after))
 }
 
+/// Seconds kept before and after a highlight moment (a multikill gets more
+/// before: the fight starts earlier).
+const HIGHLIGHT_LEAD: f64 = 6.0;
+const HIGHLIGHT_MULTI_LEAD: f64 = 12.0;
+const HIGHLIGHT_TAIL: f64 = 4.0;
+
+/// The parts of a game worth a highlight reel: the player's kills (first
+/// blood, multikills), aces and objectives the team took with the player.
+/// Deaths and assists are left out. Overlapping or nearly touching parts join.
+pub fn highlight_parts(meta: &RecordingMeta) -> Vec<(f64, f64)> {
+    let mut parts: Vec<(f64, f64)> = meta
+        .moments
+        .iter()
+        .filter(|moment| match moment.kind.as_str() {
+            "kill" | "multikill" | "firstBlood" | "ace" => true,
+            "dragon" | "baron" | "herald" | "grubs" | "tower" | "inhibitor" => moment.mine && moment.ally != Some(false),
+            _ => false,
+        })
+        .map(|moment| {
+            let lead = if moment.kind == "multikill" { HIGHLIGHT_MULTI_LEAD } else { HIGHLIGHT_LEAD };
+            ((moment.time - lead).max(0.0), (moment.time + HIGHLIGHT_TAIL).min(meta.duration.max(moment.time + HIGHLIGHT_TAIL)))
+        })
+        .collect();
+    parts.sort_by(|a, b| a.0.total_cmp(&b.0));
+    let mut joined: Vec<(f64, f64)> = Vec::new();
+    for (start, end) in parts {
+        match joined.last_mut() {
+            Some(last) if start <= last.1 + 2.0 => last.1 = last.1.max(end),
+            _ => joined.push((start, end)),
+        }
+    }
+    joined
+}
+
+/// Save a highlight reel of a game recording as a clip (Fast: no re-encode).
+pub fn save_highlights(root: &Path, relative: &str) -> Result<Entry, &'static str> {
+    let file = library::resolve(root, relative).ok_or("recording_missing")?;
+    let meta = library::read_meta(&file).ok_or("recording_missing")?;
+    let parts = highlight_parts(&meta);
+    if parts.is_empty() {
+        return Err("no_highlights");
+    }
+    let base = if meta.title.is_empty() { file.file_stem().map(|stem| stem.to_string_lossy().into_owned()).unwrap_or_default() } else { meta.title.clone() };
+    let name = format!("{base} highlights");
+    let mut entry = save_clip(root, relative, &parts, ClipMode::Fast, Some(&name), None, &HashMap::new())?;
+    if let Some(saved) = library::resolve(root, &entry.path) {
+        let mut clip_meta = library::read_meta(&saved).unwrap_or_default();
+        clip_meta.highlights = true;
+        let _ = library::write_meta(&saved, &clip_meta);
+        entry.meta = Some(clip_meta);
+    }
+    Ok(entry)
+}
+
 /// AV1 bitrate for the same picture as H.264 at `bitrate` (constant bitrate).
 pub fn av1_bitrate(bitrate: u32) -> u32 {
     (f64::from(bitrate) * AV1_SHARE) as u32

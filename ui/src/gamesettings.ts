@@ -5,11 +5,15 @@ import { errorText, localeTag, t, type MessageKey } from "./i18n";
 import { $, esc, fragment, leave, modal, toast } from "./dom";
 import { icon } from "./icons";
 
-type Category = "hotkeys" | "sound" | "interface" | "game" | "accessibility" | "advanced";
+type Category = "hotkeys" | "sound" | "video" | "interface" | "game" | "accessibility" | "advanced";
 
 interface Slider { kind: "slider"; file: string; section: string; name: string; label: string; min: number; max: number; step: number; percent?: boolean }
 interface Toggle { kind: "toggle"; file: string; section: string; name: string; label: string }
-type Control = Slider | Toggle;
+/** A few fixed values shown as one segmented control. */
+interface Choice { kind: "choice"; file: string; section: string; name: string; label: string; options: [string, string][] }
+/** Width and Height together, from the display's modes. */
+interface Resolution { kind: "resolution"; file: string; section: string; name: string; label: string }
+type Control = Slider | Toggle | Choice | Resolution;
 
 // Setting names follow the English game client, which is how players know them.
 const G = "Game.cfg";
@@ -18,12 +22,35 @@ const toggle = (section: string, name: string, label: string): Toggle => ({ kind
 const slider = (section: string, name: string, label: string, min = 0, max = 1, step = 0.01, percent = true): Slider =>
   ({ kind: "slider", file: G, section, name, label, min, max, step, percent });
 
+// Display settings League keeps only in this PC's game.cfg (not in the shared file).
+const L = "game.cfg";
+const localToggle = (section: string, name: string, label: string): Toggle => ({ kind: "toggle", file: L, section, name, label });
+const QUALITY: [string, string][] = [["0", "Very low"], ["1", "Low"], ["2", "Medium"], ["3", "High"], ["4", "Very high"]];
+const quality = (name: string, label: string, options = QUALITY): Choice => ({ kind: "choice", file: L, section: "Performance", name, label, options });
+
 const SOUND_CHANNELS: [string, string][] = [
   ["Master", "Master volume"], ["Music", "Music"], ["Announcer", "Announcer"], ["Voice", "Voice"],
   ["Sfx", "Sound effects"], ["Ambience", "Ambience"], ["Pings", "Pings"], ["Notifications", "Notifications"],
 ];
 
 const PANELS: Record<Exclude<Category, "hotkeys" | "sound" | "advanced">, [string, Control[]][]> = {
+  video: [
+    ["Display", [
+      { kind: "resolution", file: L, section: "General", name: "Width", label: "Resolution" },
+      { kind: "choice", file: L, section: "General", name: "WindowMode", label: "Window mode", options: [["0", "Fullscreen"], ["2", "Borderless"], ["1", "Windowed"]] },
+      localToggle("General", "WaitForVerticalSync", "Vertical sync"),
+    ]],
+    ["Graphics", [
+      quality("CharacterQuality", "Character quality"),
+      quality("EnvironmentQuality", "Environment quality"),
+      quality("EffectsQuality", "Effects quality"),
+      quality("ShadowQuality", "Shadows", [["0", "Off"], ["1", "Low"], ["2", "Medium"], ["3", "High"], ["4", "Very high"]]),
+      localToggle("Performance", "EnableFXAA", "Anti-aliasing (FXAA)"),
+      localToggle("General", "HideEyeCandy", "Hide eye candy"),
+      localToggle("General", "ShowGodray", "God rays"),
+      localToggle("Performance", "AutoPerformanceSettings", "Automatic performance settings"),
+    ]],
+  ],
   interface: [
     ["HUD", [
       slider("HUD", "GlobalScale", "HUD scale"),
@@ -146,7 +173,7 @@ const QUICK_CAST: Record<string, string> = {
 };
 
 const CATEGORIES: [Category, MessageKey, string][] = [
-  ["hotkeys", "gs.cat.hotkeys", "keyboard"], ["sound", "gs.cat.sound", "volume"], ["interface", "gs.cat.interface", "monitor"],
+  ["hotkeys", "gs.cat.hotkeys", "keyboard"], ["sound", "gs.cat.sound", "volume"], ["video", "gs.cat.video", "monitor"], ["interface", "gs.cat.interface", "layout-grid"],
   ["game", "gs.cat.game", "gamepad"], ["accessibility", "gs.cat.accessibility", "eye"], ["advanced", "gs.cat.advanced", "sliders"],
 ];
 
@@ -156,6 +183,9 @@ const key = (file: string, section: string, name: string) => `${file}\u0000${sec
 
 /** Extra words people type for a setting (by setting name), so "ult" finds Ability 4. */
 const TAGS: Record<string, string> = {
+  Width: "resolution screen size display", WindowMode: "fullscreen borderless windowed display", WaitForVerticalSync: "vsync tearing",
+  CharacterQuality: "graphics", EnvironmentQuality: "graphics", EffectsQuality: "graphics", ShadowQuality: "graphics shadows",
+  EnableFXAA: "antialiasing aa graphics", AutoPerformanceSettings: "graphics auto", FrameCapType: "fps frame rate cap limit",
   evtCastSpell1: "q skill spell", evtCastSpell2: "w skill spell", evtCastSpell3: "e skill spell", evtCastSpell4: "r ult ulti ultimate skill spell",
   evtCastAvatarSpell1: "d flash ignite teleport summoners", evtCastAvatarSpell2: "f flash ignite teleport summoners",
   evtLevelSpell1: "skill up rank up points", evtLevelSpell2: "skill up rank up points", evtLevelSpell3: "skill up rank up points", evtLevelSpell4: "skill up rank up points ult",
@@ -390,6 +420,23 @@ export async function openGameSettings(): Promise<void> {
     if (current === undefined) return "";
     const changed = edits.has(key(control.file, control.section, control.name)) ? " is-changed" : "";
     const attrs = `data-file="${esc(control.file)}" data-section="${esc(control.section)}" data-name="${esc(control.name)}"`;
+    if (control.kind === "choice") {
+      return `<div class="gs-row gs-choice${changed}"><span>${esc(control.label)}</span>
+        <div class="segmented" role="group" aria-label="${esc(control.label)}">${control.options
+          .map(([option, label]) => `<button type="button" data-gs-choice="${esc(option)}" ${attrs} aria-pressed="${current.trim() === option}">${esc(label)}</button>`)
+          .join("")}</div></div>`;
+    }
+    if (control.kind === "resolution") {
+      const width = Number(current) || 0;
+      const height = Number(value(control.file, control.section, "Height")) || 0;
+      const sizes = [...(view?.resolutions ?? [])];
+      if (width && height && !sizes.some(([w, h]) => w === width && h === height)) sizes.unshift([width, height]);
+      const resized = edits.has(key(control.file, control.section, "Width")) || edits.has(key(control.file, control.section, "Height")) ? " is-changed" : "";
+      return `<label class="gs-row gs-choice${resized}"><span>${esc(control.label)}</span>
+        <div class="select-wrap"><select data-gs-resolution data-file="${esc(control.file)}" data-section="${esc(control.section)}">${sizes
+          .map(([w, h]) => `<option value="${w}x${h}"${w === width && h === height ? " selected" : ""}>${w} × ${h}</option>`)
+          .join("")}</select></div></label>`;
+    }
     if (control.kind === "toggle") {
       return `<label class="toggle-row gs-row${changed}"><span class="toggle-text"><strong>${esc(control.label)}</strong></span>
         <input type="checkbox" data-gs-toggle ${attrs} ${current.trim() === "1" ? "checked" : ""}/><span class="switch"></span></label>`;
@@ -490,7 +537,7 @@ export async function openGameSettings(): Promise<void> {
       if (value(G, "Volume", `${channel}Volume`) === undefined) continue;
       add(sound, label, channel, "volume mute", () => soundRow(channel, label));
     }
-    for (const [cat, labelKey] of [["interface", "gs.cat.interface"], ["game", "gs.cat.game"], ["accessibility", "gs.cat.accessibility"]] as const) {
+    for (const [cat, labelKey] of [["video", "gs.cat.video"], ["interface", "gs.cat.interface"], ["game", "gs.cat.game"], ["accessibility", "gs.cat.accessibility"]] as const) {
       for (const [title, controls] of PANELS[cat]) {
         for (const control of controls) {
           if (value(control.file, control.section, control.name) === undefined) continue;
@@ -539,6 +586,19 @@ export async function openGameSettings(): Promise<void> {
     return `<label class="search gs-search">${icon("search", 15)}<input data-gs-search type="text" value="${esc(query)}" placeholder="${esc(t("gs.search"))}" autocomplete="off" spellcheck="false"/></label>${sections.join("")}`;
   };
 
+  /** Video: display settings of this PC (game.cfg), with their own lock. */
+  const videoHtml = () => {
+    const panels = PANELS.video.map(([title, controls]) => panel(title, controls.map(controlHtml).join(""))).join("");
+    if (!panels.trim()) return `<div class="profile-empty">${icon("alert", 18)}<div><p>${esc(t("gs.videoMissing"))}</p></div></div>`;
+    const locked = view?.localLocked ?? false;
+    return `<div class="gs-local-lock ${locked ? "is-locked" : "is-unlocked"}">
+        <div class="gs-status ${locked ? "is-locked" : "is-unlocked"}">${icon(locked ? "lock" : "lock-open", 15)}<b>${esc(t(locked ? "gs.locked" : "gs.unlocked"))}</b>
+          <button class="text-button" data-gs="toggle-local-lock" ${busy ? "disabled" : ""}>${esc(t(locked ? "gs.unlock" : "gs.lock"))}</button></div>
+        <p>${esc(t(locked ? "gs.videoLockedHint" : "gs.videoUnlockedHint"))}</p>
+      </div>
+      <p class="gs-hint">${esc(t("gs.videoNote"))}</p>${panels}`;
+  };
+
   const renderContent = () => {
     if (!view) {
       content.innerHTML = `<p class="muted profile-note">${esc(t("profile.syncing"))}</p>`;
@@ -554,6 +614,7 @@ export async function openGameSettings(): Promise<void> {
     else if (category === "hotkeys") body = hotkeysHtml();
     else if (category === "sound") body = soundHtml();
     else if (category === "advanced") body = advancedHtml();
+    else if (category === "video") body = videoHtml();
     else body = PANELS[category].map(([title, controls]) => panel(title, controls.map(controlHtml).join(""))).join("");
     content.innerHTML = notice + body;
   };
@@ -703,6 +764,12 @@ export async function openGameSettings(): Promise<void> {
       return render();
     }
     if (action === "toggle-lock" && view) return void run(() => api.lockGameSettings(!view!.locked), view.locked ? "gs.unlockedDone" : "gs.lockedDone");
+    if (action === "toggle-local-lock" && view) return void run(() => api.lockLocalGameSettings(!view!.localLocked), view.localLocked ? "gs.videoUnlockedDone" : "gs.videoLockedDone");
+    const choice = target.closest<HTMLElement>("[data-gs-choice]");
+    if (choice?.dataset.file && choice.dataset.section && choice.dataset.name) {
+      set(choice.dataset.file, choice.dataset.section, choice.dataset.name, choice.dataset.gsChoice!);
+      return refreshAfterEdit();
+    }
     if (action === "undo") return void run(() => api.restoreGameSettings(), "gs.restored").then(() => { edits.clear(); render(); });
     if (action === "folder") return void api.openGameSettingsFolder().catch((error) => toast("error", t("toast.openFailed"), describe(error)));
     const cat = target.closest<HTMLElement>("[data-gs-cat]")?.dataset.gsCat as Category | undefined;
@@ -774,6 +841,12 @@ export async function openGameSettings(): Promise<void> {
       return renderFoot();
     }
     const { file, section, name } = input.dataset;
+    if (input.matches("[data-gs-resolution]") && file && section) {
+      const [width, height] = (input as unknown as HTMLSelectElement).value.split("x");
+      set(file, section, "Width", width);
+      set(file, section, "Height", height);
+      return refreshAfterEdit();
+    }
     if (input.matches("[data-gs-toggle]") && file && section && name) {
       set(file, section, name, input.checked ? "1" : "0");
       return refreshAfterEdit();
@@ -788,7 +861,7 @@ export async function openGameSettings(): Promise<void> {
     lockAfter = view.locked || !view.path ? true : lockAfter;
   } catch (error) {
     toast("error", t("gs.failed"), describe(error), 6000);
-    view = { path: null, locked: false, leagueOpen: false, files: [], lastBackup: null, backups: 0 };
+    view = { path: null, locked: false, leagueOpen: false, files: [], lastBackup: null, backups: 0, localLocked: false, resolutions: [] };
   }
   render();
 }
