@@ -18,7 +18,7 @@ import "./gameinfo.css";
 // Final layer of the design: must stay the last stylesheet.
 import "./polish.css";
 import { openRecordings } from "./recordings";
-import type { DiscordWebhook, ModeRule, RecorderPrefs, RecorderStatus } from "./api";
+import type { DecayInfo, DiscordWebhook, ModeRule, RecorderPrefs, RecorderStatus } from "./api";
 import { experimentalOn, initBuilds, openCurrentBuild, resumeChampSelect, setExperimental, trackGames } from "./builds";
 import type { SessionStatus, SkinOwner } from "./api";
 import { LANGUAGES, applyStatic, asLang, en, errorText, fromBrowser, lang, localeTag, localizeRank, needsLanguageChoice, setLang, t, tierName, useLang, type Lang, type MessageKey } from "./i18n";
@@ -70,6 +70,8 @@ const state = {
   schedule: null as Schedule | null,
   /** Skin value in RP per synced account (keyId); absent until synced once. */
   values: new Map<string, number>(),
+  /** Decay countdowns per account (Diamond and above). */
+  decay: new Map<string, DecayInfo[]>(),
   /** Who is signed in to the Riot Client, polled every few seconds. */
   session: null as SessionStatus | null,
 };
@@ -167,7 +169,7 @@ function historyLine(account: AccountView): string {
 }
 
 function cardSignature(account: AccountView, pending: boolean): string {
-  return JSON.stringify([account, state.mode, pending, lang(), banChip(account), state.values.get(keyId(keyOf(account))), state.settings?.rpPerEuro, connection(account)]);
+  return JSON.stringify([account, state.mode, pending, lang(), banChip(account), state.values.get(keyId(keyOf(account))), decayChip(account), state.settings?.rpPerEuro, connection(account)]);
 }
 
 const rpPerEuro = (): number => state.settings?.rpPerEuro || 125;
@@ -180,6 +182,41 @@ function connectionChip(account: AccountView): string {
   const state = connection(account);
   if (state === "none") return "";
   return `<span class="chip chip-connected"><span class="live-dot"></span>${esc(t(state === "playing" ? "connected.playing" : "connected.chip"))}</span>`;
+}
+
+/** LP decay countdown (Diamond and above): Riot's number when the client gave
+ *  one, else the full bank minus the days since the last ranked game of the queue. */
+function decayChip(account: AccountView): string {
+  const decays = state.decay.get(keyId(keyOf(account)));
+  if (!decays?.length) return "";
+  const day = 86_400_000;
+  const since = (time: number) => Math.floor((Date.now() - time) / day);
+  const left = (decay: DecayInfo) => Math.max(0, decay.days != null ? decay.days - since(decay.at) : decay.bank - since(decay.lastGame));
+  const queueName = (queue: string) => t(queue === "RANKED_FLEX_SR" ? "card.decayFlex" : "card.decaySolo");
+  const date = (time: number) => new Date(time).toLocaleDateString(localeTag());
+  const detail = decays
+    .map((decay) =>
+      decay.days != null
+        ? t("card.decayTitle", { queue: queueName(decay.queue), days: String(left(decay)), date: date(decay.at) })
+        : t("card.decayEstimate", { queue: queueName(decay.queue), days: String(left(decay)), date: date(decay.lastGame), bank: String(decay.bank) }),
+    )
+    .join("\n");
+  const soonest = Math.min(...decays.map(left));
+  const label = soonest <= 0 ? t("card.decaying") : t("card.decay", { days: String(soonest) });
+  return `<span class="rank-decay${soonest <= 3 ? " is-soon" : ""}" data-tooltip="${esc(detail)}">${icon("clock", 11)}${esc(label)}</span>`;
+}
+
+/** Load the decay countdowns, then show them on the cards. */
+async function loadDecay(): Promise<void> {
+  try {
+    const list = await api.decayIndex();
+    const grouped = new Map<string, DecayInfo[]>();
+    list.forEach((decay) => grouped.set(keyId(decay.key), [...(grouped.get(keyId(decay.key)) ?? []), decay]));
+    state.decay = grouped;
+    renderAccounts();
+  } catch {
+    // No decay data: nothing to show.
+  }
 }
 
 /** Skin value of a synced account, shown beside its level. */
@@ -263,7 +300,7 @@ function cardInner(account: AccountView, pending: boolean): string {
           ${connectionChip(account)}
           ${valueChip(account)}
           ${banChip(account)}
-          <span class="acc-id" data-tooltip="${esc(t("card.accountId"))}">${icon("users", 12)}${esc(account.accountId)}</span>
+          <span class="acc-id" data-tooltip="${esc(`${t("card.accountId")}: ${account.accountId}`)}">${icon("users", 12)}${esc(account.accountId)}</span>
         </div>
       </div>
       <button class="icon-btn card-more" data-act="menu" aria-label="${esc(t("card.more"))}" data-tooltip="${esc(t("card.more"))}">${icon("more")}</button>
@@ -277,6 +314,7 @@ function cardInner(account: AccountView, pending: boolean): string {
       <div class="rank-line"><span class="rank-name">${esc(rankLabel(rank))}</span></div>
       ${lp}
       <div class="lp-bar${APEX.has(tier) ? " apex" : ""}"><span style="--p:${lpProgress(rank)}"></span></div>
+      ${state.mode === "lol" ? decayChip(account) : ""}
       `}
       </div>
     </div>
@@ -824,7 +862,7 @@ function openMenu(account: AccountView, x: number, y: number): void {
     }] : []),
     { label: t("menu.copyUsername"), icon: "copy", run: () => void copyUsername(account) },
     { label: t("card.copyId"), icon: "copy", run: () => void copyId(account) },
-    { label: t("card.copyPassword"), icon: "key", run: () => void copyPassword(account) },
+    { label: t("card.copyPassword"), icon: "lock", run: () => void copyPassword(account) },
     { label: t("menu.edit"), icon: "pencil", run: () => void editAccount(account) },
     { label: t("menu.delete"), icon: "trash", danger: true, run: () => void deleteAccount(account) },
   ]);
@@ -1044,6 +1082,7 @@ async function openSettings(): Promise<void> {
             ${toggle("recEnabled", recorder.enabled, t("settings.recOn"), t("settings.recOnHint"))}
             ${toggle("recChampSelect", recorder.champSelect, t("settings.recChampSelect"), t("settings.recChampSelectHint"))}
             ${toggle("recPostGame", recorder.postGame, t("settings.recPostGame"), t("settings.recPostGameHint"))}
+            ${toggle("recAutoHighlights", recorder.autoHighlights, t("settings.recAutoHighlights"), t("settings.recAutoHighlightsHint"))}
             <div class="rec-folder">
               <span class="toggle-text"><strong>${esc(t("settings.recFolder"))}</strong><span data-rec-folder>${esc(recorder.root)}</span></span>
               <button type="button" class="btn btn-ghost" data-rec-browse>${icon("folder-open", 14)}${esc(t("settings.recBrowse"))}</button>
@@ -1361,6 +1400,7 @@ async function openSettings(): Promise<void> {
         diskLimitGb: Math.min(100000, Math.max(0, Math.round(Number($<HTMLInputElement>('[name="recLimit"]', root).value) || 0))),
         champSelect: checked("recChampSelect"),
         postGame: checked("recPostGame"),
+        autoHighlights: checked("recAutoHighlights"),
         modes: $<HTMLInputElement>('[name="recModeOrder"]', root)
           .value.split(",")
           .filter(Boolean)
@@ -2033,6 +2073,7 @@ async function wireEvents(): Promise<void> {
   await events.onProfileUpdate((key) => {
     profileUpdated(keyId(key));
     void loadValues();
+    void loadDecay();
   });
   await initBuilds();
   void api.recorderStatus().then(showRecorderStatus).catch(() => undefined);
@@ -2093,6 +2134,7 @@ async function start(): Promise<void> {
   renderSchedule();
   setInterval(renderSchedule, 1000);
   void loadValues();
+  void loadDecay();
   void pollSession();
   document.addEventListener("visibilitychange", () => void pollSession());
   // Cards only rebuild when their signature changes, e.g. "Updated" turning stale.

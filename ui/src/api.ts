@@ -299,6 +299,10 @@ export interface GameSettingsView {
   files: { name: string; sections: { name: string; settings: { name: string; value: string }[] }[] }[];
   lastBackup: number | null;
   backups: number;
+  /** game.cfg (display settings of this PC, file "game.cfg" in `files`) is read-only. */
+  localLocked: boolean;
+  /** Resolutions the main display offers, largest first. */
+  resolutions: [number, number][];
 }
 
 /** Who is signed in to the Riot Client right now. */
@@ -505,6 +509,10 @@ export const api = {
   recorderPrefs: () => call<RecorderPrefsView>("recorder_prefs"),
   setRecorderPrefs: (prefs: RecorderPrefs) => call<RecorderPrefsView>("set_recorder_prefs", { prefs }),
   convertInfo: () => call<ConvertStatus>("convert_info"),
+  /** A clip of the game's kills, multikills, aces and objectives. */
+  saveHighlights: (path: string) => call<Recording>("save_highlights", { path }),
+  /** Decay countdowns (Diamond and above) from the last snapshots. */
+  decayIndex: () => call<DecayInfo[]>("decay_index"),
   /** All recordings not in AV1 yet, or only `paths`. */
   startConvert: (paths: string[] | null = null) => call<ConvertStatus>("start_convert", { paths }),
   stopConvert: () => call<void>("stop_convert"),
@@ -545,6 +553,7 @@ export const api = {
   /** Writes the values, then locks the file again when `lock` is set. */
   applyGameSettings: (changes: GameSettingsChange[], lock: boolean) => call<GameSettingsView>("apply_game_settings", { changes, lock }),
   lockGameSettings: (locked: boolean) => call<GameSettingsView>("lock_game_settings", { locked }),
+  lockLocalGameSettings: (locked: boolean) => call<GameSettingsView>("lock_local_game_settings", { locked }),
   restoreGameSettings: () => call<GameSettingsView>("restore_game_settings"),
   openGameSettingsFolder: () => call<void>("open_game_settings_folder"),
 };
@@ -768,6 +777,8 @@ export interface RecorderPrefs {
   champSelect: boolean;
   /** After the game, keep recording the end-of-game screen until the player leaves it. */
   postGame: boolean;
+  /** Make a highlight reel clip after every recorded game. */
+  autoHighlights: boolean;
   /** Video format: h264 plays everywhere, av1 is about half the size (GPUs with an AV1 encoder). */
   codec: "h264" | "av1";
   /** constant = always the preset's bitrate; variable = same quality, less when little moves. */
@@ -782,6 +793,21 @@ export interface ModeRule {
   record: boolean;
   /** Hours a recording is kept; 0 = until the disk limit. */
   keepHours: number;
+}
+
+/** LP decay of one account's ranked queue (Diamond and above). */
+export interface DecayInfo {
+  key: Key;
+  queue: string;
+  tier: string;
+  /** Riot's own count when the client reported one. */
+  days: number | null;
+  /** Unix ms of the snapshot holding `days`. */
+  at: number;
+  /** Unix ms of the last ranked game of this queue; 0 = none known. */
+  lastGame: number;
+  /** Days a full decay bank holds at this tier (28 Diamond, 14 Master and above). */
+  bank: number;
 }
 
 /** What this PC can do with AV1. */
@@ -854,6 +880,8 @@ export interface RecordingMeta {
   encoder: string;
   /** "h264" or "av1"; empty in older files (H.264). */
   codec?: string;
+  /** Clips: a highlight reel. */
+  highlights?: boolean;
   capture: string;
   audio: boolean;
   audioSource: string;

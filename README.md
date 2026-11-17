@@ -73,6 +73,8 @@ League replaces your settings and keybinds with each account's cloud copy when y
 
 Game settings in the sidebar does that for you. It shows your hotkeys as keycaps (click one and press the new key; duplicate keys turn red), sound sliders with mute buttons, interface, game and accessibility options, plus a searchable list of every value in the file. Apply backs up the file, writes your changes, mirrors them into `game.cfg` and `input.ini`, and locks the file again. Undo last apply puts the previous version back.
 
+The Video tab sets what League otherwise only lets you change in game: resolution (from your monitor's list), window mode, vertical sync, character, environment and effects quality, shadows and anti-aliasing. These live only in this PC's `game.cfg`, and they have their own lock: while locked, League cannot change them, not even from the in-game menu.
+
 <table>
   <tr>
     <td width="50%"><img src="docs/screenshots/game-settings.png" alt="Game settings page with hotkeys" /></td>
@@ -120,6 +122,8 @@ Off by default. Turn it on in Settings › Recorder and every League game is rec
 - Quality presets (Light 1080p 30 fps by default, Balanced, High, Custom), game sound only (Windows 10 2004 or later), an optional microphone (pick the device and test it in Settings) and optional Discord voice chat, and a disk limit that deletes the oldest full games first and never touches clips.
 - Game sound, microphone and Discord are recorded on their own tracks. While watching, the volume button sets each one from 0 to 500 % in 1 % steps (handy when Discord voices are quiet), and saved clips use the same levels; each sound can also be left out of a clip.
 - Clicking a recording opens it across the whole window, with a timeline you can zoom and a side list of your key moments with filters (kills, deaths, assists, objectives).
+- Highlights: one click in the player saves a clip of your kills, multikills, aces and the objectives you took (or turn on Highlights after every game in Settings › Recorder). Highlight reels get their own group in the Clips tab.
+- Hover the timeline to see a small picture of that moment before jumping to it.
 - Broadcast overlay while watching: hold Tab (or turn on HUD next to full screen) to see the game like a tournament broadcast at that exact moment, in the window or in full screen. A top banner with each team's kills, gold and lead, towers, voidgrubs, every dragon by its type and the Baron buff timer; dragon and Baron timers; and all ten players by lane with level, CS, K/D/A and the gold difference of each lane. Games recorded from this version also show everyone's items and who is dead with their respawn timer. Older recordings get it too, from the League client's match history (items over time only exist for new recordings).
 - Under the video, the game's end-of-game stats as in the League client: Scoreboard, Overview (gold advantage over time, kills and objectives, kill map), Stats, Graphs and Runes, with live values on hover. Click a time on the gold graph, the kill strips or the kill map to watch that moment. They are read from the League client's match history after the game and kept next to the recording. Hide them for a full-size view.
 - Built for low-end PCs: the picture is captured and converted on the graphics card and encoded by its own video encoder (NVIDIA, Intel or AMD) through Windows Media Foundation, with a software fallback. Nothing extra to download.
@@ -153,6 +157,7 @@ Off by default. Turn it on in Settings › Experimental. It is still under devel
 - LoL and TFT ranks from OP.GG, refreshed in the background (every 30 minutes by default).
 - The Friend elo filter shows which accounts can play ranked with a friend.
 - Each login reads the account's League ban, and a banned account shows the time left.
+- Diamond and above: the card counts down to LP decay for Solo/Duo and Flex, from Riot's own number when the League client gives it, otherwise from the date of your last ranked game in that queue.
 - Passwords stay in Windows Credential Manager and never reach the interface.
 - Launch with Windows, keyboard shortcuts, import and export, automatic updates, six languages and interface sizes from 80 to 200%.
 

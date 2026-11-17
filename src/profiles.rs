@@ -67,6 +67,9 @@ pub struct RankedQueue {
     pub lp: i64,
     pub wins: u32,
     pub losses: u32,
+    /// Diamond and above: days left before LP decay when the snapshot was taken
+    /// (Riot's `warnings.daysUntilDecay`); `None` when Riot gave no warning.
+    pub decay_days: Option<i64>,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
@@ -666,9 +669,18 @@ pub fn parse_ranked(stats: &Value) -> Vec<RankedQueue> {
                 lp: int(&queue["leaguePoints"]),
                 wins: uint(&queue["wins"]),
                 losses: uint(&queue["losses"]),
+                decay_days: decay_days(&queue["warnings"]),
             })
         })
         .collect()
+}
+
+/// Days before decay from a ranked queue's `warnings` (null below Diamond).
+/// Shown only when Riot says so (`displayDecayWarning`) or the count is low.
+fn decay_days(warnings: &Value) -> Option<i64> {
+    let days = warnings["daysUntilDecay"].as_i64()?;
+    let shown = warnings["displayDecayWarning"].as_bool().unwrap_or(false);
+    (days >= 0 && (shown || days <= 14)).then_some(days)
 }
 
 fn title_case(value: &str) -> String {

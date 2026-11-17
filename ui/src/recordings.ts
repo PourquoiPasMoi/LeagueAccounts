@@ -94,6 +94,14 @@ export function clock(seconds: number): string {
 /** Share of the size AV1 keeps for the same picture (measured on a real game: 64 %). */
 const AV1_KEEPS = 0.64;
 
+/** Moments a highlight reel is made of (same rule as the backend's highlight_parts). */
+function highlightCount(entry: Recording): number {
+  return (entry.meta?.moments ?? []).filter((moment) =>
+    ["kill", "multikill", "firstBlood", "ace"].includes(moment.kind) ||
+    (["dragon", "baron", "herald", "grubs", "tower", "inhibitor"].includes(moment.kind) && moment.mine && moment.ally !== false),
+  ).length;
+}
+
 /** The recording's picture is AV1 already (converted or recorded so). */
 function isAv1(entry: Recording): boolean {
   const meta = entry.meta;
@@ -434,7 +442,7 @@ export async function openRecordings(): Promise<void> {
   const isDiscord = (entry: Recording) => entry.kind === "clip" && (entry.meta?.discord === true || /\(discord\)/i.test(entry.name));
   /** Games group by game mode; clips into Discord versions and the others. */
   const modeOf = (entry: Recording) =>
-    entry.kind === "clip" ? t(isDiscord(entry) ? "rec.discordClips" : "rec.otherClips") : entry.meta?.queue || t("rec.otherMode");
+    entry.kind === "clip" ? t(isDiscord(entry) ? "rec.discordClips" : entry.meta?.highlights ? "rec.highlightClips" : "rec.otherClips") : entry.meta?.queue || t("rec.otherMode");
   const started = (entry: Recording) => entry.meta?.startedAt || entry.modified;
   const banner = (entry: Recording) => {
     const id = (championIds as Record<string, number>)[entry.meta?.champion ?? ""];
@@ -462,7 +470,7 @@ export async function openRecordings(): Promise<void> {
     const score = entry.kind === "game" ? kda(entry) : "";
     const tag =
       entry.kind === "clip"
-        ? `<span class="rec-clip-tag">${icon("scissors", 11)}${esc(t("rec.clip"))}</span>${isDiscord(entry) ? `<span class="rec-discord-tag">${esc(t("rec.discord"))}</span>` : ""}${meta?.queue ? `<span class="rec-mode-tag">${esc(meta.queue)}</span>` : ""}${postedTag(entry)}`
+        ? `<span class="rec-clip-tag">${icon("scissors", 11)}${esc(t("rec.clip"))}</span>${meta?.highlights ? `<span class="rec-discord-tag">${esc(t("rec.highlights"))}</span>` : ""}${isDiscord(entry) ? `<span class="rec-discord-tag">${esc(t("rec.discord"))}</span>` : ""}${meta?.queue ? `<span class="rec-mode-tag">${esc(meta.queue)}</span>` : ""}${postedTag(entry)}`
         : `<span class="rec-mode-tag">${esc(modeOf(entry))}</span>`;
     const outcome = meta?.result === "Win" ? " is-win" : meta?.result === "Loss" ? " is-loss" : "";
     return `
@@ -592,6 +600,7 @@ export async function openRecordings(): Promise<void> {
         ${meta?.posts?.length ? `<span class="rec-viewer-sub rec-viewer-posted">${esc(t("rec.postedTo", { list: postedList(entry) }))}</span>` : ""}
       </div>
       ${entry.kind === "game" ? `<button class="btn btn-ghost" data-rec="game-info" aria-pressed="${gameShown()}">${icon("chart-line", 14)}<span>${esc(t("gi.title"))}</span></button>` : ""}
+      ${entry.kind === "game" && highlightCount(entry) ? `<button class="btn btn-ghost" data-rec="highlights" data-tooltip="${esc(t("rec.highlightsHint"))}">${icon("film", 14)}<span>${esc(t("rec.highlights"))}</span></button>` : ""}
       ${entry.kind === "clip" ? `<button class="btn btn-ghost" data-rec="discord-post">${icon("upload", 14)}<span>${esc(t("rec.discordPost"))}</span></button>` : ""}
       ${entry.kind === "clip" && !isDiscord(entry) ? `<button class="btn btn-ghost" data-rec="discord-version" data-tooltip="${esc(t("rec.discordVersionHint"))}">${icon("upload", 14)}<span>${esc(t("rec.discordVersion"))}</span></button>` : ""}
       <button class="btn btn-ghost" data-rec="reveal">${icon("folder-open", 14)}<span>${esc(t("rec.showFile"))}</span></button>
@@ -642,6 +651,7 @@ export async function openRecordings(): Promise<void> {
         </div>
         <div class="rec-overview" data-rec-overview hidden><div class="rec-overview-window"></div><div class="rec-overview-head"></div></div>
         <div class="rec-waves" data-rec-waves hidden></div>
+        <div class="rec-preview" hidden><canvas width="192" height="108"></canvas><span></span></div>
       </div>
       <div class="rec-controls">
         <button class="icon-btn rec-play" data-rec="play" aria-label="${esc(t("rec.play"))}"><span class="rec-play-glyph"></span></button>
@@ -1374,6 +1384,89 @@ export async function openRecordings(): Promise<void> {
     viewer.querySelector<HTMLElement>("[data-rec='back']")?.focus();
   };
 
+  /** A clip of the game's kills, multikills, aces and objectives (Fast, no re-encode). */
+  let makingHighlights = false;
+  const makeHighlights = async (entry: Recording) => {
+    if (makingHighlights) return;
+    makingHighlights = true;
+    const button = viewerHead.querySelector<HTMLButtonElement>('[data-rec="highlights"]');
+    if (button) button.disabled = true;
+    try {
+      const clip = await api.saveHighlights(entry.path);
+      toast("success", t("rec.highlightsSaved"), clip.name);
+    } catch (error) {
+      toast("error", t("rec.clipFailed"), describe(error), 6000);
+    }
+    makingHighlights = false;
+    if (button?.isConnected) button.disabled = false;
+    await reload();
+  };
+
+  // Timeline hover: a small picture of that moment, from a second hidden video.
+  let previewVideo: HTMLVideoElement | null = null;
+  let previewBusy = false;
+  let previewWant: number | null = null;
+  const previewBox = () => player.querySelector<HTMLElement>(".rec-preview");
+  const drawPreview = () => {
+    const canvas = previewBox()?.querySelector("canvas");
+    if (canvas && previewVideo) {
+      try {
+        canvas.getContext("2d")?.drawImage(previewVideo, 0, 0, canvas.width, canvas.height);
+      } catch {
+        // Not decodable yet: the box keeps the last picture.
+      }
+    }
+  };
+  const nextPreview = () => {
+    if (previewWant === null || !previewVideo) {
+      previewBusy = false;
+      return;
+    }
+    previewBusy = true;
+    const time = previewWant;
+    previewWant = null;
+    previewVideo.currentTime = time;
+  };
+  const showPreview = (track: HTMLElement, clientX: number) => {
+    const box = previewBox();
+    if (!box || !video || !duration()) return;
+    const rect = track.getBoundingClientRect();
+    const fraction = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
+    const time = viewStart + fraction * viewLength();
+    const timeline = box.parentElement!.getBoundingClientRect();
+    const half = box.offsetWidth / 2 || 100;
+    box.style.left = `${Math.min(timeline.width - half, Math.max(half, clientX - timeline.left))}px`;
+    box.querySelector("span")!.textContent = clock(time);
+    box.hidden = false;
+    if (!previewVideo || previewVideo.dataset.src !== video.currentSrc) {
+      previewVideo?.removeAttribute("src");
+      previewVideo = document.createElement("video");
+      previewVideo.muted = true;
+      previewVideo.preload = "metadata";
+      previewVideo.crossOrigin = "anonymous";
+      previewVideo.dataset.src = video.currentSrc;
+      previewVideo.src = video.currentSrc;
+      previewVideo.addEventListener("seeked", () => {
+        drawPreview();
+        nextPreview();
+      });
+      previewVideo.addEventListener("loadedmetadata", () => nextPreview());
+      previewBusy = true;
+    }
+    previewWant = time;
+    if (!previewBusy) nextPreview();
+  };
+  const hidePreview = () => {
+    const box = previewBox();
+    if (box) box.hidden = true;
+  };
+  player.addEventListener("mousemove", (event) => {
+    const track = (event.target as HTMLElement).closest<HTMLElement>("[data-rec-track]");
+    if (track && !(event.target as HTMLElement).closest(".rec-marker")) showPreview(track, event.clientX);
+    else hidePreview();
+  });
+  player.addEventListener("mouseleave", hidePreview);
+
   /** The whole clip again, re-encoded under Discord's 9.5 MB, saved next to it. */
   let makingDiscord = false;
   const makeDiscordVersion = async (entry: Recording) => {
@@ -1550,6 +1643,7 @@ export async function openRecordings(): Promise<void> {
       return void api.openRecordingsFolder(null, folder).catch((error) => toast("error", t("toast.openFailed"), describe(error)));
     }
     if (action === "discord-version" && selected) return void makeDiscordVersion(selected);
+    if (action === "highlights" && selected) return void makeHighlights(selected);
     if (action === "reveal" && selected) return void api.openRecordingsFolder(selected.path).catch((error) => toast("error", t("toast.openFailed"), describe(error)));
     if (action === "delete" && row) return void remove(row.dataset.recPath!);
     if (action === "select" || action === "select-done") {

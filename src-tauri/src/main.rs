@@ -928,6 +928,56 @@ async fn skin_index(state: AppState<'_>) -> CommandResult<Vec<SkinOwner>> {
     }).await
 }
 
+/// LP decay of one account's ranked queue (Diamond and above).
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct DecayInfo {
+    key: Key,
+    /// `RANKED_SOLO_5x5` or `RANKED_FLEX_SR`.
+    queue: String,
+    tier: String,
+    /// Riot's own count (`warnings.daysUntilDecay`) when the client gave one.
+    days: Option<i64>,
+    /// Unix ms of the snapshot that holds `days`.
+    at: u64,
+    /// Unix ms of the last ranked game of this queue (client or OP.GG history); 0 = none known.
+    last_game: u64,
+    /// Days of decay protection a full bank holds at this tier (28 Diamond, 14 Master and above).
+    bank: i64,
+}
+
+/// Decay countdowns: Riot's number when the client reported one, else an
+/// estimate from the last ranked game of the queue (client first, OP.GG
+/// games in the same archive otherwise).
+#[tauri::command]
+async fn decay_index(state: AppState<'_>) -> CommandResult<Vec<DecayInfo>> {
+    let state = Arc::clone(&state);
+    blocking(move || {
+        let accounts = manager(&state)?.accounts.clone();
+        let mut list = Vec::new();
+        for (key, profile) in profiles::load_all(&accounts) {
+            let account_tier = accounts.iter().find(|account| account.account_id == key.account_id && account.region == key.region).map(|account| account.tier.clone()).unwrap_or_default();
+            let games = profiles::archive(&key);
+            for (queue, queue_id, opgg) in [("RANKED_SOLO_5x5", 420, "SOLORANKED"), ("RANKED_FLEX_SR", 440, "FLEXRANKED")] {
+                let ranked = profile.ranked.iter().find(|entry| entry.queue == queue);
+                let tier = ranked.map(|entry| entry.tier.clone()).filter(|tier| !tier.is_empty() && tier != "Unranked").unwrap_or_else(|| if queue_id == 420 { account_tier.clone() } else { String::new() });
+                let bank = match tier.to_ascii_lowercase().as_str() {
+                    "diamond" => 28,
+                    "master" | "grandmaster" | "challenger" => 14,
+                    _ => continue,
+                };
+                let last_game = games.iter().filter(|game| game.queue_id == queue_id || game.queue == opgg).map(|game| game.created).max().unwrap_or(0);
+                let days = ranked.and_then(|entry| entry.decay_days);
+                if days.is_none() && last_game == 0 {
+                    continue;
+                }
+                list.push(DecayInfo { key: view_key(&key), queue: queue.into(), tier, days, at: profile.synced_at, last_game, bank });
+            }
+        }
+        Ok(list)
+    }).await
+}
+
 /// League's shared settings file, as the Game settings page shows it.
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -941,6 +991,10 @@ struct GameSettingsView {
     files: Vec<leagueaccounts::game_settings::SettingsFile>,
     last_backup: Option<u64>,
     backups: usize,
+    /// `game.cfg` (display settings of this PC) is read-only.
+    local_locked: bool,
+    /// Resolutions the main display offers, largest first.
+    resolutions: Vec<(u32, u32)>,
 }
 
 fn game_settings_view() -> CommandResult<GameSettingsView> {
@@ -948,10 +1002,13 @@ fn game_settings_view() -> CommandResult<GameSettingsView> {
     let (last_backup, backups) = settings::backup_summary();
     let league_open = riot_client::game_client_running() || riot_client::in_game();
     let Some(path) = settings::settings_path() else {
-        return Ok(GameSettingsView { path: None, locked: false, league_open, files: Vec::new(), last_backup, backups });
+        return Ok(GameSettingsView { path: None, locked: false, league_open, files: Vec::new(), last_backup, backups, local_locked: false, resolutions: Vec::new() });
     };
     let files = settings::read(&path).map_err(|error| fail_with("game_settings_unreadable", error))?;
+    let local_locked = settings::local_path(&path).is_some_and(|local| settings::is_locked(&local));
     Ok(GameSettingsView {
+        local_locked,
+        resolutions: settings::display_resolutions(),
         locked: settings::is_locked(&path),
         path: Some(path.display().to_string()),
         league_open,
@@ -985,6 +1042,18 @@ async fn lock_game_settings(locked: bool) -> CommandResult<GameSettingsView> {
     blocking(move || {
         let path = game_settings_path()?;
         leagueaccounts::game_settings::set_locked(&path, locked).map_err(|error| fail_with("game_settings_lock", error))?;
+        game_settings_view()
+    }).await
+}
+
+/// Lock or unlock `game.cfg` (read-only): League then cannot change the display
+/// settings, also not from the in-game menu.
+#[tauri::command]
+async fn lock_local_game_settings(locked: bool) -> CommandResult<GameSettingsView> {
+    blocking(move || {
+        let path = game_settings_path()?;
+        let local = leagueaccounts::game_settings::local_path(&path).ok_or_else(|| fail("game_settings_missing"))?;
+        leagueaccounts::game_settings::set_locked(&local, locked).map_err(|error| fail_with("game_settings_lock", error))?;
         game_settings_view()
     }).await
 }
@@ -1414,6 +1483,7 @@ fn main() {
             game_settings,
             apply_game_settings,
             lock_game_settings,
+            lock_local_game_settings,
             restore_game_settings,
             open_game_settings_folder,
             champselect::champ_select_state,
@@ -1427,6 +1497,8 @@ fn main() {
             live::live_stats,
             recorder::recorder_prefs,
             recorder::convert_info,
+            recorder::save_highlights,
+            decay_index,
             recorder::start_convert,
             recorder::stop_convert,
             recorder::set_recorder_prefs,

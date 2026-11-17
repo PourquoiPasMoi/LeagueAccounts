@@ -95,6 +95,148 @@ pub fn settings_path() -> Option<PathBuf> {
     config_dir().map(|config| config.join(FILE_NAME))
 }
 
+/// Display and graphics settings League keeps only in this PC's `game.cfg`
+/// (not in the shared PersistedSettings.json, so the client and the cloud never
+/// carry them). Shown in the editor as their own file under this name.
+pub const LOCAL_FILE: &str = "game.cfg";
+const LOCAL_KEYS: [(&str, &str); 13] = [
+    ("General", "WindowMode"),
+    ("General", "Width"),
+    ("General", "Height"),
+    ("General", "WaitForVerticalSync"),
+    ("General", "HideEyeCandy"),
+    ("General", "ShowGodray"),
+    ("Performance", "CharacterQuality"),
+    ("Performance", "EnvironmentQuality"),
+    ("Performance", "EffectsQuality"),
+    ("Performance", "ShadowQuality"),
+    ("Performance", "FrameCapType"),
+    ("Performance", "EnableFXAA"),
+    ("Performance", "AutoPerformanceSettings"),
+];
+const LOCAL_BACKUP_LIMIT: usize = 10;
+
+/// `game.cfg` next to the shared settings file.
+pub fn local_path(settings: &Path) -> Option<PathBuf> {
+    settings.parent().map(|config| config.join("game.cfg"))
+}
+
+/// The display settings found in `game.cfg` (first value of each key).
+pub fn read_local(path: &Path) -> Option<SettingsFile> {
+    let text = std::fs::read_to_string(path).ok()?;
+    let mut current = String::new();
+    let mut sections: Vec<Section> = Vec::new();
+    for line in text.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with('[') && trimmed.ends_with(']') {
+            current = trimmed[1..trimmed.len() - 1].to_owned();
+            continue;
+        }
+        let Some((name, value)) = trimmed.split_once('=') else { continue };
+        let name = name.trim();
+        if !LOCAL_KEYS.contains(&(current.as_str(), name)) {
+            continue;
+        }
+        if !sections.iter().any(|section| section.name == current) {
+            sections.push(Section { name: current.clone(), settings: Vec::new() });
+        }
+        if let Some(section) = sections.iter_mut().find(|section| section.name == current) {
+            if !section.settings.iter().any(|setting| setting.name == name) {
+                section.settings.push(Setting { name: name.to_owned(), value: value.trim().to_owned() });
+            }
+        }
+    }
+    Some(SettingsFile { name: LOCAL_FILE.into(), sections })
+}
+
+/// Write display settings into `game.cfg`: existing keys replaced, missing ones
+/// added to their section. A copy is kept first; the lock (read-only) stays as it was.
+fn write_local(path: &Path, changes: &[&Change]) -> Result<(), SettingsError> {
+    let text = std::fs::read_to_string(path)?;
+    if let Ok(directory) = backup_dir() {
+        let backup = directory.join(format!("game-{}.cfg", now_ms()));
+        if std::fs::copy(path, &backup).is_ok() {
+            crate::game_locale::set_read_only(&backup, false);
+        }
+        if let Ok(entries) = std::fs::read_dir(&directory) {
+            let mut old: Vec<PathBuf> = entries.filter_map(Result::ok).map(|entry| entry.path()).filter(|file| {
+                file.file_name().and_then(|name| name.to_str()).is_some_and(|name| name.starts_with("game-") && name.ends_with(".cfg"))
+            }).collect();
+            old.sort();
+            while old.len() > LOCAL_BACKUP_LIMIT {
+                let _ = std::fs::remove_file(old.remove(0));
+            }
+        }
+    }
+    let mut wanted: Vec<(String, String, String)> = changes.iter().map(|change| (change.section.clone(), change.name.clone(), change.value.clone())).collect();
+    // A resolution chosen by hand: League keeps it only with this flag.
+    if wanted.iter().any(|(section, name, _)| section == "General" && (name == "Width" || name == "Height")) && !wanted.iter().any(|(_, name, _)| name == "UserSetResolution") {
+        wanted.push(("General".into(), "UserSetResolution".into(), "1".into()));
+    }
+    let newline = if text.contains("\r\n") { "\r\n" } else { "\n" };
+    let mut lines: Vec<String> = text.lines().map(str::to_owned).collect();
+    let mut section = String::new();
+    let mut done: Vec<usize> = Vec::new();
+    for line in lines.iter_mut() {
+        let trimmed = line.trim().to_owned();
+        if trimmed.starts_with('[') && trimmed.ends_with(']') {
+            section = trimmed[1..trimmed.len() - 1].to_owned();
+            continue;
+        }
+        let Some((name, _)) = trimmed.split_once('=') else { continue };
+        if let Some(index) = wanted.iter().position(|(want_section, want_name, _)| *want_section == section && want_name == name.trim()) {
+            if !done.contains(&index) {
+                *line = format!("{}={}", name.trim(), wanted[index].2);
+                done.push(index);
+            }
+        }
+    }
+    for (index, (want_section, name, value)) in wanted.iter().enumerate() {
+        if done.contains(&index) {
+            continue;
+        }
+        let header = format!("[{want_section}]");
+        match lines.iter().position(|line| line.trim() == header) {
+            Some(start) => {
+                let end = lines[start + 1..].iter().position(|line| line.trim().starts_with('[')).map_or(lines.len(), |offset| start + 1 + offset);
+                let mut at = end;
+                while at > start + 1 && lines[at - 1].trim().is_empty() {
+                    at -= 1;
+                }
+                lines.insert(at, format!("{name}={value}"));
+            }
+            None => {
+                lines.push(header);
+                lines.push(format!("{name}={value}"));
+            }
+        }
+    }
+    let mut output = lines.join(newline);
+    if text.ends_with('\n') {
+        output.push_str(newline);
+    }
+    let locked = is_locked(path);
+    write_unlocked(path, &output, locked)
+}
+
+/// Screen resolutions the main display offers (largest first), for the editor.
+pub fn display_resolutions() -> Vec<(u32, u32)> {
+    use windows::Win32::Graphics::Gdi::{EnumDisplaySettingsW, DEVMODEW, ENUM_DISPLAY_SETTINGS_MODE};
+    let mut found: Vec<(u32, u32)> = Vec::new();
+    for index in 0..1000u32 {
+        let mut mode = DEVMODEW { dmSize: std::mem::size_of::<DEVMODEW>() as u16, ..Default::default() };
+        if !unsafe { EnumDisplaySettingsW(windows::core::PCWSTR::null(), ENUM_DISPLAY_SETTINGS_MODE(index), &mut mode) }.as_bool() {
+            break;
+        }
+        let size = (mode.dmPelsWidth, mode.dmPelsHeight);
+        if size.0 >= 800 && size.1 >= 600 && !found.contains(&size) {
+            found.push(size);
+        }
+    }
+    found.sort_by_key(|(width, height)| std::cmp::Reverse(u64::from(*width) * u64::from(*height)));
+    found
+}
+
 pub fn is_locked(path: &Path) -> bool {
     std::fs::metadata(path).is_ok_and(|metadata| metadata.permissions().readonly())
 }
@@ -134,6 +276,11 @@ pub fn read(path: &Path) -> Result<Vec<SettingsFile>, SettingsError> {
                     }
                 }
             }
+        }
+    }
+    if let Some(local) = local_path(path).and_then(|file| read_local(&file)) {
+        if !local.sections.is_empty() {
+            files.push(local);
         }
     }
     Ok(files)
@@ -191,11 +338,28 @@ fn backups() -> std::io::Result<Vec<(u64, PathBuf)>> {
     Ok(list)
 }
 
-/// Unix ms of the newest backup, and how many there are.
+/// Backups of `game.cfg` as (unix ms, path), oldest first.
+fn local_backups() -> Vec<(u64, PathBuf)> {
+    let Ok(directory) = backup_dir() else { return Vec::new() };
+    let Ok(entries) = std::fs::read_dir(directory) else { return Vec::new() };
+    let mut list: Vec<(u64, PathBuf)> = entries
+        .filter_map(Result::ok)
+        .filter_map(|entry| {
+            let name = entry.file_name().to_string_lossy().into_owned();
+            let stamp = name.strip_prefix("game-")?.strip_suffix(".cfg")?.parse().ok()?;
+            Some((stamp, entry.path()))
+        })
+        .collect();
+    list.sort();
+    list
+}
+
+/// Unix ms of the newest backup (shared settings or game.cfg), and how many there are.
 pub fn backup_summary() -> (Option<u64>, usize) {
-    backups()
-        .map(|list| (list.last().map(|(stamp, _)| *stamp), list.len()))
-        .unwrap_or((None, 0))
+    let shared = backups().unwrap_or_default();
+    let local = local_backups();
+    let newest = shared.last().map(|(stamp, _)| *stamp).max(local.last().map(|(stamp, _)| *stamp));
+    (newest, shared.len() + local.len())
 }
 
 /// Write text over a file that may be read-only, then set the lock as asked.
@@ -211,6 +375,15 @@ fn write_unlocked(path: &Path, text: &str, lock_after: bool) -> Result<(), Setti
 /// Apply edits to `PersistedSettings.json` (and mirror them into `game.cfg` /
 /// `input.ini`), then leave the file locked when `lock` is set.
 pub fn apply(path: &Path, changes: &[Change], lock: bool) -> Result<(), SettingsError> {
+    let local: Vec<&Change> = changes.iter().filter(|change| change.file == LOCAL_FILE).collect();
+    if !local.is_empty() {
+        write_local(&local_path(path).ok_or(SettingsError::NotFound)?, &local)?;
+    }
+    let shared: Vec<Change> = changes.iter().filter(|change| change.file != LOCAL_FILE).cloned().collect();
+    if shared.is_empty() {
+        return Ok(());
+    }
+    let changes = shared.as_slice();
     let text = std::fs::read_to_string(path)?;
     let crlf = text.contains("\r\n");
     let mut json: Value = serde_json::from_str(text.trim_start_matches('\u{feff}')).map_err(|_| SettingsError::Unreadable)?;
@@ -319,14 +492,29 @@ fn mirror(path: &Path, file: &str, changes: &[Change]) {
     let _ = write_unlocked(path, &output, was_locked);
 }
 
-/// Put the newest backup back, keeping the current lock state.
+/// Undo the last apply: put back the newest backup of the shared settings
+/// and/or of `game.cfg` (both when one apply changed both: backups made within
+/// a few seconds), keeping each file's lock state.
 pub fn restore_latest(path: &Path) -> Result<(), SettingsError> {
-    let (_, latest) = backups()?.pop().ok_or(SettingsError::NotFound)?;
-    let text = std::fs::read_to_string(&latest)?;
-    // Check it is still a settings file before putting it in place.
-    let _: Value = serde_json::from_str(text.trim_start_matches('\u{feff}')).map_err(|_| SettingsError::Unreadable)?;
-    let locked = is_locked(path);
-    write_unlocked(path, &text, locked)?;
-    let _ = std::fs::remove_file(latest);
+    let shared = backups()?.pop();
+    let local = local_backups().pop();
+    let newest = shared.as_ref().map(|(stamp, _)| *stamp).max(local.as_ref().map(|(stamp, _)| *stamp)).ok_or(SettingsError::NotFound)?;
+    let together = |stamp: u64| newest.saturating_sub(stamp) < 5_000;
+    if let Some((stamp, latest)) = local.filter(|(stamp, _)| together(*stamp)) {
+        let _ = stamp;
+        let target = local_path(path).ok_or(SettingsError::NotFound)?;
+        let text = std::fs::read_to_string(&latest)?;
+        let locked = is_locked(&target);
+        write_unlocked(&target, &text, locked)?;
+        let _ = std::fs::remove_file(latest);
+    }
+    if let Some((_, latest)) = shared.filter(|(stamp, _)| together(*stamp)) {
+        let text = std::fs::read_to_string(&latest)?;
+        // Check it is still a settings file before putting it in place.
+        let _: Value = serde_json::from_str(text.trim_start_matches('\u{feff}')).map_err(|_| SettingsError::Unreadable)?;
+        let locked = is_locked(path);
+        write_unlocked(path, &text, locked)?;
+        let _ = std::fs::remove_file(latest);
+    }
     Ok(())
 }

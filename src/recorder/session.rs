@@ -536,6 +536,7 @@ fn record_inner(request: &RecordRequest, shared: &Shared, path: &Path, stamp: &s
         game_start: facts.offset,
         champ_select: game_from,
         post_game: post_from,
+        highlights: false,
         codec: codec.name().into(),
         width,
         height,

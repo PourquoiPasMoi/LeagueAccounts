@@ -694,3 +694,14 @@
 .rec-mode-switch input:focus-visible + .switch { box-shadow: 0 0 0 3px rgb(var(--accent-rgb) / .45); }
 .rec-mode-row:has(input[name^="mode-rec-"]:not(:checked)) .rec-mode-name { color: var(--text-3); }
 .rec-mode-row:has(input[name^="mode-rec-"]:not(:checked)) .select-wrap { opacity: 0.45; }
+
+/* ------------------------------------------------------------- timeline hover preview */
+
+.rec-timeline { position: relative; }
+.rec-preview {
+  position: absolute; bottom: calc(100% + 8px); z-index: 8; transform: translateX(-50%);
+  display: grid; gap: 4px; padding: 4px; border-radius: var(--r); pointer-events: none;
+  background: var(--glass, rgb(20 20 24 / .92)); border: 1px solid var(--line-2); box-shadow: 0 8px 24px rgb(0 0 0 / .45);
+}
+.rec-preview canvas { display: block; width: 192px; height: 108px; border-radius: var(--r-sm); background: var(--s1); }
+.rec-preview span { font: 600 11.5px/1 var(--font-display); color: var(--text); text-align: center; font-variant-numeric: tabular-nums; }
