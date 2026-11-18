@@ -8,7 +8,8 @@ import { icon } from "./icons";
 type Category = "hotkeys" | "sound" | "video" | "interface" | "game" | "accessibility" | "advanced";
 
 interface Slider { kind: "slider"; file: string; section: string; name: string; label: string; min: number; max: number; step: number; percent?: boolean }
-interface Toggle { kind: "toggle"; file: string; section: string; name: string; label: string }
+/** `invert`: the file stores the opposite ("Disable…" keys), so on = "0". */
+interface Toggle { kind: "toggle"; file: string; section: string; name: string; label: string; invert?: boolean }
 /** A few fixed values shown as one segmented control. */
 interface Choice { kind: "choice"; file: string; section: string; name: string; label: string; options: [string, string][] }
 /** Width and Height together, from the display's modes. */
@@ -18,13 +19,15 @@ type Control = Slider | Toggle | Choice | Resolution;
 // Setting names follow the English game client, which is how players know them.
 const G = "Game.cfg";
 const I = "Input.ini";
-const toggle = (section: string, name: string, label: string): Toggle => ({ kind: "toggle", file: G, section, name, label });
+const toggle = (section: string, name: string, label: string, invert = false): Toggle => ({ kind: "toggle", file: G, section, name, label, invert });
+const choice = (section: string, name: string, label: string, options: [string, string][]): Choice => ({ kind: "choice", file: G, section, name, label, options });
 const slider = (section: string, name: string, label: string, min = 0, max = 1, step = 0.01, percent = true): Slider =>
   ({ kind: "slider", file: G, section, name, label, min, max, step, percent });
 
 // Display settings League keeps only in this PC's game.cfg (not in the shared file).
 const L = "game.cfg";
-const localToggle = (section: string, name: string, label: string): Toggle => ({ kind: "toggle", file: L, section, name, label });
+const localToggle = (section: string, name: string, label: string, invert = false): Toggle => ({ kind: "toggle", file: L, section, name, label, invert });
+const localSlider = (section: string, name: string, label: string): Slider => ({ kind: "slider", file: L, section, name, label, min: 0, max: 1, step: 0.01, percent: true });
 const QUALITY: [string, string][] = [["0", "Very low"], ["1", "Low"], ["2", "Medium"], ["3", "High"], ["4", "Very high"]];
 const quality = (name: string, label: string, options = QUALITY): Choice => ({ kind: "choice", file: L, section: "Performance", name, label, options });
 
@@ -33,7 +36,22 @@ const SOUND_CHANNELS: [string, string][] = [
   ["Sfx", "Sound effects"], ["Ambience", "Ambience"], ["Pings", "Pings"], ["Notifications", "Notifications"],
 ];
 
-const PANELS: Record<Exclude<Category, "hotkeys" | "sound" | "advanced">, [string, Control[]][]> = {
+const PANELS: Record<Exclude<Category, "hotkeys" | "advanced">, [string, Control[]][]> = {
+  sound: [
+    ["General", [
+      toggle("General", "EnableAudio", "Sound on"),
+      localToggle("General", "EnableCustomAnnouncer", "Custom announcer packs"),
+    ]],
+    ["Voice", [
+      localSlider("Voice", "InputVolume", "Microphone volume"),
+      localSlider("Voice", "ActivationSensitivity", "Activation sensitivity"),
+      localToggle("Voice", "MuteOnConnect", "Mute my microphone when joining"),
+      localToggle("Voice", "AutoJoinParty", "Join party voice automatically"),
+      localToggle("Voice", "AutoJoinTeam", "Join team voice automatically"),
+      toggle("Voice", "ShowVoiceChatHalos", "Show voice chat halos"),
+      toggle("Voice", "ShowVoicePanelWithScoreboard", "Show voice panel with the scoreboard"),
+    ]],
+  ],
   video: [
     ["Display", [
       { kind: "resolution", file: L, section: "General", name: "Width", label: "Resolution" },
@@ -50,63 +68,143 @@ const PANELS: Record<Exclude<Category, "hotkeys" | "sound" | "advanced">, [strin
       localToggle("General", "ShowGodray", "God rays"),
       localToggle("Performance", "AutoPerformanceSettings", "Automatic performance settings"),
     ]],
+    ["Map skins", [
+      localToggle("MapSkinOptions", "MapSkinOptionDisableSnowdown", "Snowdown map", true),
+      localToggle("MapSkinOptions", "MapSkinOptionDisableLunarRevel", "Lunar Revel map", true),
+      localToggle("MapSkinOptions", "MapSkinOptionDisablePoolParty", "Pool Party map", true),
+      localToggle("MapSkinOptions", "MapSkinOptionDisableStarGuardian", "Star Guardian map", true),
+      localToggle("MapSkinOptions", "MapSkinOptionDisableOdyssey", "Odyssey map", true),
+      localToggle("MapSkinOptions", "MapSkinOptionDisableProject", "PROJECT map", true),
+      localToggle("MapSkinOptions", "MapSkinOptionDisablePopstar", "Popstar map", true),
+      localToggle("MapSkinOptions", "MapSkinOptionDisableArcade", "Arcade map", true),
+      localToggle("MapSkinOptions", "MapSkinOptionDisableURF", "URF map", true),
+      localToggle("MapSkinOptions", "MapSkinOptionDisableWorlds", "Worlds map", true),
+      localToggle("MapSkinOptions", "MapSkinOptionDisableMSI", "MSI map", true),
+    ]],
   ],
   interface: [
-    ["HUD", [
+    ["Interface size", [
       slider("HUD", "GlobalScale", "HUD scale"),
-      slider("HUD", "ChatScale", "Chat scale", 0, 100, 1, false),
+      slider("General", "CursorScale", "Cursor scale"),
       slider("HUD", "ShopScale", "Shop scale"),
-      toggle("HUD", "FlipMiniMap", "Flip minimap"),
-      toggle("HUD", "MinimapMoveSelf", "Show minimap on the left side"),
+      slider("HUD", "ChatScale", "Chat scale", 0, 100, 1, false),
+      slider("HUD", "MinimapScale", "Minimap scale", 0, 3),
+      slider("HUD", "ObjectiveVoteScale", "Objective planning scale"),
+      slider("HUD", "DeathRecapScale", "Death recap scale"),
+      slider("HUD", "PracticeToolScale", "Practice Tool scale"),
+    ]],
+    ["Health and resource bars", [
+      toggle("HUD", "DrawHealthBars", "Show health bars"),
+      toggle("Performance", "EnableHUDAnimations", "Enable HUD animations"),
+      toggle("LossOfControl", "LossOfControlEnabled", "Show loss of control UI"),
+      toggle("LossOfControl", "ShowSlows", "Show slows in loss of control"),
+      toggle("HUD", "ShowHealthBarShake", "Show health bar animations"),
+      choice("HUD", "NameTagDisplay", "Show names above health bar", [["0", "None"], ["1", "Summoner name"], ["2", "Champion name"]]),
+      toggle("HUD", "HidePlayerNames", "Streamer mode"),
+      toggle("HUD", "ShowLastHitAssist", "Show last hit assist"),
+    ]],
+    ["Notifications", [
+      toggle("HUD", "FlashScreenWhenDamaged", "Screen flash on damage"),
+      toggle("HUD", "FlashScreenWhenStunned", "Screen flash on loss of control"),
+      toggle("HUD", "ShowOffScreenPointsOfInterest", "Show off-screen pings"),
+      localToggle("General", "EnableGlobalSpellCastNotifications", "Global spell cast notifications"),
+    ]],
+    ["Ability and attack display", [
+      toggle("HUD", "AutoDisplayTarget", "Show target frame on attack"),
+      toggle("HUD", "ShowAttackRadius", "Show attack range"),
+      toggle("HUD", "ShowAutoAttackRangeIndicatorLine", "Show attack range line"),
+      toggle("HUD", "ShowSpellCosts", "Show spell costs"),
+      toggle("HUD", "EnableLineMissileVis", "Enable line missile display"),
+      toggle("HUD", "DisableHudSpellClick", "Disable HUD spell click"),
+      toggle("HUD", "ShowSpellRecommendations", "Show spell recommendations"),
+      choice("HUD", "NumericCooldownFormat", "Ability cooldown display", [["0", "None"], ["1", "Seconds"], ["2", "Minutes + seconds"], ["3", "Minutes"]]),
+      localToggle("General", "AlwaysShowExtendedTooltip", "Always show extended tooltip info"),
+    ]],
+    ["Minimap", [
+      toggle("HUD", "FlipMiniMap", "Show minimap on the left"),
+      toggle("HUD", "MinimapMoveSelf", "Allow minimap movement"),
+      toggle("HUD", "ShowNeutralCamps", "Show neutral camps"),
+      toggle("HUD", "MinimapEnableAllTimers", "Enable all camp timers"),
+    ]],
+    ["Scoreboard and team frames", [
+      toggle("HUD", "MirroredScoreboard", "Mirror scoreboard layout"),
+      toggle("HUD", "ShowSummonerNamesInScoreboard", "Show summoner names in the scoreboard"),
+      toggle("HUD", "ShowSummonerNames", "Show summoner names"),
+      toggle("HUD", "ShowPlayerPerks", "Show player runes"),
       toggle("HUD", "ShowTeamFramesOnLeft", "Show team frames on the left"),
-      toggle("HUD", "MirroredScoreboard", "Mirrored scoreboard"),
       toggle("HUD", "ShowFPSAndLatency", "Show FPS and latency"),
+      localToggle("HUD", "ShowLoadingScreenBackground", "Show loading screen background"),
     ]],
     ["Chat", [
       toggle("HUD", "ShowTimestamps", "Show timestamps"),
       toggle("HUD", "ShowAlliedChat", "Show allied chat"),
       toggle("HUD", "ShowAllChannelChat", "Show all chat"),
       toggle("Chat", "EnableChatFilter", "Chat filter"),
+      toggle("TFTHUD", "EnableChat", "Chat in Teamfight Tactics"),
     ]],
-    ["Display", [
-      toggle("HUD", "ShowSummonerNames", "Show summoner names"),
-      toggle("HUD", "ShowSpellCosts", "Show spell costs"),
-      toggle("HUD", "DrawHealthBars", "Show health bars"),
-      toggle("HUD", "ShowHealthBarShake", "Health bar shake"),
-      toggle("HUD", "ShowAttackRadius", "Show attack range"),
-      toggle("HUD", "ShowNeutralCamps", "Show neutral camps"),
-      toggle("HUD", "ShowOffScreenPointsOfInterest", "Show off-screen points of interest"),
-      toggle("HUD", "ShowPlayerPerks", "Show player runes"),
-      toggle("HUD", "FlashScreenWhenDamaged", "Flash screen when damaged"),
-      toggle("HUD", "FlashScreenWhenStunned", "Flash screen when stunned"),
-      toggle("LossOfControl", "LossOfControlEnabled", "Loss of control indicator"),
-      toggle("LossOfControl", "ShowSlows", "Show slows in loss of control"),
+    ["Emotes", [
+      choice("HUD", "EmoteSize", "Emote size", [["0", "Normal"], ["1", "Small"]]),
+      toggle("HUD", "HideEnemySummonerEmotes", "Mute enemy emotes"),
+      toggle("HUD", "HideReciprocityFist", "Mute reactions (fist bump)"),
+    ]],
+    ["Combat text", [
+      toggle("FloatingText", "Damage_Enabled", "Damage"),
+      toggle("FloatingText", "EnemyDamage_Enabled", "Enemy damage"),
+      toggle("FloatingText", "Heal_Enabled", "Heal"),
+      toggle("FloatingText", "ManaDamage_Enabled", "Mana"),
+      toggle("FloatingText", "Gold_Enabled", "Gold"),
+      toggle("FloatingText", "Experience_Enabled", "Experience"),
+      toggle("FloatingText", "Level_Enabled", "Level"),
+      toggle("FloatingText", "QuestReceived_Enabled", "Quest"),
+      toggle("FloatingText", "Invulnerable_Enabled", "Status"),
+      toggle("FloatingText", "Dodge_Enabled", "Dodge"),
+      toggle("FloatingText", "Special_Enabled", "Special"),
+      toggle("FloatingText", "Score_Enabled", "Score"),
     ]],
   ],
   game: [
-    ["Controls", [
-      slider("General", "CursorScale", "Cursor scale"),
-      slider("HUD", "MapScrollSpeed", "Camera move speed"),
+    ["Gameplay", [
+      choice("HUD", "Movement Mode", "Movement mode", [["0", "Point and click"], ["1", "WASD"]]),
       toggle("General", "AutoAcquireTarget", "Auto attack"),
       toggle("General", "EnableTargetedAttackMove", "Attack move on cursor"),
       toggle("General", "EnableLeftMouseButtonAttackMove", "Left click attack move"),
-      toggle("General", "PredictMovement", "Predict movement"),
-      toggle("General", "TargetChampionsOnlyAsToggle", "Target champions only as a toggle"),
+      toggle("General", "PredictMovement", "Use movement prediction"),
+      toggle("General", "TargetChampionsOnlyAsToggle", "Treat Target Champions Only as a toggle"),
+      toggle("General", "ShowTurretRangeIndicators", "Show turret range indicators (Co-op vs AI)"),
+      toggle("General", "RecommendJunglePaths", "Display recommended jungle path"),
+      toggle("HUD", "EnableItemComponentPurchasing", "Enable item component purchasing"),
+      localToggle("General", "ClampCastTargetLocationWithinMaxRange", "Clamp cast target location within max range"),
+      localToggle("General", "EnableChampionSpellPreview", "Enable champion spell previews"),
+      localToggle("General", "LearnSpellOnCast", "Learn spell on cast"),
     ]],
-    ["Camera and map", [
-      toggle("General", "SnapCameraOnRespawn", "Snap camera on respawn"),
-      toggle("General", "EnableScreenShake", "Screen shake"),
-      toggle("General", "ShowTurretRangeIndicators", "Show turret range indicators"),
-      toggle("General", "RecommendJunglePaths", "Recommend jungle paths"),
-      toggle("General", "RelativeTeamColors", "Relative team colors"),
+    ["Casting", [
+      toggle("HUD", "SmartCastOnKeyRelease", "Cast on key release"),
+      toggle("HUD", "SmartCastWithIndicator_CastWhenNewSpellSelected", "Quick cast with indicator: cast when another spell is selected"),
+    ]],
+    ["Camera", [
+      choice("HUD", "CameraLockMode", "Camera lock mode", [["0", "Per-side offset"], ["1", "Fixed offset"], ["2", "Semi-locked"]]),
+      toggle("General", "CameraZoomOnMouseScroll", "Zoom camera on mouse wheel"),
+      slider("HUD", "MapScrollSpeed", "Camera move speed (mouse)"),
+      slider("HUD", "KeyboardScrollSpeed", "Camera move speed (keyboard)"),
+      toggle("HUD", "ScrollSmoothingEnabled", "Enable smooth camera"),
+      toggle("HUD", "MiddleClickDragScrollEnabled", "Mouse button drag scroll"),
+      slider("HUD", "MiddleMouseScrollSpeed", "Drag scroll speed"),
+      toggle("General", "SnapCameraOnRespawn", "Move camera on revive"),
+      toggle("General", "EnableScreenShake", "Enable screen shake"),
+      toggle("General", "RelativeTeamColors", "Use relative team colors"),
     ]],
   ],
   accessibility: [
     ["Color", [
+      toggle("ColorPalette", "ColorPalette", "Color blind mode"),
       slider("Accessibility", "ColorBrightness", "Brightness"),
       slider("Accessibility", "ColorContrast", "Contrast"),
       slider("Accessibility", "ColorGamma", "Gamma"),
       slider("Accessibility", "ColorLevel", "Level"),
+    ]],
+    ["Motion and cursor", [
+      localToggle("General", "MinimizeCameraMotion", "Minimize camera motion"),
+      localToggle("General", "ShowCursorLocator", "Show cursor locator"),
     ]],
   ],
 };
@@ -179,6 +277,15 @@ const CATEGORIES: [Category, MessageKey, string][] = [
 
 const key = (file: string, section: string, name: string) => `${file}\u0000${section}\u0000${name}`;
 
+/** Every setting that has a proper control (the search shows it there, not as a raw value). */
+const CURATED = new Set<string>([
+  ...Object.values(PANELS).flatMap((panels) => panels.flatMap(([, controls]) => controls.flatMap((control) =>
+    control.kind === "resolution" ? [key(control.file, control.section, "Width"), key(control.file, control.section, "Height")] : [key(control.file, control.section, control.name)]))),
+  ...SOUND_CHANNELS.flatMap(([channel]) => [key(G, "Volume", `${channel}Volume`), key(G, "Volume", `${channel}Mute`)]),
+  ...HOTKEYS.flatMap(([, rows]) => rows.map(([name]) => key(I, "GameEvents", name))),
+  ...Object.values(QUICK_CAST).map((name) => key(I, "Quickbinds", name)),
+]);
+
 // ---------------------------------------------------------------- smart search
 
 /** Extra words people type for a setting (by setting name), so "ult" finds Ability 4. */
@@ -227,6 +334,39 @@ const TAGS: Record<string, string> = {
   PredictMovement: "prediction latency", TargetChampionsOnlyAsToggle: "champions only", SnapCameraOnRespawn: "camera respawn",
   EnableScreenShake: "shake camera", ShowTurretRangeIndicators: "tower turret range", RecommendJunglePaths: "jungle path",
   RelativeTeamColors: "colors team red blue",
+  EnableAudio: "sound audio disable all mute", EnableCustomAnnouncer: "announcer voice pack",
+  InputVolume: "mic microphone voice input volume", ActivationSensitivity: "mic microphone voice open mic threshold",
+  MuteOnConnect: "mic microphone voice mute", AutoJoinParty: "voice chat party join", AutoJoinTeam: "voice chat team join",
+  ShowVoiceChatHalos: "voice speaking halo", ShowVoicePanelWithScoreboard: "voice tab scoreboard",
+  MinimapScale: "minimap map size", ObjectiveVoteScale: "objective vote voting planning size", DeathRecapScale: "death recap size",
+  PracticeToolScale: "practice tool size", EnableHUDAnimations: "hud animations", NameTagDisplay: "names nicknames health bar champion summoner",
+  HidePlayerNames: "streamer mode hide names", ShowLastHitAssist: "last hit cs farming minions assist",
+  EnableGlobalSpellCastNotifications: "global ultimate spell cast notification",
+  AutoDisplayTarget: "target frame attack", ShowAutoAttackRangeIndicatorLine: "attack range line indicator",
+  EnableLineMissileVis: "skillshot line missile", DisableHudSpellClick: "hud spell click",
+  ShowSpellRecommendations: "spell recommendation level up", NumericCooldownFormat: "cooldown timer numbers seconds minutes",
+  AlwaysShowExtendedTooltip: "tooltip extended details", MinimapEnableAllTimers: "minimap jungle camp timers respawn",
+  ShowSummonerNamesInScoreboard: "names tab scoreboard", ShowLoadingScreenBackground: "loading screen background",
+  EnableChat: "tft chat teamfight tactics", EmoteSize: "emote size small", HideEnemySummonerEmotes: "emote enemy mute hide",
+  HideReciprocityFist: "fist bump reciprocity reaction mute hide",
+  Damage_Enabled: "combat floating text numbers damage", EnemyDamage_Enabled: "combat floating text numbers damage enemy",
+  Heal_Enabled: "combat floating text numbers heal", ManaDamage_Enabled: "combat floating text numbers mana",
+  Gold_Enabled: "combat floating text numbers gold", Experience_Enabled: "combat floating text numbers xp experience",
+  Level_Enabled: "combat floating text level up", QuestReceived_Enabled: "combat floating text quest",
+  Invulnerable_Enabled: "combat floating text status invulnerable", Dodge_Enabled: "combat floating text dodge miss",
+  Special_Enabled: "combat floating text special", Score_Enabled: "combat floating text score",
+  "Movement Mode": "wasd movement keyboard point click", EnableItemComponentPurchasing: "shop items components buy",
+  ClampCastTargetLocationWithinMaxRange: "cast range clamp skillshot", EnableChampionSpellPreview: "spell preview champion",
+  LearnSpellOnCast: "level up learn spell skill", SmartCastOnKeyRelease: "quick cast smart cast release",
+  SmartCastWithIndicator_CastWhenNewSpellSelected: "quick cast indicator smart cast",
+  CameraLockMode: "camera lock offset semi locked", CameraZoomOnMouseScroll: "camera zoom mouse wheel scroll",
+  KeyboardScrollSpeed: "camera speed keyboard arrows", ScrollSmoothingEnabled: "camera smooth", MiddleClickDragScrollEnabled: "camera drag middle mouse",
+  MiddleMouseScrollSpeed: "camera drag speed middle mouse", ColorPalette: "colorblind color blind deuteranopia",
+  MinimizeCameraMotion: "camera motion sickness reduce", ShowCursorLocator: "cursor mouse find locate",
+  MapSkinOptionDisableSnowdown: "map skin winter snow", MapSkinOptionDisableLunarRevel: "map skin lunar new year",
+  MapSkinOptionDisablePoolParty: "map skin summer", MapSkinOptionDisableStarGuardian: "map skin", MapSkinOptionDisableOdyssey: "map skin",
+  MapSkinOptionDisableProject: "map skin", MapSkinOptionDisablePopstar: "map skin kda", MapSkinOptionDisableArcade: "map skin",
+  MapSkinOptionDisableURF: "map skin urf", MapSkinOptionDisableWorlds: "map skin worlds", MapSkinOptionDisableMSI: "map skin msi",
   ColorBrightness: "color brightness light", ColorContrast: "color contrast", ColorGamma: "color gamma", ColorLevel: "color level",
 };
 
@@ -439,12 +579,12 @@ export async function openGameSettings(): Promise<void> {
     }
     if (control.kind === "toggle") {
       return `<label class="toggle-row gs-row${changed}"><span class="toggle-text"><strong>${esc(control.label)}</strong></span>
-        <input type="checkbox" data-gs-toggle ${attrs} ${current.trim() === "1" ? "checked" : ""}/><span class="switch"></span></label>`;
+        <input type="checkbox" data-gs-toggle ${attrs}${control.invert ? " data-invert" : ""} ${(current.trim() === "1") !== Boolean(control.invert) ? "checked" : ""}/><span class="switch"></span></label>`;
     }
     const number = Number(current) || 0;
     const shown = control.percent ? `${Math.round(((number - control.min) / (control.max - control.min)) * 100)}` : String(Math.round(number));
     return `<label class="gs-row gs-slider${changed}"><span>${esc(control.label)}</span>
-      <input type="range" data-gs-slider ${attrs} min="${control.min}" max="${control.max}" step="${control.step}" value="${number}" style="--fill:${((number - control.min) / (control.max - control.min)) * 100}%"/>
+      <input type="range" data-gs-slider ${attrs}${control.percent ? " data-percent" : ""} min="${control.min}" max="${control.max}" step="${control.step}" value="${number}" style="--fill:${((number - control.min) / (control.max - control.min)) * 100}%"/>
       <output>${esc(shown)}</output></label>`;
   };
 
@@ -463,7 +603,8 @@ export async function openGameSettings(): Promise<void> {
       <button class="icon-btn gs-mute" data-gs-mute="${channel}" aria-pressed="${muted}" data-tooltip="${esc(t("gs.mute"))}">${icon(muted ? "volume-x" : "volume", 15)}</button>
     </div>`;
   };
-  const soundHtml = () => panel(t("gs.cat.sound"), SOUND_CHANNELS.map(([channel, label]) => soundRow(channel, label)).join(""));
+  const soundHtml = () => panel(t("gs.cat.sound"), SOUND_CHANNELS.map(([channel, label]) => soundRow(channel, label)).join("")) +
+    PANELS.sound.map(([title, controls]) => panel(title, controls.map(controlHtml).join(""))).join("");
 
   const bindingCounts = (): Map<string, string[]> => {
     const owners = new Map<string, string[]>();
@@ -537,7 +678,7 @@ export async function openGameSettings(): Promise<void> {
       if (value(G, "Volume", `${channel}Volume`) === undefined) continue;
       add(sound, label, channel, "volume mute", () => soundRow(channel, label));
     }
-    for (const [cat, labelKey] of [["video", "gs.cat.video"], ["interface", "gs.cat.interface"], ["game", "gs.cat.game"], ["accessibility", "gs.cat.accessibility"]] as const) {
+    for (const [cat, labelKey] of [["sound", "gs.cat.sound"], ["video", "gs.cat.video"], ["interface", "gs.cat.interface"], ["game", "gs.cat.game"], ["accessibility", "gs.cat.accessibility"]] as const) {
       for (const [title, controls] of PANELS[cat]) {
         for (const control of controls) {
           if (value(control.file, control.section, control.name) === undefined) continue;
@@ -545,11 +686,12 @@ export async function openGameSettings(): Promise<void> {
         }
       }
     }
-    // The raw list last, so curated controls rank first for the same words.
+    // The raw list last, and only for settings without a proper control above.
     const all = t("gs.cat.advanced");
     for (const file of view?.files ?? []) {
       for (const section of file.sections) {
         for (const setting of section.settings) {
+          if (CURATED.has(key(file.name, section.name, setting.name))) continue;
           entries.push({
             place: `${all} · ${file.name} · ${section.name}`,
             words: words(`${setting.name} ${section.name} ${TAGS[setting.name] ?? ""} raw`),
@@ -823,7 +965,7 @@ export async function openGameSettings(): Promise<void> {
       const max = Number(input.max);
       input.style.setProperty("--fill", `${((Number(input.value) - min) / (max - min)) * 100}%`);
       const output = input.parentElement?.querySelector("output");
-      if (output) output.textContent = input.closest(".gs-volume") || max === 1 ? String(Math.round(((Number(input.value) - min) / (max - min)) * 100)) : String(Math.round(Number(input.value)));
+      if (output) output.textContent = input.closest(".gs-volume") || input.hasAttribute("data-percent") ? String(Math.round(((Number(input.value) - min) / (max - min)) * 100)) : String(Math.round(Number(input.value)));
       input.closest(".gs-row")?.classList.toggle("is-changed", edits.has(key(file, section, name)) || Boolean(input.closest(".gs-volume") && edits.has(key(file, section, name.replace("Volume", "Mute")))));
       renderHead();
       return renderFoot();
@@ -848,7 +990,7 @@ export async function openGameSettings(): Promise<void> {
       return refreshAfterEdit();
     }
     if (input.matches("[data-gs-toggle]") && file && section && name) {
-      set(file, section, name, input.checked ? "1" : "0");
+      set(file, section, name, input.checked !== input.hasAttribute("data-invert") ? "1" : "0");
       return refreshAfterEdit();
     }
   });

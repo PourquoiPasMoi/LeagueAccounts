@@ -99,7 +99,7 @@ pub fn settings_path() -> Option<PathBuf> {
 /// (not in the shared PersistedSettings.json, so the client and the cloud never
 /// carry them). Shown in the editor as their own file under this name.
 pub const LOCAL_FILE: &str = "game.cfg";
-const LOCAL_KEYS: [(&str, &str); 13] = [
+const LOCAL_KEYS: &[(&str, &str)] = &[
     ("General", "WindowMode"),
     ("General", "Width"),
     ("General", "Height"),
@@ -113,6 +113,32 @@ const LOCAL_KEYS: [(&str, &str); 13] = [
     ("Performance", "FrameCapType"),
     ("Performance", "EnableFXAA"),
     ("Performance", "AutoPerformanceSettings"),
+    // Game and interface options League keeps only in game.cfg too.
+    ("General", "EnableCustomAnnouncer"),
+    ("General", "EnableGlobalSpellCastNotifications"),
+    ("General", "AlwaysShowExtendedTooltip"),
+    ("General", "ClampCastTargetLocationWithinMaxRange"),
+    ("General", "EnableChampionSpellPreview"),
+    ("General", "LearnSpellOnCast"),
+    ("General", "MinimizeCameraMotion"),
+    ("General", "ShowCursorLocator"),
+    ("HUD", "ShowLoadingScreenBackground"),
+    ("Voice", "InputVolume"),
+    ("Voice", "ActivationSensitivity"),
+    ("Voice", "MuteOnConnect"),
+    ("Voice", "AutoJoinParty"),
+    ("Voice", "AutoJoinTeam"),
+    ("MapSkinOptions", "MapSkinOptionDisableSnowdown"),
+    ("MapSkinOptions", "MapSkinOptionDisableLunarRevel"),
+    ("MapSkinOptions", "MapSkinOptionDisablePoolParty"),
+    ("MapSkinOptions", "MapSkinOptionDisableStarGuardian"),
+    ("MapSkinOptions", "MapSkinOptionDisableOdyssey"),
+    ("MapSkinOptions", "MapSkinOptionDisableProject"),
+    ("MapSkinOptions", "MapSkinOptionDisablePopstar"),
+    ("MapSkinOptions", "MapSkinOptionDisableArcade"),
+    ("MapSkinOptions", "MapSkinOptionDisableURF"),
+    ("MapSkinOptions", "MapSkinOptionDisableWorlds"),
+    ("MapSkinOptions", "MapSkinOptionDisableMSI"),
 ];
 const LOCAL_BACKUP_LIMIT: usize = 10;
 
