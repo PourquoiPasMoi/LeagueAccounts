@@ -1,9 +1,15 @@
 // Game settings page: League's shared settings file (PersistedSettings.json),
 // edited visually, then written and locked again so every account keeps it.
 import { ApiError, api, type GameSettingsChange, type GameSettingsView } from "./api";
-import { errorText, localeTag, t, type MessageKey } from "./i18n";
+import { errorText, lang, localeTag, t, type MessageKey } from "./i18n";
 import { $, esc, fragment, leave, modal, toast } from "./dom";
 import { icon } from "./icons";
+import GAME_STRINGS from "./data/game-strings.json";
+
+/** A game setting label in the app's language, as League itself writes it
+ *  (from League's string tables; English is the label itself). */
+const STRINGS = GAME_STRINGS as Record<string, Record<string, string>>;
+const gl = (label: string): string => STRINGS[lang()]?.[label] ?? label.replace(/ \(hotkey\)$/, "");
 
 type Category = "hotkeys" | "sound" | "video" | "interface" | "game" | "accessibility" | "advanced";
 
@@ -32,54 +38,54 @@ const QUALITY: [string, string][] = [["0", "Very low"], ["1", "Low"], ["2", "Med
 const quality = (name: string, label: string, options = QUALITY): Choice => ({ kind: "choice", file: L, section: "Performance", name, label, options });
 
 const SOUND_CHANNELS: [string, string][] = [
-  ["Master", "Master volume"], ["Music", "Music"], ["Announcer", "Announcer"], ["Voice", "Voice"],
-  ["Sfx", "Sound effects"], ["Ambience", "Ambience"], ["Pings", "Pings"], ["Notifications", "Notifications"],
+  ["Master", "Main volume"], ["Music", "Music volume"], ["Announcer", "Announcer volume"], ["Voice", "Voice volume"],
+  ["Sfx", "Sound FX volume"], ["Ambience", "Ambience volume"], ["Pings", "Pings volume"], ["Notifications", "Notifications & UI"],
 ];
 
 const PANELS: Record<Exclude<Category, "hotkeys" | "advanced">, [string, Control[]][]> = {
   sound: [
     ["General", [
-      toggle("General", "EnableAudio", "Sound on"),
-      localToggle("General", "EnableCustomAnnouncer", "Custom announcer packs"),
+      toggle("General", "EnableAudio", "Disable all sound", true),
+      localToggle("General", "EnableCustomAnnouncer", "Disable custom announcer", true),
     ]],
     ["Voice", [
-      localSlider("Voice", "InputVolume", "Microphone volume"),
-      localSlider("Voice", "ActivationSensitivity", "Activation sensitivity"),
+      localSlider("Voice", "InputVolume", "Input volume (gain)"),
+      localSlider("Voice", "ActivationSensitivity", "Activation threshold (voice activity only)"),
       localToggle("Voice", "MuteOnConnect", "Mute my microphone when joining"),
       localToggle("Voice", "AutoJoinParty", "Join party voice automatically"),
       localToggle("Voice", "AutoJoinTeam", "Join team voice automatically"),
-      toggle("Voice", "ShowVoiceChatHalos", "Show voice chat halos"),
-      toggle("Voice", "ShowVoicePanelWithScoreboard", "Show voice panel with the scoreboard"),
+      toggle("Voice", "ShowVoiceChatHalos", "Show speaking indicators on HUD"),
+      toggle("Voice", "ShowVoicePanelWithScoreboard", "Show voice panel with scoreboard"),
     ]],
   ],
   video: [
     ["Display", [
       { kind: "resolution", file: L, section: "General", name: "Width", label: "Resolution" },
       { kind: "choice", file: L, section: "General", name: "WindowMode", label: "Window mode", options: [["0", "Fullscreen"], ["2", "Borderless"], ["1", "Windowed"]] },
-      localToggle("General", "WaitForVerticalSync", "Vertical sync"),
+      localToggle("General", "WaitForVerticalSync", "Wait for vertical sync"),
     ]],
     ["Graphics", [
       quality("CharacterQuality", "Character quality"),
       quality("EnvironmentQuality", "Environment quality"),
       quality("EffectsQuality", "Effects quality"),
-      quality("ShadowQuality", "Shadows", [["0", "Off"], ["1", "Low"], ["2", "Medium"], ["3", "High"], ["4", "Very high"]]),
-      localToggle("Performance", "EnableFXAA", "Anti-aliasing (FXAA)"),
+      quality("ShadowQuality", "Shadow quality", [["0", "Off"], ["1", "Low"], ["2", "Medium"], ["3", "High"], ["4", "Very high"]]),
+      localToggle("Performance", "EnableFXAA", "Anti-aliasing"),
       localToggle("General", "HideEyeCandy", "Hide eye candy"),
       localToggle("General", "ShowGodray", "God rays"),
       localToggle("Performance", "AutoPerformanceSettings", "Automatic performance settings"),
     ]],
     ["Map skins", [
-      localToggle("MapSkinOptions", "MapSkinOptionDisableSnowdown", "Snowdown map", true),
-      localToggle("MapSkinOptions", "MapSkinOptionDisableLunarRevel", "Lunar Revel map", true),
-      localToggle("MapSkinOptions", "MapSkinOptionDisablePoolParty", "Pool Party map", true),
-      localToggle("MapSkinOptions", "MapSkinOptionDisableStarGuardian", "Star Guardian map", true),
-      localToggle("MapSkinOptions", "MapSkinOptionDisableOdyssey", "Odyssey map", true),
-      localToggle("MapSkinOptions", "MapSkinOptionDisableProject", "PROJECT map", true),
-      localToggle("MapSkinOptions", "MapSkinOptionDisablePopstar", "Popstar map", true),
-      localToggle("MapSkinOptions", "MapSkinOptionDisableArcade", "Arcade map", true),
-      localToggle("MapSkinOptions", "MapSkinOptionDisableURF", "URF map", true),
-      localToggle("MapSkinOptions", "MapSkinOptionDisableWorlds", "Worlds map", true),
-      localToggle("MapSkinOptions", "MapSkinOptionDisableMSI", "MSI map", true),
+      localToggle("MapSkinOptions", "MapSkinOptionDisableSnowdown", "Disable Snowdown map accents"),
+      localToggle("MapSkinOptions", "MapSkinOptionDisableLunarRevel", "Disable Lunar Revel map accents"),
+      localToggle("MapSkinOptions", "MapSkinOptionDisablePoolParty", "Disable Pool Party map accents"),
+      localToggle("MapSkinOptions", "MapSkinOptionDisableStarGuardian", "Disable Star Guardian map accents"),
+      localToggle("MapSkinOptions", "MapSkinOptionDisableOdyssey", "Disable Odyssey map accents"),
+      localToggle("MapSkinOptions", "MapSkinOptionDisableProject", "Disable Project map accents"),
+      localToggle("MapSkinOptions", "MapSkinOptionDisablePopstar", "Disable Pop Star map accents"),
+      localToggle("MapSkinOptions", "MapSkinOptionDisableArcade", "Disable Arcade map accents"),
+      localToggle("MapSkinOptions", "MapSkinOptionDisableURF", "Disable URF map accents"),
+      localToggle("MapSkinOptions", "MapSkinOptionDisableWorlds", "Disable Worlds map accents"),
+      localToggle("MapSkinOptions", "MapSkinOptionDisableMSI", "Disable MSI map accents"),
     ]],
   ],
   interface: [
@@ -100,52 +106,52 @@ const PANELS: Record<Exclude<Category, "hotkeys" | "advanced">, [string, Control
       toggle("LossOfControl", "ShowSlows", "Show slows in loss of control"),
       toggle("HUD", "ShowHealthBarShake", "Show health bar animations"),
       choice("HUD", "NameTagDisplay", "Show names above health bar", [["0", "None"], ["1", "Summoner name"], ["2", "Champion name"]]),
-      toggle("HUD", "HidePlayerNames", "Streamer mode"),
+      toggle("HUD", "HidePlayerNames", "Enable streamer mode"),
       toggle("HUD", "ShowLastHitAssist", "Show last hit assist"),
     ]],
     ["Notifications", [
       toggle("HUD", "FlashScreenWhenDamaged", "Screen flash on damage"),
       toggle("HUD", "FlashScreenWhenStunned", "Screen flash on loss of control"),
       toggle("HUD", "ShowOffScreenPointsOfInterest", "Show off-screen pings"),
-      localToggle("General", "EnableGlobalSpellCastNotifications", "Global spell cast notifications"),
+      localToggle("General", "EnableGlobalSpellCastNotifications", "Display champion sound notification"),
     ]],
     ["Ability and attack display", [
       toggle("HUD", "AutoDisplayTarget", "Show target frame on attack"),
-      toggle("HUD", "ShowAttackRadius", "Show attack range"),
-      toggle("HUD", "ShowAutoAttackRangeIndicatorLine", "Show attack range line"),
+      toggle("HUD", "ShowAttackRadius", "Show attack move range"),
+      toggle("HUD", "ShowAutoAttackRangeIndicatorLine", "WASD attack range indicator"),
       toggle("HUD", "ShowSpellCosts", "Show spell costs"),
       toggle("HUD", "EnableLineMissileVis", "Enable line missile display"),
       toggle("HUD", "DisableHudSpellClick", "Disable HUD spell click"),
-      toggle("HUD", "ShowSpellRecommendations", "Show spell recommendations"),
+      toggle("HUD", "ShowSpellRecommendations", "Show spell recommendation"),
       choice("HUD", "NumericCooldownFormat", "Ability cooldown display", [["0", "None"], ["1", "Seconds"], ["2", "Minutes + seconds"], ["3", "Minutes"]]),
       localToggle("General", "AlwaysShowExtendedTooltip", "Always show extended tooltip info"),
     ]],
     ["Minimap", [
-      toggle("HUD", "FlipMiniMap", "Show minimap on the left"),
+      toggle("HUD", "FlipMiniMap", "Show minimap on left"),
       toggle("HUD", "MinimapMoveSelf", "Allow minimap movement"),
       toggle("HUD", "ShowNeutralCamps", "Show neutral camps"),
-      toggle("HUD", "MinimapEnableAllTimers", "Enable all camp timers"),
+      toggle("HUD", "MinimapEnableAllTimers", "Enable all minimap timers"),
     ]],
     ["Scoreboard and team frames", [
       toggle("HUD", "MirroredScoreboard", "Mirror scoreboard layout"),
       toggle("HUD", "ShowSummonerNamesInScoreboard", "Show summoner names in the scoreboard"),
       toggle("HUD", "ShowSummonerNames", "Show summoner names"),
       toggle("HUD", "ShowPlayerPerks", "Show player runes"),
-      toggle("HUD", "ShowTeamFramesOnLeft", "Show team frames on the left"),
+      toggle("HUD", "ShowTeamFramesOnLeft", "Show team frames on left"),
       toggle("HUD", "ShowFPSAndLatency", "Show FPS and latency"),
       localToggle("HUD", "ShowLoadingScreenBackground", "Show loading screen background"),
     ]],
     ["Chat", [
       toggle("HUD", "ShowTimestamps", "Show timestamps"),
-      toggle("HUD", "ShowAlliedChat", "Show allied chat"),
-      toggle("HUD", "ShowAllChannelChat", "Show all chat"),
+      toggle("HUD", "ShowAlliedChat", "Show [Allied] chat"),
+      toggle("HUD", "ShowAllChannelChat", "Show [All] chat (matched games)"),
       toggle("Chat", "EnableChatFilter", "Chat filter"),
       toggle("TFTHUD", "EnableChat", "Chat in Teamfight Tactics"),
     ]],
     ["Emotes", [
       choice("HUD", "EmoteSize", "Emote size", [["0", "Normal"], ["1", "Small"]]),
       toggle("HUD", "HideEnemySummonerEmotes", "Mute enemy emotes"),
-      toggle("HUD", "HideReciprocityFist", "Mute reactions (fist bump)"),
+      toggle("HUD", "HideReciprocityFist", "Mute reaction (fist bumps and my bad)"),
     ]],
     ["Combat text", [
       toggle("FloatingText", "Damage_Enabled", "Damage"),
@@ -164,12 +170,12 @@ const PANELS: Record<Exclude<Category, "hotkeys" | "advanced">, [string, Control
   ],
   game: [
     ["Gameplay", [
-      choice("HUD", "Movement Mode", "Movement mode", [["0", "Point and click"], ["1", "WASD"]]),
+      choice("HUD", "Movement Mode", "Movement mode", [["0", "Mouse (point and click)"], ["1", "Keyboard (WASD)"]]),
       toggle("General", "AutoAcquireTarget", "Auto attack"),
       toggle("General", "EnableTargetedAttackMove", "Attack move on cursor"),
-      toggle("General", "EnableLeftMouseButtonAttackMove", "Left click attack move"),
+      toggle("General", "EnableLeftMouseButtonAttackMove", "Bind auto attack move to left click"),
       toggle("General", "PredictMovement", "Use movement prediction"),
-      toggle("General", "TargetChampionsOnlyAsToggle", "Treat Target Champions Only as a toggle"),
+      toggle("General", "TargetChampionsOnlyAsToggle", "Treat 'Target Champions Only' as a toggle"),
       toggle("General", "ShowTurretRangeIndicators", "Show turret range indicators (Co-op vs AI)"),
       toggle("General", "RecommendJunglePaths", "Display recommended jungle path"),
       toggle("HUD", "EnableItemComponentPurchasing", "Enable item component purchasing"),
@@ -179,7 +185,7 @@ const PANELS: Record<Exclude<Category, "hotkeys" | "advanced">, [string, Control
     ]],
     ["Casting", [
       toggle("HUD", "SmartCastOnKeyRelease", "Cast on key release"),
-      toggle("HUD", "SmartCastWithIndicator_CastWhenNewSpellSelected", "Quick cast with indicator: cast when another spell is selected"),
+      toggle("HUD", "SmartCastWithIndicator_CastWhenNewSpellSelected", "Cast the pressed spell upon pressing another spell"),
     ]],
     ["Camera", [
       choice("HUD", "CameraLockMode", "Camera lock mode", [["0", "Per-side offset"], ["1", "Fixed offset"], ["2", "Semi-locked"]]),
@@ -197,10 +203,10 @@ const PANELS: Record<Exclude<Category, "hotkeys" | "advanced">, [string, Control
   accessibility: [
     ["Color", [
       toggle("ColorPalette", "ColorPalette", "Color blind mode"),
-      slider("Accessibility", "ColorBrightness", "Brightness"),
-      slider("Accessibility", "ColorContrast", "Contrast"),
-      slider("Accessibility", "ColorGamma", "Gamma"),
-      slider("Accessibility", "ColorLevel", "Level"),
+      slider("Accessibility", "ColorBrightness", "Color brightness"),
+      slider("Accessibility", "ColorContrast", "Color contrast"),
+      slider("Accessibility", "ColorGamma", "Color gamma"),
+      slider("Accessibility", "ColorLevel", "Color level"),
     ]],
     ["Motion and cursor", [
       localToggle("General", "MinimizeCameraMotion", "Minimize camera motion"),
@@ -211,54 +217,54 @@ const PANELS: Record<Exclude<Category, "hotkeys" | "advanced">, [string, Control
 
 const HOTKEYS: [string, [string, string][]][] = [
   ["Abilities", [
-    ["evtCastSpell1", "Ability 1"], ["evtCastSpell2", "Ability 2"], ["evtCastSpell3", "Ability 3"],
-    ["evtCastSpell4", "Ability 4 (ultimate)"], ["evtCastAvatarSpell1", "Summoner spell 1"], ["evtCastAvatarSpell2", "Summoner spell 2"],
-    ["evtLevelSpell1", "Level up ability 1"], ["evtLevelSpell2", "Level up ability 2"], ["evtLevelSpell3", "Level up ability 3"],
-    ["evtLevelSpell4", "Level up ability 4"],
+    ["evtCastSpell1", "Spell 1"], ["evtCastSpell2", "Spell 2"], ["evtCastSpell3", "Spell 3"],
+    ["evtCastSpell4", "Spell 4 (ultimate)"], ["evtCastAvatarSpell1", "Summoner spell 1"], ["evtCastAvatarSpell2", "Summoner spell 2"],
+    ["evtLevelSpell1", "Level up spell 1"], ["evtLevelSpell2", "Level up spell 2"], ["evtLevelSpell3", "Level up spell 3"],
+    ["evtLevelSpell4", "Level up spell 4"],
   ]],
   ["Items", [
     ["evtUseItem1", "Item 1"], ["evtUseItem2", "Item 2"], ["evtUseItem3", "Item 3"], ["evtUseItem4", "Item 4"],
     ["evtUseItem5", "Item 5"], ["evtUseItem6", "Item 6"], ["evtUseVisionItem", "Trinket"], ["evtUseItem7", "Recall"],
   ]],
-  ["Movement and targeting", [
-    ["evtPlayerMoveClick", "Move"], ["evtPlayerAttackMoveClick", "Attack move click"], ["evtPlayerAttackMove", "Attack move"],
-    ["evtPlayerAttackOnlyClick", "Attack only"], ["evtPlayerStopPosition", "Stop"], ["evtPlayerHoldPosition", "Hold position"],
-    ["evtChampionOnly", "Target champions only"], ["evtPetMoveClick", "Pet move"],
+  ["Player movement", [
+    ["evtPlayerMoveClick", "Player move click"], ["evtPlayerAttackMoveClick", "Player attack move click"], ["evtPlayerAttackMove", "Player attack move"],
+    ["evtPlayerAttackOnlyClick", "Player attack only click"], ["evtPlayerStopPosition", "Player stop position"], ["evtPlayerHoldPosition", "Player hold position"],
+    ["evtChampionOnly", "Target champions only"], ["evtPetMoveClick", "Move pet click"],
   ]],
-  ["Camera", [
+  ["Camera control", [
     ["evtCameraLockToggle", "Toggle camera lock"], ["evtCameraSnap", "Center camera on champion"], ["evtSelectSelf", "Select self"],
     ["evtSelectAlly1", "Select ally 1"], ["evtSelectAlly2", "Select ally 2"], ["evtSelectAlly3", "Select ally 3"],
-    ["evtSelectAlly4", "Select ally 4"], ["evtOnUIMouse4Pan", "Drag camera"],
+    ["evtSelectAlly4", "Select ally 4"], ["evtOnUIMouse4Pan", "Drag scroll"],
   ]],
   ["Camera scrolling", [
-    ["evtScrollUp", "Scroll camera up"], ["evtScrollDown", "Scroll camera down"], ["evtScrollLeft", "Scroll camera left"],
-    ["evtScrollRight", "Scroll camera right"], ["evtDragScrollLock", "Drag scroll lock"], ["evtToggleMouseClip", "Lock mouse to window"],
+    ["evtScrollUp", "Scroll up"], ["evtScrollDown", "Scroll down"], ["evtScrollLeft", "Scroll left"],
+    ["evtScrollRight", "Scroll right"], ["evtDragScrollLock", "Drag scroll lock"], ["evtToggleMouseClip", "Toggle mouse screen lock"],
   ]],
   ["Pings", [
-    ["evntPlayerPing", "Ping"], ["evntPlayerPingCursor", "Ping at cursor"], ["evntPlayerPingDanger", "Caution ping"],
-    ["evntPlayerPingCursorDanger", "Caution ping at cursor"], ["evtPlayerPingRadialDanger", "Retreat ping"],
+    ["evntPlayerPing", "Alert ping"], ["evntPlayerPingCursor", "Quick alert ping"], ["evntPlayerPingDanger", "Caution ping"],
+    ["evntPlayerPingCursorDanger", "Quick caution ping"], ["evtPlayerPingRadialDanger", "Retreat ping"],
     ["evtPlayerPingMIA", "Enemy missing ping"], ["evtPlayerPingOMW", "On my way ping"], ["evtPlayerPingComeHere", "Assist me ping"],
     ["evtPlayerPingPush", "Push ping"], ["evtPlayerPingAllIn", "All in ping"], ["evtPlayerPingVisionNeeded", "Need vision ping"],
-    ["evtPlayerPingAreaIsWarded", "Area warded ping"],
+    ["evtPlayerPingAreaIsWarded", "Enemy vision ping"],
   ]],
   ["Emotes", [
     ["evtEmoteJoke", "Joke"], ["evtEmoteTaunt", "Taunt"], ["evtEmoteDance", "Dance"], ["evtEmoteLaugh", "Laugh"],
     ["evtEmoteToggle", "Toggle"], ["evtChampMasteryDisplay", "Mastery emote"], ["evtReciprocityTrigger", "Fist bump"],
-    ["evtReciprocityMyBadTrigger", "My bad"], ["evtRadialEmoteOpen", "Open emote wheel"], ["evtRadialEmoteInstantOpen", "Open emote wheel (instant)"],
-    ["evtRadialEmotePlaySlot0", "Emote wheel: centre"], ["evtRadialEmotePlaySlot1", "Emote wheel: slot 1"], ["evtRadialEmotePlaySlot2", "Emote wheel: slot 2"],
-    ["evtRadialEmotePlaySlot3", "Emote wheel: slot 3"], ["evtRadialEmotePlaySlot4", "Emote wheel: slot 4"], ["evtRadialEmotePlaySlot5", "Emote wheel: slot 5"],
-    ["evtRadialEmotePlaySlot6", "Emote wheel: slot 6"], ["evtRadialEmotePlaySlot7", "Emote wheel: slot 7"], ["evtRadialEmotePlaySlot8", "Emote wheel: slot 8"],
+    ["evtReciprocityMyBadTrigger", "My bad"], ["evtRadialEmoteOpen", "Open emote wheel"], ["evtRadialEmoteInstantOpen", "Quick open emote wheel"],
+    ["evtRadialEmotePlaySlot0", "Emote center"], ["evtRadialEmotePlaySlot1", "Emote wheel slot 1"], ["evtRadialEmotePlaySlot2", "Emote wheel slot 2"],
+    ["evtRadialEmotePlaySlot3", "Emote wheel slot 3"], ["evtRadialEmotePlaySlot4", "Emote wheel slot 4"], ["evtRadialEmotePlaySlot5", "Emote wheel slot 5"],
+    ["evtRadialEmotePlaySlot6", "Emote wheel slot 6"], ["evtRadialEmotePlaySlot7", "Emote wheel slot 7"], ["evtRadialEmotePlaySlot8", "Emote wheel slot 8"],
   ]],
-  ["Communication and shop", [
-    ["evtOpenShop", "Open shop"], ["evtShopFocusSearch", "Shop: search"], ["evtShopSwitchTabs", "Shop: switch tabs"],
-    ["evtChatHistory", "Chat history"], ["evtPushToTalk", "Push to talk"], ["evtPushToTalkTeam", "Push to talk (team)"],
-    ["evtShowVoicePanel", "Voice panel"],
+  ["Communication", [
+    ["evtOpenShop", "Open shop"], ["evtShopFocusSearch", "Focus shop search bar"], ["evtShopSwitchTabs", "Switch shop tabs"],
+    ["evtChatHistory", "Chat history"], ["evtPushToTalk", "Push to talk (party)"], ["evtPushToTalkTeam", "Push to talk (team)"],
+    ["evtShowVoicePanel", "Show/hide voice chat panel"],
   ]],
   ["Display", [
-    ["evtShowScoreBoard", "Scoreboard (toggle)"], ["evtHoldShowScoreBoard", "Scoreboard (hold)"], ["evtTogglePlayerStats", "Player stats"],
-    ["evtToggleFPSAndLatency", "FPS and latency"], ["evtShowHealthBars", "Health bars"], ["evtToggleMinionHealthBars", "Minion health bars"],
-    ["evtShowSummonerNames", "Summoner names"], ["evtDrawHud", "Show or hide HUD"], ["evtToggleDeathRecapShowcase", "Death recap"],
-    ["evtShowCharacterMenu", "Character menu"], ["evtSysMenu", "Game menu"],
+    ["evtShowScoreBoard", "Show scoreboard"], ["evtHoldShowScoreBoard", "Show scoreboard (hold)"], ["evtTogglePlayerStats", "Toggle basic player stats"],
+    ["evtToggleFPSAndLatency", "Toggle FPS display"], ["evtShowHealthBars", "Show health bars (hotkey)"], ["evtToggleMinionHealthBars", "Toggle minion health bars"],
+    ["evtShowSummonerNames", "Show summoner names (hotkey)"], ["evtDrawHud", "Show/hide HUD"], ["evtToggleDeathRecapShowcase", "Toggle death recap showcase"],
+    ["evtShowCharacterMenu", "Show character menu"], ["evtSysMenu", "System menu"],
   ]],
 ];
 
@@ -561,9 +567,9 @@ export async function openGameSettings(): Promise<void> {
     const changed = edits.has(key(control.file, control.section, control.name)) ? " is-changed" : "";
     const attrs = `data-file="${esc(control.file)}" data-section="${esc(control.section)}" data-name="${esc(control.name)}"`;
     if (control.kind === "choice") {
-      return `<div class="gs-row gs-choice${changed}"><span>${esc(control.label)}</span>
-        <div class="segmented" role="group" aria-label="${esc(control.label)}">${control.options
-          .map(([option, label]) => `<button type="button" data-gs-choice="${esc(option)}" ${attrs} aria-pressed="${current.trim() === option}">${esc(label)}</button>`)
+      return `<div class="gs-row gs-choice${changed}"><span>${esc(gl(control.label))}</span>
+        <div class="segmented" role="group" aria-label="${esc(gl(control.label))}">${control.options
+          .map(([option, label]) => `<button type="button" data-gs-choice="${esc(option)}" ${attrs} aria-pressed="${current.trim() === option}">${esc(gl(label))}</button>`)
           .join("")}</div></div>`;
     }
     if (control.kind === "resolution") {
@@ -572,23 +578,23 @@ export async function openGameSettings(): Promise<void> {
       const sizes = [...(view?.resolutions ?? [])];
       if (width && height && !sizes.some(([w, h]) => w === width && h === height)) sizes.unshift([width, height]);
       const resized = edits.has(key(control.file, control.section, "Width")) || edits.has(key(control.file, control.section, "Height")) ? " is-changed" : "";
-      return `<label class="gs-row gs-choice${resized}"><span>${esc(control.label)}</span>
+      return `<label class="gs-row gs-choice${resized}"><span>${esc(gl(control.label))}</span>
         <div class="select-wrap"><select data-gs-resolution data-file="${esc(control.file)}" data-section="${esc(control.section)}">${sizes
           .map(([w, h]) => `<option value="${w}x${h}"${w === width && h === height ? " selected" : ""}>${w} × ${h}</option>`)
           .join("")}</select></div></label>`;
     }
     if (control.kind === "toggle") {
-      return `<label class="toggle-row gs-row${changed}"><span class="toggle-text"><strong>${esc(control.label)}</strong></span>
+      return `<label class="toggle-row gs-row${changed}"><span class="toggle-text"><strong>${esc(gl(control.label))}</strong></span>
         <input type="checkbox" data-gs-toggle ${attrs}${control.invert ? " data-invert" : ""} ${(current.trim() === "1") !== Boolean(control.invert) ? "checked" : ""}/><span class="switch"></span></label>`;
     }
     const number = Number(current) || 0;
     const shown = control.percent ? `${Math.round(((number - control.min) / (control.max - control.min)) * 100)}` : String(Math.round(number));
-    return `<label class="gs-row gs-slider${changed}"><span>${esc(control.label)}</span>
+    return `<label class="gs-row gs-slider${changed}"><span>${esc(gl(control.label))}</span>
       <input type="range" data-gs-slider ${attrs}${control.percent ? " data-percent" : ""} min="${control.min}" max="${control.max}" step="${control.step}" value="${number}" style="--fill:${((number - control.min) / (control.max - control.min)) * 100}%"/>
       <output>${esc(shown)}</output></label>`;
   };
 
-  const panel = (title: string, body: string) => (body.trim() ? `<section class="settings-section gs-panel"><h3>${esc(title)}</h3>${body}</section>` : "");
+  const panel = (title: string, body: string) => (body.trim() ? `<section class="settings-section gs-panel"><h3>${esc(gl(title))}</h3>${body}</section>` : "");
 
   const soundRow = (channel: string, label: string): string => {
     const volume = value(G, "Volume", `${channel}Volume`);
@@ -597,8 +603,8 @@ export async function openGameSettings(): Promise<void> {
     const changed = edits.has(key(G, "Volume", `${channel}Volume`)) || edits.has(key(G, "Volume", `${channel}Mute`)) ? " is-changed" : "";
     const number = Number(volume) || 0;
     return `<div class="gs-row gs-slider gs-volume${changed}${muted ? " is-muted" : ""}">
-      <span>${esc(label)}</span>
-      <input type="range" data-gs-slider data-file="${G}" data-section="Volume" data-name="${channel}Volume" min="0" max="1" step="0.01" value="${number}" style="--fill:${number * 100}%" aria-label="${esc(label)}"/>
+      <span>${esc(gl(label))}</span>
+      <input type="range" data-gs-slider data-file="${G}" data-section="Volume" data-name="${channel}Volume" min="0" max="1" step="0.01" value="${number}" style="--fill:${number * 100}%" aria-label="${esc(gl(label))}"/>
       <output>${Math.round(number * 100)}</output>
       <button class="icon-btn gs-mute" data-gs-mute="${channel}" aria-pressed="${muted}" data-tooltip="${esc(t("gs.mute"))}">${icon(muted ? "volume-x" : "volume", 15)}</button>
     </div>`;
@@ -631,13 +637,13 @@ export async function openGameSettings(): Promise<void> {
       const quick = QUICK_CAST[name];
       const quickValue = quick ? value(I, "Quickbinds", quick) : undefined;
       return `<div class="gs-row gs-key${changed}">
-        <span>${esc(label)}</span>
+        <span>${esc(gl(label))}</span>
         <div class="gs-slots">${slots.slice(0, 2).map((slot, index) => {
           const active = capturing?.name === name && capturing.slot === index;
           const id = slot.join("+").toLowerCase();
           const others = slot.length ? (owners.get(id) ?? []).filter((owner) => owner !== label) : [];
           return `<button class="gs-slot${active ? " is-capturing" : ""}${slot.length ? "" : " is-empty"}${others.length ? " is-conflict" : ""}" data-gs-bind="${esc(name)}" data-slot="${index}"
-            ${others.length ? `data-tooltip="${esc(t("gs.conflict", { names: others.join(", ") }))}"` : ""}>
+            ${others.length ? `data-tooltip="${esc(t("gs.conflict", { names: others.map(gl).join(", ") }))}"` : ""}>
             ${active ? esc(t("gs.pressKey")) : slot.length ? esc(slot.map(keyLabel).join(" + ")) : esc(t("gs.unbound"))}
           </button>`;
         }).join("")}</div>
@@ -661,7 +667,7 @@ export async function openGameSettings(): Promise<void> {
     const owners = bindingCounts();
     const entries: { place: string; words: string[]; html: () => string }[] = [];
     const add = (place: string, label: string, name: string, extra: string, html: () => string) =>
-      entries.push({ place, words: words(`${label} ${name} ${TAGS[name] ?? ""} ${extra}`), html });
+      entries.push({ place, words: words(`${label} ${gl(label)} ${name} ${TAGS[name] ?? ""} ${extra}`), html });
     const hotkeys = t("gs.cat.hotkeys");
     for (const [group, rows] of HOTKEYS) {
       for (const [name, label] of rows) {
@@ -670,7 +676,7 @@ export async function openGameSettings(): Promise<void> {
         // The current key counts too: searching "space" finds what Space does.
         const keys = parseBinding(binding).flat().join(" ");
         const quick = QUICK_CAST[name] ? "quick cast smart cast self cast" : "";
-        add(`${hotkeys} · ${group}`, label, name, `${group} hotkey keybind key bind shortcut ${keys} ${quick}`, () => hotkeyRow(name, label, owners));
+        add(`${hotkeys} · ${gl(group)}`, label, name, `${group} ${gl(group)} hotkey keybind key bind shortcut ${keys} ${quick}`, () => hotkeyRow(name, label, owners));
       }
     }
     const sound = t("gs.cat.sound");
@@ -682,7 +688,7 @@ export async function openGameSettings(): Promise<void> {
       for (const [title, controls] of PANELS[cat]) {
         for (const control of controls) {
           if (value(control.file, control.section, control.name) === undefined) continue;
-          add(`${t(labelKey)} · ${title}`, control.label, control.name, `${title} ${control.section}`, () => controlHtml(control));
+          add(`${t(labelKey)} · ${gl(title)}`, control.label, control.name, `${title} ${gl(title)} ${control.section}`, () => controlHtml(control));
         }
       }
     }
