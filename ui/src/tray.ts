@@ -3,7 +3,9 @@
 // created on that click and destroyed when it loses focus, so its frame loop
 // and the wave meter only run while it is on screen.
 
-import "./league.css";
+// Its own copy of the design tokens: importing league.css here made Vite move it
+// into a chunk shared with the main window, loaded after polish.css (old look came back).
+import "./tray-base.css";
 import "./tray.css";
 import { api, events, musicCover, type MusicNow } from "./api";
 import { icon } from "./icons";
