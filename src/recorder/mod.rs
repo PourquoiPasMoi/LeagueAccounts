@@ -9,6 +9,7 @@ pub mod capture;
 pub mod clip;
 pub mod encoder;
 pub mod gameinfo;
+pub mod hotkey;
 pub mod library;
 pub mod metrics;
 pub mod moments;

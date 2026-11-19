@@ -15,9 +15,11 @@ import { skinsValue } from "./prices";
 import { openGameSettings } from "./gamesettings";
 import "./recordings.css";
 import "./gameinfo.css";
+import "./music.css";
 // Final layer of the design: must stay the last stylesheet.
 import "./polish.css";
 import { openRecordings } from "./recordings";
+import { initMusic, musicOn, openMusic, setMusicEnabled } from "./music";
 import type { DecayInfo, DiscordWebhook, ModeRule, RecorderPrefs, RecorderStatus } from "./api";
 import { experimentalOn, initBuilds, openCurrentBuild, resumeChampSelect, setExperimental, trackGames } from "./builds";
 import type { SessionStatus, SkinOwner } from "./api";
@@ -1023,6 +1025,7 @@ async function openSettings(): Promise<void> {
           <button type="button" role="tab" data-settings-tab="recorder" aria-selected="${settingsTab === "recorder"}">${esc(t("settings.recorder"))}</button>
           <button type="button" role="tab" data-settings-tab="recmodes" aria-selected="${settingsTab === "recmodes"}">${esc(t("settings.recModes"))}</button>
           <button type="button" role="tab" data-settings-tab="discord" aria-selected="${settingsTab === "discord"}">${esc(t("settings.discord"))}</button>
+          <button type="button" role="tab" data-settings-tab="music" aria-selected="${settingsTab === "music"}">${esc(t("settings.music"))}</button>
           <button type="button" role="tab" data-settings-tab="experimental" aria-selected="${settingsTab === "experimental"}">${esc(t("settings.experimental"))}</button>
         </nav>
         <div class="settings-pages">
@@ -1083,6 +1086,17 @@ async function openSettings(): Promise<void> {
             ${toggle("recChampSelect", recorder.champSelect, t("settings.recChampSelect"), t("settings.recChampSelectHint"))}
             ${toggle("recPostGame", recorder.postGame, t("settings.recPostGame"), t("settings.recPostGameHint"))}
             ${toggle("recAutoHighlights", recorder.autoHighlights, t("settings.recAutoHighlights"), t("settings.recAutoHighlightsHint"))}
+            <div class="rec-folder rec-bookmark">
+              <span class="toggle-text"><strong>${esc(t("settings.recBookmarkKey"))}</strong><span>${esc(t("settings.recBookmarkKeyHint"))}</span></span>
+              <button type="button" class="btn btn-ghost rec-key" data-rec-key>${esc(recorder.bookmarkKey || t("settings.recBookmarkOff"))}</button>
+              <button type="button" class="btn btn-ghost" data-rec-key-clear ${recorder.bookmarkKey ? "" : "hidden"}>${esc(t("settings.recBookmarkClear"))}</button>
+              <input type="hidden" name="recBookmarkKey" value="${esc(recorder.bookmarkKey)}"/>
+            </div>
+            <div class="rec-custom rec-bookmark-times">
+              <label class="field inline"><span>${esc(t("settings.recBookmarkBefore"))}</span><span class="interval-input"><input name="recBookmarkBefore" type="number" min="1" max="600" step="5" value="${recorder.bookmarkBefore}"/><span>s</span></span></label>
+              <label class="field inline"><span>${esc(t("settings.recBookmarkAfter"))}</span><span class="interval-input"><input name="recBookmarkAfter" type="number" min="0" max="300" step="5" value="${recorder.bookmarkAfter}"/><span>s</span></span></label>
+            </div>
+            ${toggle("recBookmarkSound", recorder.bookmarkSound, t("settings.recBookmarkSound"), t("settings.recBookmarkSoundHint"))}
             <div class="rec-folder">
               <span class="toggle-text"><strong>${esc(t("settings.recFolder"))}</strong><span data-rec-folder>${esc(recorder.root)}</span></span>
               <button type="button" class="btn btn-ghost" data-rec-browse>${icon("folder-open", 14)}${esc(t("settings.recBrowse"))}</button>
@@ -1109,6 +1123,7 @@ async function openSettings(): Promise<void> {
               <span class="rec-mic-result" data-rec-mic-result></span>
             </div>
             ${toggle("recDiscord", recorder.discord, t("settings.recDiscord"), t("settings.recDiscordHint"))}
+            ${musicOn() ? toggle("recMusic", recorder.music, t("settings.recMusic"), t("settings.recMusicHint")) : ""}
             <div class="rec-option">
               <span class="toggle-text"><strong>${esc(t("settings.recCodec"))}</strong><span>${esc(t("settings.recCodecHint"))}</span></span>
               ${segmented("codec", av1 ? recorder.codec : "h264", [["h264", t("settings.recH264")], ["av1", t("settings.recAv1")]], av1 ? [] : ["av1"])}
@@ -1144,6 +1159,15 @@ async function openSettings(): Promise<void> {
             <label class="field"><span>${esc(t("settings.discordName"))}</span><input name="discordName" maxlength="60" autocomplete="off" spellcheck="false"/></label>
             <label class="field"><span>${esc(t("settings.discordUrl"))}</span><input name="discordUrl" autocomplete="off" spellcheck="false" placeholder="https://discord.com/api/webhooks/…"/></label>
             <button type="button" class="btn btn-ghost" data-discord-add>${icon("plus", 13)}<span>${esc(t("settings.discordAdd"))}</span></button>
+          </div>
+        </section>
+        <section class="settings-page" data-settings-page="music" ${settingsTab === "music" ? "" : "hidden"}>
+          <h3 class="settings-page-title">${esc(t("settings.music"))}</h3>
+        ${toggle("musicEnabled", musicOn(), t("settings.musicEnabled"), t("settings.musicHint"))}
+        <p class="settings-note">${esc(t("settings.musicNote"))}</p>
+          <div class="music-cache-row" data-settings-ignore>
+            <span data-music-cache>${esc(t("settings.musicCovers", { size: "…" }))}</span>
+            <button type="button" class="btn btn-ghost" data-music-clear>${esc(t("settings.musicClear"))}</button>
           </div>
         </section>
         <section class="settings-page" data-settings-page="experimental" ${settingsTab === "experimental" ? "" : "hidden"}>
@@ -1212,6 +1236,13 @@ async function openSettings(): Promise<void> {
       };
       for (const name of ["input", "change", "click"]) root.addEventListener(name, () => requestAnimationFrame(refresh));
       refresh();
+      // Music: saved cover pictures (cleared at once, not by Save).
+      const musicCache = root.querySelector<HTMLElement>("[data-music-cache]");
+      const showCache = (info: { bytes: number }) => {
+        if (musicCache) musicCache.textContent = t("settings.musicCovers", { size: `${(info.bytes / 1048576).toFixed(1)} MB` });
+      };
+      void api.musicCache().then(showCache).catch(() => undefined);
+      root.querySelector("[data-music-clear]")?.addEventListener("click", () => void api.musicClearCache().then(showCache).catch(() => undefined));
       // Discord webhooks: saved at once (not by the Save button).
       const hookList = $("[data-discord-list]", root);
       const showHooks = (hooks: DiscordWebhook[]) => {
@@ -1261,6 +1292,41 @@ async function openSettings(): Promise<void> {
         }
       };
       window.addEventListener("keydown", renameKeys, true);
+      // Bookmark key: click the keycap, then press the key (Esc cancels).
+      const keyButton = root.querySelector<HTMLButtonElement>("[data-rec-key]");
+      const keyInput = root.querySelector<HTMLInputElement>('[name="recBookmarkKey"]');
+      const keyClear = root.querySelector<HTMLButtonElement>("[data-rec-key-clear]");
+      let capturingKey = false;
+      const showKey = () => {
+        if (!keyButton || !keyInput) return;
+        keyButton.textContent = capturingKey ? t("gs.pressKey") : keyInput.value || t("settings.recBookmarkOff");
+        keyButton.classList.toggle("is-capturing", capturingKey);
+        if (keyClear) keyClear.hidden = !keyInput.value;
+      };
+      const setKey = (value: string) => {
+        if (keyInput) keyInput.value = value;
+        capturingKey = false;
+        showKey();
+        root.dispatchEvent(new Event("input", { bubbles: true }));
+      };
+      const captureKey = (event: KeyboardEvent) => {
+        if (!root.isConnected) return window.removeEventListener("keydown", captureKey, true);
+        if (!capturingKey) return;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        if (event.key === "Escape") {
+          capturingKey = false;
+          return showKey();
+        }
+        const name = bookmarkKeyName(event);
+        if (name) setKey(name);
+      };
+      window.addEventListener("keydown", captureKey, true);
+      keyButton?.addEventListener("click", () => {
+        capturingKey = !capturingKey;
+        showKey();
+      });
+      keyClear?.addEventListener("click", () => setKey(""));
       root.addEventListener("click", (event) => {
         const target = event.target as HTMLElement;
         const hookRow = target.closest<HTMLElement>("[data-discord-hook]");
@@ -1384,6 +1450,8 @@ async function openSettings(): Promise<void> {
       if (!saved.ok) return false;
       const companion = await guard(() => setExperimental(checked("companion")), "toast.settingsFailed");
       if (!companion.ok) return false;
+      const music = await guard(() => setMusicEnabled(checked("musicEnabled")), "toast.settingsFailed");
+      if (!music.ok) return false;
       const recorderPrefs: RecorderPrefs = {
         enabled: checked("recEnabled"),
         folder: recorderFolder,
@@ -1396,11 +1464,16 @@ async function openSettings(): Promise<void> {
         gameAudio: checked("recGameAudio"),
         microphone: checked("recMic"),
         discord: checked("recDiscord"),
+        music: root.querySelector('[name="recMusic"]') ? checked("recMusic") : recorder.music,
         micDevice: $<HTMLSelectElement>('[name="recMicDevice"]', root).value,
         diskLimitGb: Math.min(100000, Math.max(0, Math.round(Number($<HTMLInputElement>('[name="recLimit"]', root).value) || 0))),
         champSelect: checked("recChampSelect"),
         postGame: checked("recPostGame"),
         autoHighlights: checked("recAutoHighlights"),
+        bookmarkKey: $<HTMLInputElement>('[name="recBookmarkKey"]', root).value,
+        bookmarkBefore: Math.min(600, Math.max(1, Math.round(Number($<HTMLInputElement>('[name="recBookmarkBefore"]', root).value) || 60))),
+        bookmarkAfter: Math.min(300, Math.max(0, Math.round(Number($<HTMLInputElement>('[name="recBookmarkAfter"]', root).value) || 0))),
+        bookmarkSound: checked("recBookmarkSound"),
         modes: $<HTMLInputElement>('[name="recModeOrder"]', root)
           .value.split(",")
           .filter(Boolean)
@@ -1837,6 +1910,7 @@ function wire(): void {
       if (action === "settings") void openSettings();
       if (action === "game-settings") void openGameSettings();
       if (action === "recordings") void openRecordings();
+      if (action === "music") void openMusic();
       if (action === "builds") openCurrentBuild();
     });
   });
@@ -2076,6 +2150,7 @@ async function wireEvents(): Promise<void> {
     void loadDecay();
   });
   await initBuilds();
+  void initMusic();
   void api.recorderStatus().then(showRecorderStatus).catch(() => undefined);
   void events.onRecorderStatus(showRecorderStatus);
   await trackGames();
@@ -2097,6 +2172,20 @@ const IN_TAURI = "__TAURI_INTERNALS__" in window;
 /** An update restart waits while the user is doing something. */
 const uiBusy = (): boolean =>
   Boolean(activeLogin || state.refreshing || document.querySelector(".overlay, .drawer-overlay, .login-overlay, .profile-overlay, .menu, .is-open"));
+
+/** A key press as the recorder's bookmark key ("Ctrl+F8"), or "" for keys it
+ *  cannot use (modifiers alone, Windows keys, Escape). Same names as hotkey.rs. */
+function bookmarkKeyName(event: KeyboardEvent): string {
+  const named: Record<string, string> = { Insert: "Insert", Delete: "Delete", Home: "Home", End: "End", PageUp: "PageUp", PageDown: "PageDown", Pause: "Pause", ScrollLock: "ScrollLock" };
+  let key = "";
+  if (/^F([1-9]|1\d|2[0-4])$/.test(event.key)) key = event.key;
+  else if (/^Numpad\d$/.test(event.code)) key = event.code;
+  else if (/^Key[A-Z]$/.test(event.code)) key = event.code.slice(3);
+  else if (/^Digit\d$/.test(event.code)) key = event.code.slice(5);
+  else if (named[event.key]) key = named[event.key];
+  if (!key) return "";
+  return [event.ctrlKey ? "Ctrl" : "", event.altKey ? "Alt" : "", event.shiftKey ? "Shift" : "", key].filter(Boolean).join("+");
+}
 
 async function start(): Promise<void> {
   loadPrefs();

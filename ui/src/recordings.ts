@@ -16,13 +16,14 @@ const OBJECTIVES = new Set(["dragon", "baron", "herald", "grubs", "tower", "inhi
 
 type ClipMode = "fast" | "exact" | "discord";
 /** Moment filters of the viewer (side list and timeline). */
-type Filter = "all" | "kills" | "deaths" | "assists" | "objectives";
+type Filter = "all" | "kills" | "deaths" | "assists" | "objectives" | "bookmarks";
 const FILTERS: [Filter, MessageKey][] = [
   ["all", "rec.filterAll"],
   ["kills", "rec.filterKills"],
   ["deaths", "rec.filterDeaths"],
   ["assists", "rec.filterAssists"],
   ["objectives", "rec.filterObjectives"],
+  ["bookmarks", "rec.filterBookmarks"],
 ];
 const KILLS = new Set(["kill", "multikill", "firstBlood"]);
 function matches(moment: Moment, filter: Filter): boolean {
@@ -30,7 +31,17 @@ function matches(moment: Moment, filter: Filter): boolean {
   if (filter === "deaths") return moment.kind === "death";
   if (filter === "assists") return moment.kind === "assist";
   if (filter === "objectives") return OBJECTIVES.has(moment.kind);
+  if (filter === "bookmarks") return moment.kind === "bookmark";
   return true;
+}
+/** Seconds before and after a bookmark that its clip keeps (saved with it as "60+10"). */
+function bookmarkSpan(moment: Moment): [number, number] {
+  const [before, after] = moment.detail.split("+").map(Number);
+  return [Number.isFinite(before) && before > 0 ? before : 60, Number.isFinite(after) && after >= 0 ? after : 10];
+}
+/** The bookmarks made with the hotkey during the game. */
+function bookmarksOf(entry: Recording): Moment[] {
+  return (entry.meta?.moments ?? []).filter((moment) => moment.kind === "bookmark");
 }
 /** Kills / deaths / assists from the player's moments ("" without moments). */
 function kda(entry: Recording): string {
@@ -239,6 +250,7 @@ const MOMENT_KEYS: Record<string, MessageKey> = {
   inhibitor: "moment.inhibitor",
   ace: "moment.ace",
   gameEnd: "moment.gameEnd",
+  bookmark: "moment.bookmark",
 };
 
 /** A first blood or multikill is the same moment as the kill it comes with:
@@ -263,6 +275,7 @@ function momentLabel(moment: Moment): string {
 
 /** Colour family of a marker. */
 function momentTone(moment: Moment): string {
+  if (moment.kind === "bookmark") return "bookmark";
   if (moment.kind === "death") return "bad";
   if (moment.kind === "gameEnd") return moment.detail === "Win" ? "good" : "bad";
   if (moment.ally === false) return "bad";
@@ -275,7 +288,7 @@ function momentTooltip(moment: Moment): string {
   const parts = [momentLabel(moment), clock(moment.gameTime)];
   if (moment.ally === true) parts.push(t("rec.allyTeam"));
   if (moment.ally === false) parts.push(t("rec.enemyTeam"));
-  if (moment.detail && !["multikill", "gameEnd"].includes(moment.kind)) parts.push(moment.detail);
+  if (moment.detail && !["multikill", "gameEnd", "bookmark"].includes(moment.kind)) parts.push(moment.detail);
   return `${parts.join(" · ")}\n${t("rec.momentClipHint")}`;
 }
 
@@ -518,7 +531,7 @@ export async function openRecordings(): Promise<void> {
     const tag =
       entry.kind === "clip"
         ? `<span class="rec-clip-tag">${icon("scissors", 11)}${esc(t("rec.clip"))}</span>${meta?.highlights ? `<span class="rec-discord-tag">${esc(t("rec.highlights"))}</span>` : ""}${isDiscord(entry) ? `<span class="rec-discord-tag">${esc(t("rec.discord"))}</span>` : ""}${meta?.queue ? `<span class="rec-mode-tag">${esc(meta.queue)}</span>` : ""}${postedTag(entry)}`
-        : `<span class="rec-mode-tag">${esc(modeOf(entry))}</span>`;
+        : `<span class="rec-mode-tag">${esc(modeOf(entry))}</span>${bookmarksOf(entry).length ? `<span class="rec-discord-tag">${esc(t("rec.bookmarkCount", { count: bookmarksOf(entry).length }))}</span>` : ""}`;
     const outcome = meta?.result === "Win" ? " is-win" : meta?.result === "Loss" ? " is-loss" : "";
     return `
       <div class="rec-row is-${entry.kind}${outcome}${selected?.path === entry.path ? " is-selected" : ""}${picked.has(entry.path) ? " is-picked" : ""}" role="button" tabindex="0" data-rec-path="${esc(entry.path)}"${selecting ? ` aria-pressed="${picked.has(entry.path)}"` : ""}>
@@ -606,7 +619,7 @@ export async function openRecordings(): Promise<void> {
     });
     const rows = moments
       .map((moment, index) => {
-        const detail = moment.detail && !["multikill", "gameEnd"].includes(moment.kind) ? moment.detail : moment.ally === true ? t("rec.allyTeam") : moment.ally === false ? t("rec.enemyTeam") : "";
+        const detail = moment.detail && !["multikill", "gameEnd", "bookmark"].includes(moment.kind) ? moment.detail : moment.ally === true ? t("rec.allyTeam") : moment.ally === false ? t("rec.enemyTeam") : "";
         return `<button class="rec-side-row tone-${momentTone(moment)}" data-rec-moment="${index}" data-tooltip="${esc(t("rec.momentClipHint"))}">
           ${momentIcon(moment.kind, 15)}<b>${clock(moment.time)}</b><span>${esc(momentLabel(moment))}</span>${detail ? `<em>${esc(detail)}</em>` : ""}</button>`;
       })
@@ -647,6 +660,7 @@ export async function openRecordings(): Promise<void> {
         ${meta?.posts?.length ? `<span class="rec-viewer-sub rec-viewer-posted">${esc(t("rec.postedTo", { list: postedList(entry) }))}</span>` : ""}
       </div>
       ${entry.kind === "game" ? `<button class="btn btn-ghost" data-rec="game-info" aria-pressed="${gameShown()}">${icon("chart-line", 14)}<span>${esc(t("gi.title"))}</span></button>` : ""}
+      ${entry.kind === "game" && bookmarksOf(entry).length ? `<button class="btn btn-ghost" data-rec="bookmarks" data-tooltip="${esc(t("rec.keepBookmarksHint"))}">${momentIcon("bookmark", 14)}<span>${esc(t("rec.keepBookmarks", { count: bookmarksOf(entry).length }))}</span></button>` : ""}
       ${entry.kind === "game" && highlightCount(entry) ? `<button class="btn btn-ghost" data-rec="highlights" data-tooltip="${esc(t("rec.highlightsHint"))}">${icon("film", 14)}<span>${esc(t("rec.highlights"))}</span></button>` : ""}
       ${entry.kind === "clip" ? `<button class="btn btn-ghost" data-rec="discord-post">${icon("upload", 14)}<span>${esc(t("rec.discordPost"))}</span></button>` : ""}
       ${entry.kind === "clip" && !isDiscord(entry) ? `<button class="btn btn-ghost" data-rec="discord-version" data-tooltip="${esc(t("rec.discordVersionHint"))}">${icon("upload", 14)}<span>${esc(t("rec.discordVersion"))}</span></button>` : ""}
@@ -1522,6 +1536,94 @@ export async function openRecordings(): Promise<void> {
     await reload();
   };
 
+  /** Keep only the bookmarks of a game: clips of them (quality and sounds
+   *  chosen here), then, when asked, the full game is deleted. */
+  let keeping = false;
+  const keepBookmarks = async (entry: Recording) => {
+    if (keeping) return;
+    const marks = bookmarksOf(entry);
+    if (!marks.length) return;
+    const meta = entry.meta;
+    const sources = (meta?.audioTracks ?? []).filter((track) => track !== "mix");
+    const choices = sources.length ? sources : meta?.audio ? ["all"] : [];
+    const soundLabel = (sound: string) => (sound === "all" ? t("rec.sound") : `${t(`rec.audio.${sound}` as MessageKey)} ${level(sound)}%`);
+    const [before, after] = bookmarkSpan(marks[0]);
+    let settings = { before, after, joined: false, quality: "fast" as ClipMode, sounds: undefined as string[] | undefined, remove: true };
+    const answer = await modal({
+      title: t("rec.keepBookmarksTitle", { count: marks.length }),
+      body: `<p class="hint">${esc(t("rec.keepBookmarksIntro"))}</p>
+        <div class="rec-keep-times">
+          <label class="field inline"><span>${esc(t("settings.recBookmarkBefore"))}</span><span class="interval-input"><input name="keepBefore" type="number" min="1" max="600" step="5" value="${before}"/><span>s</span></span></label>
+          <label class="field inline"><span>${esc(t("settings.recBookmarkAfter"))}</span><span class="interval-input"><input name="keepAfter" type="number" min="0" max="300" step="5" value="${after}"/><span>s</span></span></label>
+        </div>
+        <label class="field"><span>${esc(t("rec.keepOutput"))}</span><div class="select-wrap"><select name="keepJoined">
+          <option value="each">${esc(t("rec.keepEach"))}</option><option value="one">${esc(t("rec.keepOne"))}</option></select></div></label>
+        <label class="field"><span>${esc(t("rec.keepQuality"))}</span><div class="select-wrap"><select name="keepQuality">
+          <option value="fast">${esc(t("rec.keepFast"))}</option><option value="exact">${esc(t("rec.keepExact"))}</option><option value="discord">${esc(t("rec.keepDiscord"))}</option></select></div></label>
+        ${choices.length ? `<div class="rec-sounds"><span>${esc(t("rec.sound"))}${sources.length ? ` <em>${esc(t("rec.clipLevels"))}</em>` : ""}</span>${choices
+          .map((sound) => `<label class="rec-sound"><input type="checkbox" name="keepSound" value="${esc(sound)}"${sound === "all" || level(sound) > 0 ? " checked" : ""}/><span>${esc(soundLabel(sound))}</span></label>`)
+          .join("")}</div>` : ""}
+        <label class="toggle-row"><span class="toggle-text"><strong>${esc(t("rec.keepDelete"))}</strong><span>${esc(t("rec.keepDeleteHint"))}</span></span>
+          <input type="checkbox" name="keepDelete" checked/><span class="switch"></span></label>`,
+      actions: [{ label: t("common.cancel"), value: "cancel" }, { label: t("rec.keepSave"), value: "save", kind: "primary" }],
+      onSubmit: (_value, root) => {
+        const number = (name: string, fallback: number, low: number, high: number) => Math.min(high, Math.max(low, Math.round(Number($<HTMLInputElement>(`[name="${name}"]`, root).value) || fallback)));
+        const checked = [...root.querySelectorAll<HTMLInputElement>('[name="keepSound"]:checked')].map((input) => input.value);
+        settings = {
+          before: number("keepBefore", before, 1, 600),
+          after: number("keepAfter", after, 0, 300),
+          joined: $<HTMLSelectElement>('[name="keepJoined"]', root).value === "one",
+          quality: $<HTMLSelectElement>('[name="keepQuality"]', root).value as ClipMode,
+          sounds: checked.length === choices.length ? undefined : checked.filter((sound) => sound !== "all"),
+          remove: $<HTMLInputElement>('[name="keepDelete"]', root).checked,
+        };
+        return true;
+      },
+    });
+    if (answer !== "save") return;
+    const total = meta?.duration ?? Infinity;
+    // Ranges around each press; overlapping ones become one clip.
+    const ranges: [number, number][] = [];
+    for (const mark of [...marks].sort((a, b) => a.time - b.time)) {
+      const start = Math.max(0, mark.time - settings.before);
+      const end = Math.min(total, mark.time + settings.after);
+      const last = ranges[ranges.length - 1];
+      if (last && start <= last[1]) last[1] = Math.max(last[1], end);
+      else if (end > start + 0.5) ranges.push([start, end]);
+    }
+    if (!ranges.length) return;
+    const gains = sources.length ? Object.fromEntries(sources.map((sound) => [sound, level(sound) / 100])) : undefined;
+    const base = title(entry).replace(/ · /g, " ");
+    const jobs: { parts: [number, number][]; name: string }[] = settings.joined
+      ? [{ parts: ranges, name: t("rec.bookmarksClipName", { title: base }) }]
+      : ranges.map((part, index) => ({ parts: [part], name: t("rec.bookmarkClipName", { title: base, number: index + 1 }) }));
+    keeping = true;
+    let saved = 0;
+    try {
+      for (const job of jobs) {
+        toast("info", t("rec.keepSaving", { done: saved + 1, total: jobs.length }));
+        await api.saveClip(entry.path, job.parts, settings.quality, job.name, settings.sounds, gains);
+        saved++;
+      }
+    } catch (error) {
+      toast("error", t("rec.clipFailed"), describe(error), 6000);
+    }
+    keeping = false;
+    // The full game goes only when every clip was saved.
+    if (saved === jobs.length && settings.remove) {
+      if (selected?.path === entry.path) closeViewer();
+      try {
+        await api.deleteRecording(entry.path);
+        toast("success", t("rec.keepDone", { count: saved }));
+      } catch (error) {
+        toast("error", t("rec.deleteFailed"), describe(error));
+      }
+    } else if (saved === jobs.length) {
+      toast("success", t("rec.keepSaved", { count: saved }));
+    }
+    await reload();
+  };
+
   // Timeline hover: a small picture of that moment, from a second hidden video.
   let previewVideo: HTMLVideoElement | null = null;
   let previewBusy = false;
@@ -1764,6 +1866,7 @@ export async function openRecordings(): Promise<void> {
     }
     if (action === "discord-version" && selected) return void makeDiscordVersion(selected);
     if (action === "highlights" && selected) return void makeHighlights(selected);
+    if (action === "bookmarks" && selected) return void keepBookmarks(selected);
     if (action === "reveal" && selected) return void api.openRecordingsFolder(selected.path).catch((error) => toast("error", t("toast.openFailed"), describe(error)));
     if (action === "delete" && row) return void remove(row.dataset.recPath!);
     if (action === "select" || action === "select-done") {
@@ -1887,8 +1990,9 @@ export async function openRecordings(): Promise<void> {
     }
     const moment = target.closest<HTMLElement>("[data-rec-moment]")?.dataset.recMoment;
     if (moment !== undefined) {
-      const time = currentMoments()[Number(moment)]?.time ?? 0;
-      seek(time - LEAD);
+      const picked = currentMoments()[Number(moment)];
+      const time = picked?.time ?? 0;
+      seek(picked?.kind === "bookmark" ? time - bookmarkSpan(picked)[0] : time - LEAD);
       if (video?.paused) void video.play().catch(() => undefined);
       return;
     }
@@ -1926,7 +2030,8 @@ export async function openRecordings(): Promise<void> {
     const moment = currentMoments()[Number(index)];
     if (!moment) return;
     const total = duration();
-    range = { start: Math.max(0, moment.time - LEAD), end: Math.min(total || moment.time + TAIL, moment.time + TAIL) };
+    const [lead, tail] = moment.kind === "bookmark" ? bookmarkSpan(moment) : [LEAD, TAIL];
+    range = { start: Math.max(0, moment.time - lead), end: Math.min(total || moment.time + tail, moment.time + tail) };
     if (zoom > 1 && !(inView(range.start) && inView(range.end))) viewStart = range.start - viewLength() * 0.2;
     seek(range.start);
     if (!video.paused) video.pause();

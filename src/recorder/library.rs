@@ -233,7 +233,7 @@ pub fn is_fragmented(path: &Path) -> bool {
 /// its own audio-only MP4 (made when the recording is first played).
 pub const TRACKS: &str = ".tracks";
 /// Sound sources that can have their own track.
-pub const SOURCES: [&str; 4] = ["game", "pc", "mic", "discord"];
+pub const SOURCES: [&str; 5] = ["game", "pc", "mic", "discord", "music"];
 
 /// `<folder>/.tracks/<name>.<source>.mp4`.
 pub fn track_file(video: &Path, source: &str) -> PathBuf {

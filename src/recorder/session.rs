@@ -35,6 +35,8 @@ pub struct RecordSettings {
     pub game_audio: bool,
     /// Discord's sound only (voice chat), as its own track.
     pub discord: bool,
+    /// The app's music player, as its own track.
+    pub music: bool,
     pub microphone: bool,
     /// Windows endpoint id of the microphone; empty = the default communication device.
     pub microphone_device: String,
@@ -87,6 +89,11 @@ pub struct Recording {
     in_game: Arc<AtomicBool>,
     /// Back on the League client after the game.
     after: Arc<AtomicBool>,
+    /// When the first frame was written (video second 0).
+    video_start: Arc<OnceLock<Instant>>,
+    /// Bookmarks the player made with the hotkey: (video seconds, seconds
+    /// before, seconds after) kept by a clip of it.
+    bookmarks: Arc<Mutex<Vec<(f64, u32, u32)>>>,
     thread: Option<JoinHandle<Outcome>>,
     /// The file being written.
     pub path: PathBuf,
@@ -122,6 +129,23 @@ impl Recording {
         self.window.load(Ordering::Relaxed)
     }
 
+    /// Mark this moment of the video (the bookmark hotkey). The video seconds,
+    /// or None before the first frame.
+    pub fn bookmark(&self, before: u32, after: u32) -> Option<f64> {
+        let time = self.video_start.get()?.elapsed().as_secs_f64();
+        let mut bookmarks = self.bookmarks.lock().ok()?;
+        // A double press (key held, bounce) is one bookmark.
+        if bookmarks.last().is_some_and(|(last, _, _)| time - last < 1.0) {
+            return None;
+        }
+        bookmarks.push((time, before, after));
+        Some(time)
+    }
+
+    pub fn bookmark_count(&self) -> usize {
+        self.bookmarks.lock().map_or(0, |bookmarks| bookmarks.len())
+    }
+
     pub fn is_finished(&self) -> bool {
         self.thread.as_ref().is_none_or(JoinHandle::is_finished)
     }
@@ -153,9 +177,19 @@ pub fn start(request: RecordRequest, window: HWND) -> std::io::Result<Recording>
     let in_game = Arc::new(AtomicBool::new(!request.pregame));
     let window = Arc::new(AtomicIsize::new(window.0 as isize));
     let after = Arc::new(AtomicBool::new(false));
+    let video_start: Arc<OnceLock<Instant>> = Arc::new(OnceLock::new());
+    let bookmarks = Arc::new(Mutex::new(Vec::new()));
     let started_at = now_ms();
     let thread = {
-        let shared = Shared { stop: Arc::clone(&stop), discard: Arc::clone(&discard), window: Arc::clone(&window), in_game: Arc::clone(&in_game), after: Arc::clone(&after) };
+        let shared = Shared {
+            stop: Arc::clone(&stop),
+            discard: Arc::clone(&discard),
+            window: Arc::clone(&window),
+            in_game: Arc::clone(&in_game),
+            after: Arc::clone(&after),
+            video_start: Arc::clone(&video_start),
+            bookmarks: Arc::clone(&bookmarks),
+        };
         let path = path.clone();
         let request = request.clone();
         thread::Builder::new()
@@ -166,7 +200,7 @@ pub fn start(request: RecordRequest, window: HWND) -> std::io::Result<Recording>
                 outcome
             })?
     };
-    Ok(Recording { stop, discard, window, in_game, after, thread: Some(thread), path, account: request.account, started_at })
+    Ok(Recording { stop, discard, window, in_game, after, video_start, bookmarks, thread: Some(thread), path, account: request.account, started_at })
 }
 
 struct Shared {
@@ -175,6 +209,8 @@ struct Shared {
     window: Arc<AtomicIsize>,
     in_game: Arc<AtomicBool>,
     after: Arc<AtomicBool>,
+    video_start: Arc<OnceLock<Instant>>,
+    bookmarks: Arc<Mutex<Vec<(f64, u32, u32)>>>,
 }
 
 /// Where the recording is: on the client window, moving to the game, or in the game.
@@ -249,6 +285,12 @@ fn record_inner(request: &RecordRequest, shared: &Shared, path: &Path, stamp: &s
             audio_source.push("discord");
         }
     }
+    if settings.music {
+        if let Ok(source) = audio::music_sound() {
+            sources.push(source);
+            audio_source.push("music");
+        }
+    }
     let mut mixer = AudioMixer::new(sources);
     let audio_tracks = mixer.tracks();
     let fps = settings.fps.clamp(10, 120);
@@ -279,7 +321,7 @@ fn record_inner(request: &RecordRequest, shared: &Shared, path: &Path, stamp: &s
     }
 
     // Key moments: their own light thread, so a slow answer never delays frames.
-    let video_start: Arc<OnceLock<Instant>> = Arc::new(OnceLock::new());
+    let video_start = Arc::clone(&shared.video_start);
     let facts = Arc::new(Mutex::new(None));
     let moments_done = Arc::new(AtomicBool::new(false));
     let moments = {
@@ -508,8 +550,23 @@ fn record_inner(request: &RecordRequest, shared: &Shared, path: &Path, stamp: &s
     }
     let _ = finished;
 
-    let facts = facts.lock().ok().and_then(|mut facts| facts.take()).unwrap_or_default();
+    let mut facts = facts.lock().ok().and_then(|mut facts| facts.take()).unwrap_or_default();
     let duration = tick as f64 / f64::from(fps);
+    // Bookmarks join the key moments; `detail` keeps the seconds before and
+    // after the press that a clip of the bookmark holds ("60+10").
+    let bookmarks = shared.bookmarks.lock().map(|bookmarks| bookmarks.clone()).unwrap_or_default();
+    for (time, before, after) in bookmarks {
+        let time = time.min(duration);
+        facts.moments.push(super::moments::Moment {
+            kind: "bookmark".into(),
+            time,
+            game_time: facts.offset.map_or(0.0, |offset| (time - offset).max(0.0)),
+            detail: format!("{before}+{after}"),
+            ally: None,
+            mine: true,
+        });
+    }
+    facts.moments.sort_by(|a, b| a.time.total_cmp(&b.time));
     let title = [stamp, facts.champion.as_str(), request.queue.as_str(), facts.result.as_str()]
         .iter()
         .filter(|part| !part.is_empty())

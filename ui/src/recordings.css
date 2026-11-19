@@ -212,6 +212,7 @@
 .tone-good { --tone: #0ac8b9; }
 .tone-bad { --tone: #e06d62; }
 .tone-assist { --tone: #a09b8c; }
+.tone-bookmark { --tone: var(--accent); }
 
 .rec-tools { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 10px; }
 .rec-tools .btn { height: 30px; padding: 0 12px; display: inline-flex; align-items: center; gap: 7px; font-size: 11px; }
@@ -740,3 +741,8 @@
 .rec-wave-mute:hover { color: var(--text); background: var(--fill-2); }
 .rec-wave-mute[aria-pressed="true"] { color: var(--loss); }
 .rec-wave-row.is-muted canvas { opacity: 0.3; }
+
+/* Bookmark key (Settings › Recorder) and the keep-bookmarks dialog. */
+.rec-key { min-width: 76px; justify-content: center; font-variant-numeric: tabular-nums; }
+.rec-key.is-capturing { color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.rec-keep-times { display: flex; flex-wrap: wrap; gap: 8px 18px; margin: 4px 0 10px; }

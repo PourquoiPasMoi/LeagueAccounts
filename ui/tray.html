@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>League Companion</title>
+  </head>
+  <body class="tray-body">
+    <div class="tp-glow" aria-hidden="true"></div>
+    <main class="tp">
+      <div class="tp-top">
+        <img class="tp-cover" alt="" />
+        <div class="tp-text"><strong></strong><span></span></div>
+        <div class="tp-corner">
+          <button type="button" class="tp-small" data-tray="open"></button>
+          <button type="button" class="tp-small" data-tray="quit"></button>
+        </div>
+      </div>
+      <canvas class="tp-wave" aria-hidden="true"></canvas>
+      <div class="tp-progress"><span data-time>0:00</span><div class="tp-bar"><i></i></div><span data-length>0:00</span></div>
+      <div class="tp-controls">
+        <button type="button" class="tp-ctl" data-tray="previous"></button>
+        <button type="button" class="tp-play" data-tray="toggle"></button>
+        <button type="button" class="tp-ctl" data-tray="next"></button>
+      </div>
+    </main>
+    <script type="module" src="/src/tray.ts"></script>
+  </body>
+</html>

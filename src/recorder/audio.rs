@@ -53,7 +53,7 @@ fn format() -> WAVEFORMATEX {
 const MAX_QUEUED: usize = (AUDIO_RATE * AUDIO_CHANNELS) as usize * 3 / 10;
 
 pub struct AudioSource {
-    /// "game", "pc", "mic" or "discord": the track name in the recording.
+    /// "game", "pc", "mic", "discord" or "music": the track name in the recording.
     pub label: &'static str,
     client: IAudioClient,
     capture: IAudioCaptureClient,
@@ -111,6 +111,14 @@ impl AudioSource {
     }
 }
 
+impl AudioSource {
+    /// Everything captured since the last call (interleaved stereo floats).
+    pub fn drain(&mut self) -> Vec<f32> {
+        self.pump();
+        self.queue.drain(..).collect()
+    }
+}
+
 impl Drop for AudioSource {
     fn drop(&mut self) {
         unsafe {
@@ -143,9 +151,8 @@ pub fn discord_sound() -> Result<AudioSource> {
     process_sound("discord", discord_process().ok_or_else(fail)?)
 }
 
-/// The main Discord process (stable, PTB or Canary): a Discord process whose
-/// parent is not one.
-fn discord_process() -> Option<u32> {
+/// Every process as (pid, parent pid, lowercase exe name). Only listed, never opened.
+fn process_list() -> Option<Vec<(u32, u32, String)>> {
     use windows::Win32::System::Diagnostics::ToolHelp::{CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W, TH32CS_SNAPPROCESS};
     let snapshot = unsafe { CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0) }.ok()?;
     let mut processes: Vec<(u32, u32, String)> = Vec::new();
@@ -159,9 +166,30 @@ fn discord_process() -> Option<u32> {
     unsafe {
         let _ = CloseHandle(snapshot);
     }
+    Some(processes)
+}
+
+/// The main Discord process (stable, PTB or Canary): a Discord process whose
+/// parent is not one.
+fn discord_process() -> Option<u32> {
+    let processes = process_list()?;
     let is_discord = |name: &str| matches!(name, "discord.exe" | "discordptb.exe" | "discordcanary.exe");
     let discord: Vec<&(u32, u32, String)> = processes.iter().filter(|(_, _, name)| is_discord(name)).collect();
     discord.iter().find(|(_, parent, _)| !discord.iter().any(|(pid, _, _)| pid == parent)).map(|(pid, _, _)| *pid)
+}
+
+/// The music player's sound, as its own track: the tree of this app's
+/// WebView2 browser process (YouTube's player plays there). Capturing our own
+/// process tree does NOT reach WebView2 (measured: silent), its browser
+/// process must be the target.
+pub fn music_sound() -> Result<AudioSource> {
+    process_sound("music", webview_process().ok_or_else(fail)?)
+}
+
+/// This app's WebView2 browser process: an msedgewebview2.exe whose parent is us.
+fn webview_process() -> Option<u32> {
+    let me = std::process::id();
+    process_list()?.into_iter().find(|(_, parent, name)| *parent == me && name == "msedgewebview2.exe").map(|(pid, _, _)| pid)
 }
 
 fn process_sound(label: &'static str, pid: u32) -> Result<AudioSource> {

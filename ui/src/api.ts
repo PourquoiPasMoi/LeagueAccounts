@@ -438,6 +438,53 @@ export const keyOf = (account: AccountView): Key => ({
 
 export const keyId = (key: Key): string => `${key.region}:${key.accountId}`;
 
+// ---------------------------------------------------------------- music player
+
+export interface MusicTrack {
+  id: string;
+  title: string;
+  artist: string;
+  /** Seconds; 0 until it played once. */
+  duration: number;
+}
+
+export interface MusicPlaylist {
+  id: string;
+  name: string;
+  /** YouTube playlist it came from ("" = made in the app). */
+  source: string;
+  tracks: MusicTrack[];
+}
+
+export interface MusicLibrary {
+  playlists: MusicPlaylist[];
+}
+
+/** The song in the player, kept by Rust for the tray player. */
+export interface MusicNow {
+  id: string;
+  title: string;
+  artist: string;
+  playing: boolean;
+  /** Seconds into the song when `at` (Unix ms, set by Rust) was taken. */
+  time: number;
+  duration: number;
+  /** 0-100, 0 when muted. */
+  volume: number;
+  at?: number;
+}
+
+export interface MusicPrefs {
+  enabled: boolean;
+}
+
+/** Cover picture of a YouTube song: "hi" = largest, "lo" = 320×180. */
+export const musicCover = (id: string, size: "hi" | "lo"): string =>
+  "__TAURI_INTERNALS__" in window
+    ? `http://lamusic.localhost/thumb/${id}/${size}`
+    : `https://i.ytimg.com/vi/${id}/${size === "hi" ? "maxresdefault" : "mqdefault"}.jpg`;
+
+
 /** Tauri rejects with the command's `Err(AppError)`; normalize to ApiError. */
 async function call<T>(command: string, args?: Record<string, unknown>): Promise<T> {
   try {
@@ -506,6 +553,26 @@ export const api = {
   liveGameState: () => call<LiveGame | null>("live_game_state"),
   /** Live numbers for everyone (local only); null before the match starts. */
   liveStats: () => call<LiveStats | null>("live_stats"),
+  musicPrefs: () => call<MusicPrefs>("music_prefs"),
+  setMusicPrefs: (prefs: MusicPrefs) => call<MusicPrefs>("set_music_prefs", { prefs }),
+  musicLibrary: () => call<MusicLibrary>("music_library"),
+  musicCreatePlaylist: (name: string) => call<MusicLibrary>("music_create_playlist", { name }),
+  musicRenamePlaylist: (id: string, name: string) => call<MusicLibrary>("music_rename_playlist", { id, name }),
+  musicDeletePlaylist: (id: string) => call<MusicLibrary>("music_delete_playlist", { id }),
+  musicImportPlaylist: (link: string) => call<MusicLibrary>("music_import_playlist", { link }),
+  musicSyncPlaylist: (id: string) => call<MusicLibrary>("music_sync_playlist", { id }),
+  musicAddLinks: (id: string, input: string) => call<{ library: MusicLibrary; added: number }>("music_add_links", { id, input }),
+  musicAddTracks: (id: string, tracks: MusicTrack[]) => call<MusicLibrary>("music_add_tracks", { id, tracks }),
+  musicRemoveTrack: (id: string, index: number) => call<MusicLibrary>("music_remove_track", { id, index }),
+  musicMoveTrack: (id: string, from: number, to: number) => call<MusicLibrary>("music_move_track", { id, from, to }),
+  musicSearch: (query: string) => call<MusicTrack[]>("music_search", { query }),
+  musicCache: () => call<{ bytes: number; pictures: number }>("music_cache"),
+  musicClearCache: () => call<{ bytes: number; pictures: number }>("music_clear_cache"),
+  musicSetDuration: (id: string, seconds: number) => call<void>("music_set_duration", { id, seconds }),
+  musicWave: (on: boolean) => call<void>("music_wave", { on }),
+  musicNowPlaying: (now: MusicNow | null) => call<void>("music_now_playing", { now }),
+  musicNow: () => call<MusicNow | null>("music_now"),
+  musicTray: (action: "toggle" | "next" | "previous" | "open" | "quit" | "close") => call<void>("music_tray", { action }),
   recorderPrefs: () => call<RecorderPrefsView>("recorder_prefs"),
   setRecorderPrefs: (prefs: RecorderPrefs) => call<RecorderPrefsView>("set_recorder_prefs", { prefs }),
   convertInfo: () => call<ConvertStatus>("convert_info"),
@@ -769,6 +836,8 @@ export interface RecorderPrefs {
   microphone: boolean;
   /** Discord's sound only (voice chat), as its own track. */
   discord: boolean;
+  /** The music player's sound as its own track (only while the player is on). */
+  music: boolean;
   /** Windows endpoint id of the microphone; "" = Windows' default communication device. */
   micDevice: string;
   /** 0 = no limit. */
@@ -785,6 +854,13 @@ export interface RecorderPrefs {
   rate: "constant" | "variable";
   /** One rule per mode group, most important first (the disk limit deletes from the end first). */
   modes: ModeRule[];
+  /** Hotkey that bookmarks the moment while a game is recorded ("F8", "Ctrl+F8"); empty = off. */
+  bookmarkKey: string;
+  /** Seconds before and after the press that a bookmark clip keeps. */
+  bookmarkBefore: number;
+  bookmarkAfter: number;
+  /** The Windows sound when a bookmark is taken. */
+  bookmarkSound: boolean;
 }
 
 /** Recording rule of one mode group (see `queues::GROUPS`). */
@@ -977,4 +1053,12 @@ export const events = {
   onRecordingsChanged: (handler: () => void): Promise<UnlistenFn> => listen("recordings-changed", () => handler()),
   /** A game recording's end-of-game details were saved (its path). */
   onRecordingGame: (handler: (path: string) => void): Promise<UnlistenFn> => listen<string>("recording-game", (event) => handler(event.payload)),
+  /** 48 sound levels (0-255) of the music, ~30 a second while asked for. */
+  onMusicWave: (handler: (levels: number[]) => void): Promise<UnlistenFn> => listen<number[]>("music-wave", (event) => handler(event.payload)),
+  /** Tray menu: "toggle" (play / pause) or "next". */
+  onMusicControl: (handler: (action: string) => void): Promise<UnlistenFn> => listen<string>("music-control", (event) => handler(event.payload)),
+  /** The window went to the tray (false) or came back (true). */
+  /** Tray player: the song or its state changed. */
+  onMusicNow: (handler: (now: MusicNow | null) => void): Promise<UnlistenFn> => listen<MusicNow | null>("music-now", (event) => handler(event.payload)),
+  onWindowVisible: (handler: (visible: boolean) => void): Promise<UnlistenFn> => listen<boolean>("window-visible", (event) => handler(event.payload)),
 };
