@@ -372,8 +372,8 @@ fn parse(input: &str, list_first: bool) -> Option<Link> {
         return None;
     }
     .filter(|id| valid_id(id));
-    // Mixes ("RD…") are made for one viewer on the fly and cannot be read as a list.
-    let list = query_value(&query, "list").filter(|list| valid_list(list) && !list.starts_with("RD")).map(str::to_owned);
+    // Mixes ("RD…") are read through YouTube's "up next" list (`mix`).
+    let list = query_value(&query, "list").filter(|list| valid_list(list)).map(str::to_owned);
     match (video, list) {
         (Some(_), Some(list)) if list_first => Some(Link::Playlist(list)),
         (Some(video), _) => Some(Link::Video(video)),
@@ -500,10 +500,62 @@ pub fn song(video: &str) -> Result<Track, &'static str> {
     })
 }
 
-/// Name and songs of a public or unlisted playlist (up to 2000 songs).
+/// A YouTube Mix ("RD…"): made for each viewer, endless, and not readable as
+/// a playlist. Its "up next" list is read instead, a few pages until no new
+/// song comes (about 25-45 songs, what YouTube shows for it).
+fn mix(list: &str) -> Result<(String, Vec<Track>), &'static str> {
+    let mut title = String::new();
+    let mut tracks: Vec<Track> = Vec::new();
+    let mut last = String::new();
+    for _ in 0..5 {
+        let mut body = json!({ "playlistId": list });
+        if !last.is_empty() {
+            body["videoId"] = json!(last);
+        }
+        let answer = innertube("next", body)?;
+        let mut panels = Vec::new();
+        collect(&answer, "playlist", &mut panels);
+        let Some(panel) = panels.into_iter().find(|panel| panel.get("contents").is_some()) else { break };
+        if title.is_empty() {
+            title = panel.get("title").and_then(Value::as_str).map(str::to_owned).unwrap_or_else(|| text(&panel["title"]));
+        }
+        let mut items = Vec::new();
+        collect(&panel["contents"], "playlistPanelVideoRenderer", &mut items);
+        let before = tracks.len();
+        for item in items {
+            let Some(id) = item.get("videoId").and_then(Value::as_str).filter(|id| valid_id(id)) else { continue };
+            if tracks.iter().any(|track| track.id == id) {
+                continue;
+            }
+            let mut artist = text(&item["longBylineText"]);
+            if artist.is_empty() {
+                artist = text(&item["shortBylineText"]);
+            }
+            tracks.push(Track {
+                id: id.to_owned(),
+                title: text(&item["title"]),
+                artist: artist.trim_end_matches(" - Topic").to_owned(),
+                duration: clock(&text(&item["lengthText"])),
+            });
+        }
+        if tracks.len() == before || tracks.len() >= 100 {
+            break;
+        }
+        last = tracks.last().map(|track| track.id.clone()).unwrap_or_default();
+    }
+    if tracks.is_empty() {
+        return Err("music_playlist_empty");
+    }
+    Ok((title, tracks))
+}
+
+/// Name and songs of a public or unlisted playlist (up to 2000 songs), or a Mix.
 pub fn playlist(list: &str) -> Result<(String, Vec<Track>), &'static str> {
     if !valid_list(list) {
         return Err("music_playlist_link");
+    }
+    if list.starts_with("RD") {
+        return mix(list);
     }
     let mut answer = innertube("browse", json!({ "browseId": format!("VL{list}") }))?;
     let mut headers = Vec::new();
