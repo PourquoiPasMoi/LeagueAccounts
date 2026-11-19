@@ -124,12 +124,23 @@ Off by default. Turn it on in Settings › Recorder and every League game is rec
 - Clicking a recording opens it across the whole window, with a timeline you can zoom and a side list of your key moments with filters (kills, deaths, assists, objectives).
 - Highlights: one click in the player saves a clip of your kills, multikills, aces and the objectives you took (or turn on Highlights after every game in Settings › Recorder). Highlight reels get their own group in the Clips tab.
 - Hover the timeline to see a small picture of that moment before jumping to it.
+- Bookmark key (F8 by default, set in Settings › Recorder): press it during a game to mark the last minute; after the game, Keep bookmarks saves a clip of each one and can delete the full game.
+- Music track: with the music player on, Settings › Recorder can record its sound on a separate track, so you keep it in a clip or leave it out.
 - Each sound strip under the timeline has its own mute button (game, microphone, Discord).
 - Slow motion and keyboard control: play from 0.25× to 2× (− and +, 0 for normal), Space to play or pause, J and L for 10 s, comma and period for one frame, Shift + arrows for the previous or next key moment, Up and Down for the volume, M to mute, F for full screen; press ? for the list. Each account in the Recordings list shows its rank crest.
 - Broadcast overlay while watching: hold Tab (or turn on HUD next to full screen) to see the game like a tournament broadcast at that exact moment, in the window or in full screen. A top banner with each team's kills, gold and lead, towers, voidgrubs, every dragon by its type and the Baron buff timer; dragon and Baron timers; and all ten players by lane with level, CS, K/D/A and the gold difference of each lane. Games recorded from this version also show everyone's items and who is dead with their respawn timer. Older recordings get it too, from the League client's match history (items over time only exist for new recordings).
 - Under the video, the game's end-of-game stats as in the League client: Scoreboard, Overview (gold advantage over time, kills and objectives, kill map), Stats, Graphs and Runes, with live values on hover. Click a time on the gold graph, the kill strips or the kill map to watch that moment. They are read from the League client's match history after the game and kept next to the recording. Hide them for a full-size view.
 - Built for low-end PCs: the picture is captured and converted on the graphics card and encoded by its own video encoder (NVIDIA, Intel or AMD) through Windows Media Foundation, with a software fallback. Nothing extra to download.
 - Capture only, the way OBS and Medal work (Windows Graphics Capture of the game window, or the whole screen). The game process is never opened, hooked, read or drawn over. Key moments come from Riot's local live game data.
+
+### Music player
+
+Off by default. Turn it on in Settings › Music and a Music page appears in the sidebar.
+
+- Make playlists from YouTube links (songs or whole playlists), import a playlist you already have on YouTube, or search for songs.
+- Now playing panel with the song's large cover, a sound wave that moves with the music, seek, shuffle, repeat and volume. A small player in the sidebar keeps playing while you use the rest of the app.
+- Light on your PC: the sound comes from YouTube's own player, kept tiny and hidden so YouTube sends its smallest video with it. When the window is closed to the tray it stops drawing, so only the music keeps playing.
+- Right-click the tray icon while a song is loaded for a small player with the cover, controls and the moving wave. It only exists while it is open.
 
 ### Experimental: champ select and live game assistant
 

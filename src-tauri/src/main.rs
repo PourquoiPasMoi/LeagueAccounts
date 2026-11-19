@@ -8,6 +8,7 @@
 mod champselect;
 mod login_control;
 mod live;
+mod music;
 mod recorder;
 mod refresh;
 mod scale;
@@ -1279,7 +1280,7 @@ async fn open_logs_folder() -> CommandResult<()> {
 
 /// Rounded window corners on Windows 11 (the system's standard radius), set
 /// explicitly so an undecorated window always gets them. Earlier Windows ignore it.
-fn round_corners(window: &tauri::WebviewWindow) {
+pub(crate) fn round_corners(window: &tauri::WebviewWindow) {
     use windows_sys::Win32::Graphics::Dwm::{DwmSetWindowAttribute, DWMWA_WINDOW_CORNER_PREFERENCE, DWMWCP_ROUND};
     let Ok(hwnd) = window.hwnd() else { return };
     let preference = DWMWCP_ROUND;
@@ -1327,12 +1328,24 @@ fn run_update_watcher(exe: std::path::PathBuf, pid: u32) -> ! {
     std::process::exit(0);
 }
 
-fn show_main(app: &AppHandle) {
+pub(crate) fn show_main(app: &AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
+        set_page_visible(&window, true);
         let _ = window.unminimize();
         let _ = window.show();
         let _ = window.set_focus();
+        let webview: &tauri::Webview = window.as_ref();
+        let _ = webview.set_focus();
     }
+}
+
+/// In the tray the page stops drawing: WebView2 is told it is not visible, so
+/// animations, timers and painting pause (music keeps playing). The page also
+/// hears `window-visible` to stop its own work at once.
+fn set_page_visible(window: &tauri::WebviewWindow, visible: bool) {
+    let webview: &tauri::Webview = window.as_ref();
+    let _ = if visible { webview.show() } else { webview.hide() };
+    let _ = window.emit("window-visible", visible);
 }
 
 /// Tray menu labels in the interface language.
@@ -1349,32 +1362,87 @@ fn tray_labels(language: &str) -> (&'static str, &'static str) {
     }
 }
 
+/// Tray labels for the music player's two items.
+fn music_tray_labels(language: &str) -> (&'static str, &'static str) {
+    match language {
+        "tr" => ("Müzik: oynat / duraklat", "Sonraki şarkı"),
+        "de" => ("Musik: Wiedergabe / Pause", "Nächster Titel"),
+        "es" => ("Música: reproducir / pausar", "Siguiente canción"),
+        "fr" => ("Musique : lecture / pause", "Morceau suivant"),
+        "pt" => ("Música: tocar / pausar", "Próxima música"),
+        "zh" => ("音乐：播放 / 暂停", "下一首"),
+        "zhTw" => ("音樂：播放 / 暫停", "下一首"),
+        _ => ("Music: play / pause", "Next song"),
+    }
+}
+
+/// Open, (music controls when the player is on), Quit.
+fn tray_menu<M: Manager<tauri::Wry>>(manager: &M, language: &str) -> tauri::Result<tauri::menu::Menu<tauri::Wry>> {
+    use tauri::menu::{IsMenuItem, Menu, MenuItem, PredefinedMenuItem};
+    let (open_label, quit_label) = tray_labels(language);
+    let (play_label, next_label) = music_tray_labels(language);
+    let open = MenuItem::with_id(manager, "open", open_label, true, None::<&str>)?;
+    let play = MenuItem::with_id(manager, "music-toggle", play_label, true, None::<&str>)?;
+    let next = MenuItem::with_id(manager, "music-next", next_label, true, None::<&str>)?;
+    let separator = PredefinedMenuItem::separator(manager)?;
+    let separator_2 = PredefinedMenuItem::separator(manager)?;
+    let quit = MenuItem::with_id(manager, "quit", quit_label, true, None::<&str>)?;
+    let mut items: Vec<&dyn IsMenuItem<tauri::Wry>> = vec![&open, &separator];
+    if leagueaccounts::music::prefs().enabled {
+        items.extend([&play as &dyn IsMenuItem<tauri::Wry>, &next, &separator_2]);
+    }
+    items.push(&quit);
+    Menu::with_items(manager, &items)
+}
+
+/// Rebuild the tray menu (music player turned on or off). While a song is
+/// loaded the icon has no menu: right-click opens the tray player instead.
+pub(crate) fn refresh_tray(app: &AppHandle) {
+    let Some(tray) = app.tray_by_id("main") else { return };
+    if music::has_song() {
+        let _ = tray.set_menu(None::<tauri::menu::Menu<tauri::Wry>>);
+        return;
+    }
+    let language = app.state::<Arc<Shared>>().settings.lock().map(|settings| settings.ui_language.clone()).unwrap_or_default();
+    if let Ok(menu) = tray_menu(app, &language) {
+        let _ = tray.set_menu(Some(menu));
+    }
+}
+
+/// Quit from the tray: a game being recorded is finished properly first.
+pub(crate) fn quit(app: &AppHandle) {
+    recorder::stop_now();
+    app.exit(0)
+}
+
 /// The notification-area icon: click to open the window, right-click for
 /// Open / Quit. Closing the window only hides it; Quit ends the app.
 fn create_tray(app: &tauri::App, language: &str) -> tauri::Result<()> {
-    use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
     use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
-    let (open_label, quit_label) = tray_labels(language);
-    let open = MenuItem::with_id(app, "open", open_label, true, None::<&str>)?;
-    let separator = PredefinedMenuItem::separator(app)?;
-    let quit = MenuItem::with_id(app, "quit", quit_label, true, None::<&str>)?;
-    let menu = Menu::with_items(app, &[&open, &separator, &quit])?;
+    let menu = tray_menu(app, language)?;
     let mut tray = TrayIconBuilder::with_id("main")
         .tooltip("League Companion")
         .menu(&menu)
         .show_menu_on_left_click(false)
         .on_menu_event(|app, event| match event.id.as_ref() {
             "open" => show_main(app),
-            "quit" => {
-                // A game being recorded is finished properly first.
-                recorder::stop_now();
-                app.exit(0)
+            // The page plays the music; it hears these even while hidden.
+            "music-toggle" => {
+                let _ = app.emit("music-control", "toggle");
             }
+            "music-next" => {
+                let _ = app.emit("music-control", "next");
+            }
+            "quit" => quit(app),
             _ => {}
         })
         .on_tray_icon_event(|tray, event| {
-            if let TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, .. } = event {
-                show_main(tray.app_handle());
+            match event {
+                TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, .. } => show_main(tray.app_handle()),
+                TrayIconEvent::Click { button: MouseButton::Right, button_state: MouseButtonState::Up, position, .. } if music::has_song() => {
+                    music::open_tray_player(tray.app_handle(), position.x, position.y)
+                }
+                _ => {}
             }
         });
     if let Some(icon) = app.default_window_icon() {
@@ -1520,6 +1588,26 @@ fn main() {
             recorder::microphones,
             recorder::microphone_level,
             recorder::recording_sound_tracks,
+            music::music_prefs,
+            music::set_music_prefs,
+            music::music_library,
+            music::music_create_playlist,
+            music::music_rename_playlist,
+            music::music_delete_playlist,
+            music::music_import_playlist,
+            music::music_sync_playlist,
+            music::music_add_links,
+            music::music_add_tracks,
+            music::music_remove_track,
+            music::music_move_track,
+            music::music_search,
+            music::music_cache,
+            music::music_clear_cache,
+            music::music_set_duration,
+            music::music_wave,
+            music::music_now_playing,
+            music::music_now,
+            music::music_tray,
         ])
         // Champion and skin pictures: http://lacache.localhost/<game-data path>,
         // downloaded once from CommunityDragon and then served from disk.
@@ -1529,6 +1617,9 @@ fn main() {
                 if window.label() == "main" {
                     api.prevent_close();
                     let _ = window.hide();
+                    if let Some(main) = window.app_handle().get_webview_window("main") {
+                        set_page_visible(&main, false);
+                    }
                 }
             }
         })
@@ -1537,6 +1628,11 @@ fn main() {
             let path = request.uri().path().to_owned();
             let range = request.headers().get("range").and_then(|value| value.to_str().ok()).map(str::to_owned);
             thread::spawn(move || responder.respond(recorder::serve(&path, range.as_deref())));
+        })
+        // Music cover pictures: http://lamusic.localhost/thumb/<id>/<hi|lo>, kept on disk.
+        .register_asynchronous_uri_scheme_protocol("lamusic", |_context, request, responder| {
+            let path = request.uri().path().to_owned();
+            thread::spawn(move || responder.respond(music::serve(&path)));
         })
         .register_asynchronous_uri_scheme_protocol("lacache", |_context, request, responder| {
             let path = request.uri().path().to_owned();
@@ -1607,6 +1703,8 @@ fn main() {
                 if !start_minimized {
                     let _ = window.show();
                     let _ = window.set_focus();
+                } else {
+                    set_page_visible(&window, false);
                 }
             }
             let _ = create_tray(app, &ui_language);

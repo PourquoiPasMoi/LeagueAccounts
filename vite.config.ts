@@ -13,6 +13,7 @@ export default defineConfig({
       input: {
         // Relative to the project folder, where every npm script runs.
         main: "ui/index.html",
+        tray: "ui/tray.html",
       },
     },
   },

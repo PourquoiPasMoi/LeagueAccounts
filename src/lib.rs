@@ -22,6 +22,9 @@ pub mod protect;
 pub mod recorder;
 pub mod locales;
 pub mod logging;
+pub mod music;
+#[cfg(windows)]
+pub mod music_wave;
 pub mod models;
 pub mod rank_fetcher;
 pub mod riot_client;

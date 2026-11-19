@@ -28,6 +28,8 @@ const GLYPHS: Record<string, string> = {
   inhibitor: `<path ${STROKE} d="M8 1.6 12.6 8 8 14.4 3.4 8zM3.4 8h9.2M8 1.6v12.8"/>`,
   // Crown (ace: the whole enemy team is down).
   ace: `<path ${STROKE} d="M2.5 12.6h11M3 12.6 1.8 5.4l3.7 2.7L8 3l2.5 5.1 3.7-2.7-1.2 7.2z"/>`,
+  // Bookmark ribbon (the player's own hotkey mark).
+  bookmark: `<path ${STROKE} d="M4.2 2h7.6v12L8 10.9 4.2 14z"/>`,
   // Flag (game end).
   gameEnd: `<path ${STROKE} d="M3.5 14.2V2M3.5 2.6h8.6l-2 3 2 3H3.5"/>`,
 };

@@ -41,6 +41,8 @@ pub struct RecorderPrefs {
     pub microphone: bool,
     /// Discord's sound only (voice chat), as its own track. Off by default.
     pub discord: bool,
+    /// The music player's sound as its own track (only while the player is on). Off by default.
+    pub music: bool,
     /// Windows endpoint id of the microphone; empty = Windows' default communication device.
     pub mic_device: String,
     /// Gigabytes for all recordings; 0 = no limit.
@@ -58,6 +60,14 @@ pub struct RecorderPrefs {
     /// One rule per mode group, most important first (the disk limit deletes
     /// from the end of the list first).
     pub modes: Vec<ModeRule>,
+    /// Hotkey that bookmarks the moment while a game is recorded ("F8",
+    /// "Ctrl+F8"…); empty = off.
+    pub bookmark_key: String,
+    /// Seconds before and after the press that a bookmark clip keeps.
+    pub bookmark_before: u32,
+    pub bookmark_after: u32,
+    /// The Windows sound when a bookmark is taken.
+    pub bookmark_sound: bool,
 }
 
 /// What to do with the games of one mode group (`queues::GROUPS`).
@@ -107,6 +117,7 @@ impl Default for RecorderPrefs {
             game_audio: true,
             microphone: false,
             discord: false,
+            music: false,
             mic_device: String::new(),
             disk_limit_gb: 100,
             champ_select: true,
@@ -115,6 +126,10 @@ impl Default for RecorderPrefs {
             codec: "h264".into(),
             rate: "variable".into(),
             modes: complete_modes(Vec::new()),
+            bookmark_key: "F8".into(),
+            bookmark_before: 60,
+            bookmark_after: 10,
+            bookmark_sound: true,
         }
     }
 }
@@ -183,6 +198,11 @@ impl RecorderPrefs {
         self.fps = self.fps.clamp(10, 120);
         self.bitrate = self.bitrate.clamp(1, 100);
         self.disk_limit_gb = self.disk_limit_gb.min(100_000);
+        if !self.bookmark_key.is_empty() && leagueaccounts::recorder::hotkey::parse(&self.bookmark_key).is_none() {
+            self.bookmark_key = "F8".into();
+        }
+        self.bookmark_before = self.bookmark_before.clamp(1, 600);
+        self.bookmark_after = self.bookmark_after.min(300);
         self
     }
 }
@@ -320,6 +340,7 @@ fn start_recording(app: &AppHandle, window: leagueaccounts::recorder::capture::W
             game_audio: prefs.game_audio,
             microphone: prefs.microphone,
             discord: prefs.discord,
+            music: prefs.music && leagueaccounts::music::prefs().enabled,
             microphone_device: prefs.mic_device.clone(),
             codec,
             rate,
@@ -575,7 +596,35 @@ fn convert_old_recordings(app: &AppHandle) {
     }
 }
 
+/// The bookmark hotkey was pressed: mark the moment in the game being recorded.
+fn bookmark(app: &AppHandle) {
+    let prefs = prefs();
+    let marked = ACTIVE.lock().ok().and_then(|active| {
+        let recording = &active.as_ref()?.recording;
+        let time = recording.bookmark(prefs.bookmark_before, prefs.bookmark_after)?;
+        Some((time, recording.bookmark_count()))
+    });
+    if let Some((time, count)) = marked {
+        if prefs.bookmark_sound {
+            leagueaccounts::recorder::hotkey::beep();
+        }
+        let _ = app.emit("recording-bookmark", serde_json::json!({ "time": time, "count": count }));
+    }
+}
+
 pub fn spawn(app: AppHandle) {
+    {
+        let app = app.clone();
+        // The key is only taken while a game is being recorded.
+        leagueaccounts::recorder::hotkey::watch(
+            || {
+                let prefs = prefs();
+                let recording = ACTIVE.lock().is_ok_and(|active| active.is_some());
+                (prefs.enabled && recording && !prefs.bookmark_key.is_empty()).then_some(prefs.bookmark_key)
+            },
+            move || bookmark(&app),
+        );
+    }
     {
         let app = app.clone();
         thread::spawn(move || {
