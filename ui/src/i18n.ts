@@ -726,7 +726,7 @@ const en = {
   "music.previous": "Previous",
   "music.next": "Next",
   "music.repeatOff": "Repeat: off",
-  "music.repeatAll": "Repeat: all",
+  "music.repeatAll": "Repeat: whole playlist",
   "music.repeatOne": "Repeat: this song",
   "music.volume": "Volume",
   "music.mute": "Mute",

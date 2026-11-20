@@ -226,7 +226,7 @@
 .music-controls { display: flex; align-items: center; justify-content: center; gap: 10px; }
 .music-ctl { width: 38px; height: 38px; border-radius: 50%; color: var(--text-2); }
 .music-ctl:hover { color: var(--text); }
-.music-ctl[aria-pressed="true"] { color: rgb(var(--music-tint)); }
+.music-ctl[aria-pressed="true"] { color: rgb(var(--music-tint)); background: rgb(var(--music-tint) / .16); }
 .music-play {
   display: grid;
   place-items: center;

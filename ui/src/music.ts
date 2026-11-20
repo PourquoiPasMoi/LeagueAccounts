@@ -1041,6 +1041,8 @@ export async function openMusic(): Promise<void> {
       repeat = repeat === "off" ? "all" : repeat === "all" ? "one" : "off";
       saveState();
       renderNow();
+      // The three states look alike at a glance: say which one is on.
+      toast("info", repeatLabel(), "", 1800);
     }
     if (action === "video") {
       videoShown = !videoShown;
