@@ -476,6 +476,8 @@ export interface MusicNow {
 
 export interface MusicPrefs {
   enabled: boolean;
+  /** Download speed cap in kbit/s, 0 = none. */
+  speed: number;
 }
 
 /** Cover picture of a YouTube song: "hi" = largest, "lo" = 320×180. */

@@ -2228,7 +2228,7 @@ dependencies = [
 
 [[package]]
 name = "leagueaccounts"
-version = "5.6.2"
+version = "5.6.3"
 dependencies = [
  "arboard",
  "html-escape",
@@ -2251,7 +2251,7 @@ dependencies = [
 
 [[package]]
 name = "leagueaccounts-app"
-version = "5.6.2"
+version = "5.6.3"
 dependencies = [
  "arboard",
  "leagueaccounts",
@@ -2263,6 +2263,8 @@ dependencies = [
  "tauri-plugin-autostart",
  "tauri-plugin-single-instance",
  "tempfile",
+ "webview2-com",
+ "windows-core",
  "windows-sys 0.61.2",
 ]
 

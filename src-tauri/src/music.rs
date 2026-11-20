@@ -36,7 +36,137 @@ pub async fn set_music_prefs(app: AppHandle, prefs: Prefs) -> CommandResult<Pref
         set_wave(&app, false);
     }
     crate::refresh_tray(&app);
+    #[cfg(windows)]
+    gentle::apply(&app);
     Ok(saved)
+}
+
+/// Gentle downloads. YouTube's player fetches a song in bursts (measured
+/// 0.6-1.1 MB within one second, 5 MB in the first 30 s), which floods a slow
+/// line: packet loss and ping spikes in game at every song change. The
+/// player's frame gets a DevTools network rule that caps only YouTube's media
+/// server (googlevideo; the player's scripts load at full speed). The player
+/// then streams evenly and picks a lighter stream: at 256 kbit/s it plays
+/// without breaks and used 0.9 MB in 30 s. Our own WebView only: nothing
+/// is bypassed, YouTube just sees a slower line.
+#[cfg(windows)]
+pub mod gentle {
+    use serde_json::{json, Value};
+    use std::sync::Mutex;
+    use tauri::{AppHandle, Manager, WebviewWindow};
+    use webview2_com::Microsoft::Web::WebView2::Win32::{ICoreWebView2, ICoreWebView2DevToolsProtocolEventReceivedEventArgs, ICoreWebView2_11};
+    use webview2_com::{take_pwstr, CallDevToolsProtocolMethodCompletedHandler, DevToolsProtocolEventReceivedEventHandler};
+    use windows_core::{Interface, HSTRING, PWSTR};
+
+    /// DevTools sessions of the frames in the main window (the player's frame).
+    static SESSIONS: Mutex<Vec<String>> = Mutex::new(Vec::new());
+
+    /// kbit/s, 0 = no cap (also while the player is off).
+    fn speed() -> u32 {
+        let prefs = leagueaccounts::music::prefs();
+        if prefs.enabled {
+            prefs.speed
+        } else {
+            0
+        }
+    }
+
+    fn call(core: &ICoreWebView2, session: Option<&str>, method: &str, params: &str, done: impl FnOnce(bool) + 'static) {
+        let handler = CallDevToolsProtocolMethodCompletedHandler::create(Box::new(move |result, _| {
+            done(result.is_ok());
+            Ok(())
+        }));
+        // SAFETY: COM calls on the WebView's own thread (inside with_webview or
+        // its event handlers); the strings live until the call returns.
+        unsafe {
+            let _ = match session {
+                Some(session) => match core.cast::<ICoreWebView2_11>() {
+                    Ok(core) => core.CallDevToolsProtocolMethodForSession(&HSTRING::from(session), &HSTRING::from(method), &HSTRING::from(params), &handler),
+                    Err(_) => return,
+                },
+                None => core.CallDevToolsProtocolMethod(&HSTRING::from(method), &HSTRING::from(params), &handler),
+            };
+        }
+    }
+
+    /// Sets the current cap on one frame's session.
+    fn limit(core: &ICoreWebView2, session: &str) {
+        let kbps = speed();
+        let bytes = f64::from(kbps) * 125.0;
+        let rules = if kbps == 0 {
+            json!([])
+        } else {
+            json!([{ "urlPattern": "*://*.googlevideo.com/*", "latency": 0, "downloadThroughput": bytes, "uploadThroughput": -1 }])
+        };
+        let params = json!({ "offline": false, "matchedNetworkConditions": rules }).to_string();
+        let fallback = (core.clone(), session.to_owned());
+        call(core, Some(session), "Network.enable", "{}", |_| {});
+        call(core, Some(session), "Network.emulateNetworkConditionsByRule", &params, move |ok| {
+            // WebView2 runtimes older than the rules API: cap the whole frame.
+            if !ok {
+                let (core, session) = fallback;
+                let whole = json!({ "offline": false, "latency": 0, "downloadThroughput": if kbps == 0 { -1.0 } else { bytes }, "uploadThroughput": -1 });
+                call(&core, Some(&session), "Network.emulateNetworkConditions", &whole.to_string(), |_| {});
+            }
+        });
+    }
+
+    fn params(args: Option<ICoreWebView2DevToolsProtocolEventReceivedEventArgs>) -> Value {
+        let Some(args) = args else { return Value::Null };
+        let mut text = PWSTR::null();
+        // SAFETY: the string is owned by us after the call and freed by take_pwstr.
+        if unsafe { args.ParameterObjectAsJson(&mut text) }.is_err() {
+            return Value::Null;
+        }
+        serde_json::from_str(&take_pwstr(text)).unwrap_or(Value::Null)
+    }
+
+    fn listen(core: &ICoreWebView2, event: &str, attached: bool) {
+        let owner = core.clone();
+        let handler = DevToolsProtocolEventReceivedEventHandler::create(Box::new(move |_, args| {
+            let params = params(args);
+            let Some(session) = params["sessionId"].as_str() else { return Ok(()) };
+            let mut sessions = SESSIONS.lock().unwrap_or_else(|poison| poison.into_inner());
+            if !attached {
+                sessions.retain(|known| known != session);
+            } else if params["targetInfo"]["type"] == "iframe" {
+                sessions.push(session.to_owned());
+                limit(&owner, session);
+            }
+            Ok(())
+        }));
+        let mut token = 0i64;
+        // SAFETY: WebView thread; the receiver keeps the handler alive.
+        unsafe {
+            if let Ok(receiver) = core.GetDevToolsProtocolEventReceiver(&HSTRING::from(event)) {
+                let _ = receiver.add_DevToolsProtocolEventReceived(&handler, &mut token);
+            }
+        }
+    }
+
+    /// Main window at start: every frame it opens (the player) gets the cap.
+    pub fn setup(window: &WebviewWindow) {
+        let _ = window.with_webview(|webview| {
+            // SAFETY: WebView thread.
+            let Ok(core) = (unsafe { webview.controller().CoreWebView2() }) else { return };
+            listen(&core, "Target.attachedToTarget", true);
+            listen(&core, "Target.detachedFromTarget", false);
+            call(&core, None, "Target.setAutoAttach", r#"{"autoAttach":true,"waitForDebuggerOnStart":false,"flatten":true}"#, |_| {});
+        });
+    }
+
+    /// The setting changed: new cap on the open player frame.
+    pub fn apply(app: &AppHandle) {
+        let Some(window) = app.get_webview_window("main") else { return };
+        let _ = window.with_webview(|webview| {
+            // SAFETY: WebView thread.
+            let Ok(core) = (unsafe { webview.controller().CoreWebView2() }) else { return };
+            let sessions = SESSIONS.lock().unwrap_or_else(|poison| poison.into_inner()).clone();
+            for session in sessions {
+                limit(&core, &session);
+            }
+        });
+    }
 }
 
 /// The length of a song, learned by the player, saved where it was unknown.

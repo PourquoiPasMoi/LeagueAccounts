@@ -1,6 +1,6 @@
 [package]
 name = "leagueaccounts-app"
-version = "5.6.2"
+version = "5.6.3"
 edition = "2021"
 description = "League of Legends account manager for Windows"
 license = "MIT"
@@ -24,3 +24,7 @@ tauri = { version = "2", features = ["tray-icon"] }
 tauri-plugin-autostart = "2"
 tauri-plugin-single-instance = "2"
 windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Graphics_Dwm"] }
+# Same versions as Tauri's WebView2 layer (already in Cargo.lock): DevTools
+# network rule for the music player's frame (music.rs `gentle`).
+webview2-com = "0.39"
+windows-core = "0.62"

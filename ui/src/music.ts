@@ -20,6 +20,9 @@ const YT = "https://www.youtube-nocookie.com";
 const STATE_KEY = "musicState";
 
 let enabled = false;
+let speed = 256;
+/** Download speed cap in kbit/s (Settings › Music), 0 = none. */
+export const musicSpeed = (): number => speed;
 let library: MusicLibrary = { playlists: [] };
 
 /** What plays: a copy of a playlist's songs (or one search result). */
@@ -1162,7 +1165,9 @@ export async function initMusic(): Promise<void> {
   // Saved progress every 10 s while playing (cheap, survives a crash).
   window.setInterval(() => playing && saveState(), 10_000);
   try {
-    enabled = (await api.musicPrefs()).enabled;
+    const prefs = await api.musicPrefs();
+    enabled = prefs.enabled;
+    speed = prefs.speed ?? 256;
   } catch {
     enabled = false;
   }
@@ -1179,9 +1184,12 @@ export async function initMusic(): Promise<void> {
 }
 
 /** Settings › Music. Turning it off stops the music and hides everything. */
-export async function setMusicEnabled(on: boolean): Promise<void> {
-  if (on === enabled) return;
-  enabled = (await api.setMusicPrefs({ enabled: on })).enabled;
+export async function setMusicEnabled(on: boolean, nextSpeed = speed): Promise<void> {
+  if (on === enabled && nextSpeed === speed) return;
+  const saved = await api.setMusicPrefs({ enabled: on, speed: nextSpeed });
+  speed = saved.speed;
+  if (saved.enabled === enabled) return;
+  enabled = saved.enabled;
   showTile();
   if (!enabled) {
     closeFrame();
