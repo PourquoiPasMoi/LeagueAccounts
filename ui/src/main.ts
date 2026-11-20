@@ -19,7 +19,7 @@ import "./music.css";
 // Final layer of the design: must stay the last stylesheet.
 import "./polish.css";
 import { openRecordings } from "./recordings";
-import { initMusic, musicOn, openMusic, setMusicEnabled } from "./music";
+import { initMusic, musicOn, musicSpeed, openMusic, setMusicEnabled } from "./music";
 import type { DecayInfo, DiscordWebhook, ModeRule, RecorderPrefs, RecorderStatus } from "./api";
 import { experimentalOn, initBuilds, openCurrentBuild, resumeChampSelect, setExperimental, trackGames } from "./builds";
 import type { SessionStatus, SkinOwner } from "./api";
@@ -1165,6 +1165,14 @@ async function openSettings(): Promise<void> {
           <h3 class="settings-page-title">${esc(t("settings.music"))}</h3>
         ${toggle("musicEnabled", musicOn(), t("settings.musicEnabled"), t("settings.musicHint"))}
         <p class="settings-note">${esc(t("settings.musicNote"))}</p>
+        <label class="field inline"><span>${esc(t("settings.musicSpeed"))}</span>
+          <div class="select-wrap"><select name="musicSpeed">${[0, 1000, 512, 256]
+            .map((value) => {
+              const text = value === 0 ? t("settings.musicSpeedOff") : value === 256 ? t("settings.musicSpeedGames") : value === 1000 ? "1 Mbit/s" : `${value} kbit/s`;
+              return `<option value="${value}" ${musicSpeed() === value ? "selected" : ""}>${esc(text)}</option>`;
+            })
+            .join("")}</select></div></label>
+        <p class="settings-note">${esc(t("settings.musicSpeedHint"))}</p>
           <div class="music-cache-row" data-settings-ignore>
             <span data-music-cache>${esc(t("settings.musicCovers", { size: "…" }))}</span>
             <button type="button" class="btn btn-ghost" data-music-clear>${esc(t("settings.musicClear"))}</button>
@@ -1450,7 +1458,7 @@ async function openSettings(): Promise<void> {
       if (!saved.ok) return false;
       const companion = await guard(() => setExperimental(checked("companion")), "toast.settingsFailed");
       if (!companion.ok) return false;
-      const music = await guard(() => setMusicEnabled(checked("musicEnabled")), "toast.settingsFailed");
+      const music = await guard(() => setMusicEnabled(checked("musicEnabled"), Number($<HTMLSelectElement>('[name="musicSpeed"]', root).value)), "toast.settingsFailed");
       if (!music.ok) return false;
       const recorderPrefs: RecorderPrefs = {
         enabled: checked("recEnabled"),

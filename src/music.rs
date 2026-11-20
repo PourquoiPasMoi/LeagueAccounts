@@ -51,11 +51,20 @@ pub struct Library {
     pub playlists: Vec<Playlist>,
 }
 
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Prefs {
     /// The whole feature: sidebar row, page, mini player.
     pub enabled: bool,
+    /// Cap on how fast songs download, kbit/s (0 = no cap). YouTube's player
+    /// otherwise loads in bursts that flood slow lines (ping spikes in game).
+    pub speed: u32,
+}
+
+impl Default for Prefs {
+    fn default() -> Self {
+        Self { enabled: false, speed: 256 }
+    }
 }
 
 #[derive(Clone, Debug, Default, Serialize)]

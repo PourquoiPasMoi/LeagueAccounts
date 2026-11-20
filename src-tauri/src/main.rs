@@ -1696,6 +1696,7 @@ fn main() {
             app.handle().plugin(updater::plugin(Arc::clone(&shared)))?;
             if let Some(window) = app.get_webview_window("main") {
                 round_corners(&window);
+                music::gentle::setup(&window);
                 // The window opens at its configured size, which is 100%.
                 scale::apply(&window, 100, ui_scale);
                 // Started with Windows and "start minimized": only the tray icon
