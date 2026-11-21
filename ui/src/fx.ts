@@ -1,6 +1,6 @@
 // Small interaction effects. One delegated listener each, nothing runs while idle.
 
-const SPOT = ".card, .side-tile, .rec-card, .ranked-card";
+const SPOT = ".card, .side-tile, .rec-card, .ranked-card, .stats-view .profile-panel";
 
 /** A soft light that follows the pointer over cards (CSS reads --mx / --my). */
 function pointerLight(): void {

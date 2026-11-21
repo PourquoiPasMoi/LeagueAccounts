@@ -1286,6 +1286,7 @@ const en = {
   "rec.key.note": "Add a note here",
   "rec.search": "Search champion, mode, result, note",
   "rec.searchNone": "No recording matches the search.",
+  "stats.roleFilter": "Click to see only these games. Click again for every role.",
 };
 
 type MessageKey = keyof typeof en;
@@ -2576,6 +2577,7 @@ const tr: Dict = {
   "rec.key.note": "Buraya not ekle",
   "rec.search": "Şampiyon, mod, sonuç, not ara",
   "rec.searchNone": "Aramayla eşleşen kayıt yok.",
+  "stats.roleFilter": "Yalnızca bu oyunları görmek için tıkla. Tüm roller için tekrar tıkla.",
 };
 
 const de: Dict = {
@@ -3863,6 +3865,7 @@ const de: Dict = {
   "rec.key.note": "Hier eine Notiz hinzufügen",
   "rec.search": "Champion, Modus, Ergebnis, Notiz suchen",
   "rec.searchNone": "Keine Aufnahme passt zur Suche.",
+  "stats.roleFilter": "Klicken, um nur diese Spiele zu sehen. Erneut klicken für alle Rollen.",
 };
 
 const es: Dict = {
@@ -5150,6 +5153,7 @@ const es: Dict = {
   "rec.key.note": "Añadir una nota aquí",
   "rec.search": "Buscar campeón, modo, resultado, nota",
   "rec.searchNone": "Ninguna grabación coincide con la búsqueda.",
+  "stats.roleFilter": "Haz clic para ver solo estas partidas. Otro clic para todos los roles.",
 };
 
 const fr: Dict = {
@@ -6437,6 +6441,7 @@ const fr: Dict = {
   "rec.key.note": "Ajouter une note ici",
   "rec.search": "Rechercher champion, mode, résultat, note",
   "rec.searchNone": "Aucun enregistrement ne correspond à la recherche.",
+  "stats.roleFilter": "Cliquez pour ne voir que ces parties. Cliquez de nouveau pour tous les rôles.",
 };
 
 const pt: Dict = {
@@ -7724,6 +7729,7 @@ const pt: Dict = {
   "rec.key.note": "Adicionar uma nota aqui",
   "rec.search": "Procurar campeão, modo, resultado, nota",
   "rec.searchNone": "Nenhuma gravação corresponde à pesquisa.",
+  "stats.roleFilter": "Clica para ver só estas partidas. Clica de novo para todas as funções.",
 };
 
 const zh: Dict = {
@@ -8994,6 +9000,7 @@ const zh: Dict = {
   "rec.key.note": "在此处添加笔记",
   "rec.search": "搜索英雄、模式、结果、笔记",
   "rec.searchNone": "没有符合搜索的录像。",
+  "stats.roleFilter": "点击只看这些对局，再次点击显示所有位置。",
 };
 
 const zhTw: Dict = {
@@ -10264,6 +10271,7 @@ const zhTw: Dict = {
   "rec.key.note": "在此處新增筆記",
   "rec.search": "搜尋英雄、模式、結果、筆記",
   "rec.searchNone": "沒有符合搜尋的錄影。",
+  "stats.roleFilter": "點擊只看這些對戰，再次點擊顯示所有位置。",
 };
 
 export const LANGUAGES = [

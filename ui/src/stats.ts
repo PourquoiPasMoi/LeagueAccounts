@@ -15,6 +15,8 @@ export interface StatsFilters {
   queue: QueueFilter;
   range: RangeFilter;
   metric: TrendMetric;
+  /** Only games on this lane (`TOP`, `JUNGLE`, ...); empty = every role. */
+  role: string;
 }
 
 const QUEUES: Record<Exclude<QueueFilter, "all">, number[]> = {
@@ -94,49 +96,39 @@ const METRIC_KEYS: Record<TrendMetric, MessageKey> = {
   kda: "stats.kda", cs: "stats.csMin", damage: "stats.damageMin", vision: "stats.visionMin", gold: "stats.goldMin",
 };
 
+const segmented = <T extends string | number>(name: string, value: T, options: [T, string][]) => `
+  <div class="segmented">${options.map(([option, label]) => `
+    <button data-stats-${name}="${option}" aria-pressed="${option === value}">${esc(label)}</button>`).join("")}</div>`;
+
+const queueOptions = (): [QueueFilter, string][] => [
+  ["all", t("stats.allQueues")], ["solo", t("profile.q.solo")], ["flex", t("profile.q.flex")],
+  ["normal", t("profile.q.normal")], ["aram", t("profile.q.aram")], ["arena", t("profile.q.arena")],
+];
+
+/** Panels side by side (`columns` = CSS grid tracks); one left alone takes the whole row. */
+const row = (columns: string, ...panels: string[]): string => {
+  const shown = panels.filter((html) => html.trim());
+  return shown.length ? `<div class="stats-row" style="--cols:${columns}">${shown.join("")}</div>` : "";
+};
+
+/** The whole Stats tab: the filters, then the content (drawn again when a filter changes). */
 export function statsHtml(all: MatchRecord[], profile: Profile | null, filters: StatsFilters): string {
-  const segmented = <T extends string | number>(name: string, value: T, options: [T, string][]) => `
-    <div class="segmented">${options.map(([option, label]) => `
-      <button data-stats-${name}="${option}" aria-pressed="${option === value}">${esc(label)}</button>`).join("")}</div>`;
-  const queues: [QueueFilter, string][] = [
-    ["all", t("stats.allQueues")], ["solo", t("profile.q.solo")], ["flex", t("profile.q.flex")],
-    ["normal", t("profile.q.normal")], ["aram", t("profile.q.aram")], ["arena", t("profile.q.arena")],
-  ];
-  const toolbar = `
-    <div class="stats-toolbar">
-      ${segmented("queue", filters.queue, queues)}
-      ${segmented("range", filters.range, [[0, t("stats.allGames")], [50, t("stats.last", { count: 50 })], [20, t("stats.last", { count: 20 })]])}
-    </div>`;
-  const games = filterGames(all, filters);
-  if (!all.length) {
-    return `${toolbar}<div class="profile-empty">${icon("info", 18)}<div><strong>${esc(t("stats.emptyTitle"))}</strong><p>${esc(t("stats.emptyText"))}</p></div></div>`;
-  }
-  if (!games.length) return `${toolbar}<p class="muted profile-note">${esc(t("stats.noneForFilter"))}</p>`;
-
-  const rich = games.filter(detailed);
-  const note = rich.length < games.length
-    ? `<p class="muted profile-note">${esc(t("stats.detailNote", { detailed: rich.length, total: games.length }))}</p>`
-    : "";
-  const scope = queues.find(([option]) => option === filters.queue)?.[1] ?? "";
-
   return `
-    ${toolbar}
-    ${playStylePanel(games, profile, scope)}
-    ${note}
-    <div class="opgg-grid">
-      <div class="opgg-col">
-        ${performancePanel(games)}
-        ${roleSharePanel(games)}
-        ${classesPanel(games, profile)}
-        ${poolPanel(games, profile)}
+    <div class="stats-view">
+      <div class="stats-toolbar">
+        ${segmented("queue", filters.queue, queueOptions())}
+        ${segmented("range", filters.range, [[0, t("stats.allGames")], [50, t("stats.last", { count: 50 })], [20, t("stats.last", { count: 20 })]])}
       </div>
-      <div class="opgg-col">
-        ${sidesPanel(games)}
-        ${activityPanel(games)}
-        ${metricsPanel(games)}
-      </div>
-    </div>
-    <section class="profile-panel">
+      <div class="stats-content">${statsContentHtml(all, profile, filters)}</div>
+    </div>`;
+}
+
+/** The trend panel alone (its metric switch redraws only this). */
+export function trendPanelHtml(all: MatchRecord[], profile: Profile | null, filters: StatsFilters): string {
+  const base = filterGames(all, filters);
+  const games = filters.role ? base.filter((game) => game.position === filters.role) : base;
+  return `
+    <section class="profile-panel trend-panel" data-reveal>
       <header class="panel-head">
         <h3>${esc(t("stats.trend"))}</h3>
         ${segmented("metric", filters.metric, [
@@ -145,16 +137,35 @@ export function statsHtml(all: MatchRecord[], profile: Profile | null, filters: 
         ])}
       </header>
       ${trendChart(games, filters.metric, profile)}
-    </section>
-    <div class="stats-columns">
-      <div class="stats-main">
-        ${championTable(games, profile)}
-      </div>
-      <div class="stats-side">
-        ${streaksPanel(games)}
-        ${recordsPanel(games, profile)}
-      </div>
-    </div>
+    </section>`;
+}
+
+export function statsContentHtml(all: MatchRecord[], profile: Profile | null, filters: StatsFilters): string {
+  if (!all.length) {
+    return `<div class="profile-empty">${icon("info", 18)}<div><strong>${esc(t("stats.emptyTitle"))}</strong><p>${esc(t("stats.emptyText"))}</p></div></div>`;
+  }
+  const base = filterGames(all, filters);
+  // A role that the other filters left without games is dropped.
+  if (filters.role && !base.some((game) => game.position === filters.role)) filters.role = "";
+  const games = filters.role ? base.filter((game) => game.position === filters.role) : base;
+  if (!games.length) return `<p class="muted profile-note">${esc(t("stats.noneForFilter"))}</p>`;
+
+  const rich = games.filter(detailed);
+  const note = rich.length < games.length
+    ? `<p class="muted profile-note">${esc(t("stats.detailNote", { detailed: rich.length, total: games.length }))}</p>`
+    : "";
+  const roleName = ROLES.find(([role]) => role === filters.role)?.[1];
+  const scope = [queueOptions().find(([option]) => option === filters.queue)?.[1] ?? "", roleName ? t(roleName) : ""].filter(Boolean).join(" · ");
+
+  return `
+    ${heroPanel(games, profile, scope)}
+    ${note}
+    ${row("minmax(0, 7fr) minmax(0, 5fr)", performancePanel(games), sidesPanel(games))}
+    ${row("minmax(0, 7fr) minmax(0, 5fr)", roleSharePanel(base, filters.role), classesPanel(games, profile))}
+    ${row("minmax(0, 1fr) minmax(0, 1fr)", activityPanel(games), metricsPanel(games))}
+    ${trendPanelHtml(all, profile, filters)}
+    ${row("minmax(0, 5fr) minmax(0, 7fr)", poolPanel(games, profile), championTable(games, profile))}
+    ${row("minmax(0, 1fr) minmax(0, 1fr)", streaksPanel(games), recordsPanel(games, profile))}
     ${formPanel(games, profile)}`;
 }
 
@@ -166,8 +177,8 @@ function trendChart(newestFirst: MatchRecord[], metric: TrendMetric, profile: Pr
     .map((game, index) => ({ game, index, value: metricValue(game, metric) }))
     .filter((point): point is { game: MatchRecord; index: number; value: number } => point.value !== null);
   if (points.length < 2) return `<p class="chart-empty">${icon("chart-line", 18)}<span>${esc(t("stats.trendEmpty"))}</span></p>`;
-  const width = 760;
-  const height = 190;
+  const width = 1180;
+  const height = 230;
   const pad = { left: 44, right: 14, top: 12, bottom: 22 };
   const values = points.map((point) => point.value);
   const high = Math.max(...values) * 1.08 || 1;
@@ -184,7 +195,7 @@ function trendChart(newestFirst: MatchRecord[], metric: TrendMetric, profile: Pr
     <text x="${pad.left - 6}" y="${(y(value) + 4).toFixed(1)}" text-anchor="end" class="axis">${esc(number(value, value < 10 ? 1 : 0))}</text>`).join("");
   const bars = points.map((point, order) => {
     const barWidth = Math.max(3, (width - pad.left - pad.right) / games.length - 3);
-    return `<rect x="${(x(point.index) - barWidth / 2).toFixed(1)}" y="${y(point.value).toFixed(1)}" width="${barWidth.toFixed(1)}" height="${(height - pad.bottom - y(point.value)).toFixed(1)}" data-i="${order}" class="${point.game.win ? "bar-win" : "bar-loss"}"/>`;
+    return `<rect x="${(x(point.index) - barWidth / 2).toFixed(1)}" y="${y(point.value).toFixed(1)}" width="${barWidth.toFixed(1)}" height="${(height - pad.bottom - y(point.value)).toFixed(1)}" rx="1.5" data-i="${order}" style="--b:${(order / Math.max(1, points.length - 1)).toFixed(3)}" class="${point.game.win ? "bar-win" : "bar-loss"}"/>`;
   }).join("");
   // Hover readout: the game's result, the metric, K/D/A and when it was played.
   const hover: HoverPoint[] = points.map((point, order) => {
@@ -208,7 +219,7 @@ function trendChart(newestFirst: MatchRecord[], metric: TrendMetric, profile: Pr
       ${ticks}
       ${bars}
       <line x1="${pad.left}" x2="${width - pad.right}" y1="${y(average).toFixed(1)}" y2="${y(average).toFixed(1)}" class="avg-line"/>
-      <polyline points="${line}" class="trend-line"/>
+      <polyline points="${line}" class="trend-line" pathLength="1"/>
       <g class="chart-hover" visibility="hidden"></g>
       <text x="${pad.left}" y="${height - 5}" class="axis">${esc(t("stats.older"))}</text>
       <text x="${width - pad.right}" y="${height - 5}" text-anchor="end" class="axis">${esc(t("stats.newer"))}</text>
@@ -237,7 +248,7 @@ function championTable(games: MatchRecord[], profile: Profile | null): string {
     })
     .sort((left, right) => right.games - left.games || right.wins / right.games - left.wins / left.games);
   return `
-    <section class="profile-panel">
+    <section class="profile-panel" data-reveal>
       <header class="panel-head"><h3>${esc(t("stats.champions"))}</h3><span class="muted">${esc(t("stats.championsCount", { count: rows.length }))}</span></header>
       <div class="table-scroll">
       <table class="champion-stats">
@@ -267,17 +278,24 @@ const ROLES: [string, MessageKey][] = [
   ["BOTTOM", "stats.role.bot"], ["UTILITY", "stats.role.support"],
 ];
 
-function streaksPanel(games: MatchRecord[]): string {
-  const chronological = [...games].reverse();
+/** Longest win and loss runs, and the run the newest game is part of (negative = losses). */
+function streaks(games: MatchRecord[]): { best: number; worst: number; run: number } {
   let best = 0;
   let worst = 0;
   let run = 0;
-  chronological.forEach((game) => {
+  [...games].reverse().forEach((game) => {
     run = game.win ? Math.max(1, run + 1) : Math.min(-1, run - 1);
     best = Math.max(best, run);
     worst = Math.min(worst, run);
   });
-  const current = games.length ? (games[0].win ? t("stats.winStreak", { count: Math.max(run, 0) }) : t("stats.lossStreak", { count: Math.abs(Math.min(run, 0)) })) : "";
+  return { best, worst, run };
+}
+
+const streakText = (run: number): string => (run >= 0 ? t("stats.winStreak", { count: run }) : t("stats.lossStreak", { count: -run }));
+
+function streaksPanel(games: MatchRecord[]): string {
+  const { best, worst, run } = streaks(games);
+  const current = games.length ? streakText(run) : "";
   const sum = (field: keyof MatchRecord) => games.reduce((total, game) => total + Number(game[field] || 0), 0);
   const multis: [string, number][] = [
     [t("stats.double"), sum("doubleKills")], [t("stats.triple"), sum("tripleKills")],
@@ -285,14 +303,14 @@ function streaksPanel(games: MatchRecord[]): string {
     [t("stats.firstBlood"), games.filter((game) => game.firstBlood).length],
   ];
   return `
-    <section class="profile-panel">
+    <section class="profile-panel" data-reveal>
       <h3>${esc(t("stats.streaks"))}</h3>
       <div class="streak-row">
         <div><span>${esc(t("stats.current"))}</span><b class="${games[0]?.win ? "is-good" : "is-bad"}">${esc(current)}</b></div>
-        <div><span>${esc(t("stats.bestStreak"))}</span><b class="is-good">${best}</b></div>
-        <div><span>${esc(t("stats.worstStreak"))}</span><b class="is-bad">${Math.abs(worst)}</b></div>
+        <div><span>${esc(t("stats.bestStreak"))}</span><b class="is-good" data-count>${best}</b></div>
+        <div><span>${esc(t("stats.worstStreak"))}</span><b class="is-bad" data-count>${Math.abs(worst)}</b></div>
       </div>
-      <ul class="multi-list">${multis.map(([label, count]) => `<li><b>${count}</b><span>${esc(label)}</span></li>`).join("")}</ul>
+      <ul class="multi-list">${multis.map(([label, count]) => `<li><b data-count>${count}</b><span>${esc(label)}</span></li>`).join("")}</ul>
     </section>`;
 }
 
@@ -303,13 +321,13 @@ function formPanel(games: MatchRecord[], profile: Profile | null): string {
   const recent = games.slice(0, 30).reverse();
   const wins = recent.filter((game) => game.win).length;
   return `
-    <section class="profile-panel">
+    <section class="profile-panel" data-reveal>
       <header class="panel-head">
         <h3>${esc(t("stats.form"))}</h3>
         <span class="muted">${esc(t("profile.winLoss", { wins, losses: recent.length - wins }))}</span>
       </header>
-      <div class="form-strip" style="--n:${Math.max(recent.length, 10)}">${recent.map((game) => `
-        <span class="form-game ${game.win ? "is-win" : "is-loss"}" data-tooltip="${esc(`${championNameOf(game, profile)} · ${game.kills}/${game.deaths}/${game.assists} · ${t(queueKey(game))} · ${new Date(game.created).toLocaleDateString(localeTag())}`)}">
+      <div class="form-strip" style="--n:${Math.max(recent.length, 10)}">${recent.map((game, index) => `
+        <span class="form-game ${game.win ? "is-win" : "is-loss"}" style="--k:${index}" data-tooltip="${esc(`${championNameOf(game, profile)} · ${game.kills}/${game.deaths}/${game.assists} · ${t(queueKey(game))} · ${new Date(game.created).toLocaleDateString(localeTag())}`)}">
           <span class="form-icon">${championIdOf(game, profile) ? `<img src="${esc(championIcon(championIdOf(game, profile)))}" alt="" loading="lazy" draggable="false" />` : ""}</span>
           <em>${esc(t(game.win ? "stats.winShort" : "stats.lossShort"))}</em>
         </span>`).join("")}
@@ -340,7 +358,7 @@ function recordsPanel(games: MatchRecord[], profile: Profile | null): string {
   ].filter((record): record is Record => record !== null);
   if (!records.length) return "";
   return `
-    <section class="profile-panel">
+    <section class="profile-panel" data-reveal>
       <h3>${esc(t("stats.records"))}</h3>
       <ul class="records">${records.map((record) => {
         const id = championIdOf(record.game, profile);
@@ -364,7 +382,7 @@ const CLASS_KEYS: Record<(typeof CLASSES)[number], MessageKey> = {
   Assassin: "stats.class.assassin", Marksman: "stats.class.marksman", Support: "stats.class.support",
 };
 const ROLE_COLORS: Record<string, string> = {
-  TOP: "#c89b3c", JUNGLE: "#0ac8b9", MIDDLE: "#cdbe91", BOTTOM: "#0397ab", UTILITY: "#a0784a",
+  TOP: "#ff9f0a", JUNGLE: "#30d158", MIDDLE: "#0a84ff", BOTTOM: "#bf5af2", UTILITY: "#64d2ff",
 };
 
 /** Lane glyphs drawn in the client's thin-line style (24px box). */
@@ -436,29 +454,55 @@ const focusShare = (counts: { games: MatchRecord[] }[], top: number, total: numb
   counts.slice(0, top).reduce((sum, entry) => sum + entry.games.length, 0) / Math.max(1, total);
 
 const panel = (title: string, body: string, aside = ""): string => `
-  <section class="profile-panel">
+  <section class="profile-panel" data-reveal>
     <header class="panel-head"><h3>${esc(title)}</h3>${aside ? `<span class="muted">${esc(aside)}</span>` : ""}</header>
     ${body}
   </section>`;
 
 const chip = (text: string, tone: string): string => `<em class="delta-chip ${tone}">${esc(text)}</em>`;
 
-function playStylePanel(games: MatchRecord[], profile: Profile | null, scope: string): string {
+/** The top of the page: win rate as a ring, the record, the last games, four key numbers. */
+function heroPanel(games: MatchRecord[], profile: Profile | null, scope: string): string {
   const summary = summarize(games);
   const rich = games.filter(detailed);
   const seconds = rich.reduce((sum, game) => sum + game.durationSeconds, 0);
   const counts = championCounts(games, profile);
-  const tile = (label: string, main: string, sub = "", tone = "") =>
-    `<div class="style-tile"><span>${esc(label)}</span><b class="${tone}">${esc(main)}</b>${sub ? `<em>${esc(sub)}</em>` : ""}</div>`;
-  const body = `
-    <div class="style-tiles">
-      ${tile(t("stats.games"), number(summary.games), t("profile.winLoss", { wins: summary.wins, losses: summary.games - summary.wins }))}
-      ${tile(t("stats.winRate"), percent(summary.rate), "", summary.rate >= 0.5 ? "is-good" : "is-bad")}
-      ${tile(t("stats.kda"), `${number(summary.kda, 2)}:1`)}
-      ${tile(t("stats.playTime"), seconds ? `${Math.floor(seconds / 3600)}h ${Math.round((seconds % 3600) / 60)}m` : "—", summary.length ? t("stats.avgLength", { time: clock(summary.length) }) : "")}
-      ${tile(t("stats.championPool"), `${counts.length} / ${TOTAL_CHAMPIONS}`, t("stats.top3Share", { share: percent(focusShare(counts, 3, games.length)) }))}
-    </div>`;
-  return panel(t("stats.playStyle"), body, `${scope} · ${t("stats.gamesCount", { count: games.length })}`);
+  const n = Math.max(1, games.length);
+  const per = (field: "kills" | "deaths" | "assists") => number(games.reduce((sum, game) => sum + game[field], 0) / n, 1);
+  const { best, run } = streaks(games);
+  const tone = summary.rate >= 0.5 ? "is-good" : "is-bad";
+  const tile = (label: string, main: string, sub = "", mainTone = "") =>
+    `<div class="hero-tile"><span>${esc(label)}</span><b class="${mainTone}" data-count>${esc(main)}</b>${sub ? `<em>${esc(sub)}</em>` : ""}</div>`;
+  const recent = games.slice(0, 20).reverse();
+  return `
+    <section class="profile-panel stat-hero" data-reveal>
+      <div class="hero-ring ${tone}" style="--p:${summary.rate.toFixed(4)}">
+        <svg viewBox="0 0 120 120" aria-hidden="true">
+          <circle class="ring-track" cx="60" cy="60" r="52"/>
+          <circle class="ring-value" cx="60" cy="60" r="52" pathLength="100"/>
+        </svg>
+        <div class="hero-ring-text"><b data-count>${esc(percent(summary.rate))}</b><span>${esc(t("stats.winRate"))}</span></div>
+      </div>
+      <div class="hero-main">
+        <div class="hero-title"><h3>${esc(t("stats.playStyle"))}</h3><span class="muted">${esc(`${scope} · ${t("stats.gamesCount", { count: games.length })}`)}</span></div>
+        <div class="hero-record">
+          <b class="is-good" data-count>${summary.wins}</b><span>${esc(t("stats.winShort"))}</span>
+          <span class="hero-split"><span style="--p:${summary.rate.toFixed(4)}"></span></span>
+          <b class="is-bad" data-count>${summary.games - summary.wins}</b><span>${esc(t("stats.lossShort"))}</span>
+        </div>
+        <div class="hero-form">
+          <span>${esc(t("stats.form"))}</span>
+          <div class="hero-pills">${recent.map((game, index) =>
+            `<i class="${game.win ? "is-win" : "is-loss"}" style="--k:${index}" data-tooltip="${esc(`${championNameOf(game, profile)} · ${t(game.win ? "profile.win" : "profile.loss")} · ${game.kills}/${game.deaths}/${game.assists}`)}"></i>`).join("")}</div>
+        </div>
+      </div>
+      <div class="hero-tiles">
+        ${tile(t("stats.kda"), number(summary.kda, 2), `${per("kills")} / ${per("deaths")} / ${per("assists")}`)}
+        ${tile(t("stats.current"), streakText(run), `${t("stats.bestStreak")}: ${best}`, run >= 0 ? "is-good" : "is-bad")}
+        ${tile(t("stats.playTime"), seconds ? `${Math.floor(seconds / 3600)}h ${Math.round((seconds % 3600) / 60)}m` : "—", summary.length ? t("stats.avgLength", { time: clock(summary.length) }) : "")}
+        ${tile(t("stats.championPool"), `${counts.length} / ${TOTAL_CHAMPIONS}`, t("stats.top3Share", { share: percent(focusShare(counts, 3, games.length)) }))}
+      </div>
+    </section>`;
 }
 
 /** Last 20 games against the whole list, as OP.GG's Performance box. */
@@ -473,7 +517,7 @@ function performancePanel(games: MatchRecord[]): string {
     return `
       <div class="perf-item">
         <span>${esc(label)}</span>
-        <div class="perf-value"><b>${esc(format(value))}</b>${chip(delta(diff), tone || "is-neutral")}</div>
+        <div class="perf-value"><b data-count>${esc(format(value))}</b>${chip(delta(diff), tone || "is-neutral")}</div>
         <div class="perf-bar ${tone}"><span style="--p:${clamp(value / scale)}"></span><i style="--m:${clamp(base / scale)}"></i></div>
         <small>${esc(t("stats.allValue", { value: format(base) }))}</small>
       </div>`;
@@ -500,9 +544,9 @@ function sidesPanel(games: MatchRecord[]): string {
   const split = blue.games && red.games ? blue.rate / Math.max(1e-9, blue.rate + red.rate) : blue.games ? 1 : 0;
   const body = `
     <div class="side-head">
-      <div class="is-blue"><span>${esc(t("stats.blue"))}</span><b>${blue.games ? esc(percent(blue.rate)) : "—"}</b><em>${esc(t("profile.winLoss", { wins: blue.wins, losses: blue.games - blue.wins }))}</em></div>
+      <div class="is-blue"><span>${esc(t("stats.blue"))}</span><b data-count>${blue.games ? esc(percent(blue.rate)) : "—"}</b><em>${esc(t("profile.winLoss", { wins: blue.wins, losses: blue.games - blue.wins }))}</em></div>
       <div class="side-mid"><span>${esc(t("stats.winRate"))}</span>${blue.games && red.games ? chip(`${leader} +${Math.abs(Math.round(lead * 1000) / 10)}%p`, lead >= 0 ? "is-blue" : "is-red") : ""}</div>
-      <div class="is-red"><span>${esc(t("stats.red"))}</span><b>${red.games ? esc(percent(red.rate)) : "—"}</b><em>${esc(t("profile.winLoss", { wins: red.wins, losses: red.games - red.wins }))}</em></div>
+      <div class="is-red"><span>${esc(t("stats.red"))}</span><b data-count>${red.games ? esc(percent(red.rate)) : "—"}</b><em>${esc(t("profile.winLoss", { wins: red.wins, losses: red.games - red.wins }))}</em></div>
     </div>
     <div class="side-bar"><span class="is-blue" style="--p:${split}"></span><span class="is-red"></span></div>
     <h4 class="sub-head">${esc(t("stats.playShare"))}</h4>
@@ -513,22 +557,25 @@ function sidesPanel(games: MatchRecord[]): string {
   return panel(t("stats.sideStats"), body);
 }
 
-function roleSharePanel(games: MatchRecord[]): string {
+/** `games`: before the role filter, so every role stays on show; `selected`: the role filtered on. */
+function roleSharePanel(games: MatchRecord[], selected: string): string {
   const withRole = games.filter((game) => game.position);
   if (!withRole.length) return "";
   const roles = ROLES.map(([role, label]) => ({ role, label, games: withRole.filter((game) => game.position === role) }));
   const main = roles.reduce((best, entry) => (entry.games.length > best.games.length ? entry : best), roles[0]);
   const body = `
     <div class="role-bar">${roles.filter((entry) => entry.games.length).map((entry) =>
-      `<span style="--p:${entry.games.length / withRole.length};--c:${ROLE_COLORS[entry.role]}" data-tooltip="${esc(`${t(entry.label)}: ${percent(entry.games.length / withRole.length)}`)}"></span>`).join("")}</div>
+      `<span class="${selected && selected !== entry.role ? "is-dim" : ""}" style="--p:${entry.games.length / withRole.length};--c:${ROLE_COLORS[entry.role]}" data-tooltip="${esc(`${t(entry.label)}: ${percent(entry.games.length / withRole.length)}`)}"></span>`).join("")}</div>
     <div class="role-boxes">${roles.map((entry) => {
       const wins = entry.games.filter((game) => game.win).length;
+      const facts = `${t(entry.label)}: ${t("profile.winLoss", { wins, losses: entry.games.length - wins })}${entry.games.length ? ` · ${percent(wins / entry.games.length)}` : ""}`;
       return `
-      <div class="role-box${entry === main ? " is-main" : ""}" style="--c:${ROLE_COLORS[entry.role]}" data-tooltip="${esc(`${t(entry.label)}: ${t("profile.winLoss", { wins, losses: entry.games.length - wins })}${entry.games.length ? ` · ${percent(wins / entry.games.length)}` : ""}`)}">
+      <button type="button" class="role-box${entry === main ? " is-main" : ""}" style="--c:${ROLE_COLORS[entry.role]}" data-stats-role="${entry.role}" aria-pressed="${selected === entry.role}"${entry.games.length ? "" : " disabled"} data-tooltip="${esc(entry.games.length ? `${facts}\n${t("stats.roleFilter")}` : facts)}">
         ${roleGlyph(entry.role)}
-        <b>${esc(percent(entry.games.length / withRole.length))}</b>
+        <b data-count>${esc(percent(entry.games.length / withRole.length))}</b>
         <em>${esc(t("stats.gamesShort", { count: entry.games.length }))}</em>
-      </div>`;
+        <span class="role-name">${esc(t(entry.label))}</span>
+      </button>`;
     }).join("")}</div>`;
   return panel(t("stats.roleShare"), body);
 }
@@ -569,8 +616,8 @@ function poolPanel(games: MatchRecord[], profile: Profile | null): string {
   });
   const body = `
     <div class="pool-tiles">
-      <div class="style-tile"><span>${esc(t("stats.championsPlayed"))}</span><b>${esc(`${counts.length} / ${TOTAL_CHAMPIONS}`)}</b></div>
-      <div class="style-tile"><span>${esc(t("stats.championFocus"))}</span><b>${esc(percent(focusShare(counts, 3, total)))}</b></div>
+      <div class="style-tile"><span>${esc(t("stats.championsPlayed"))}</span><b data-count>${esc(`${counts.length} / ${TOTAL_CHAMPIONS}`)}</b></div>
+      <div class="style-tile"><span>${esc(t("stats.championFocus"))}</span><b data-count>${esc(percent(focusShare(counts, 3, total)))}</b></div>
     </div>
     <ul class="class-list">
       ${focus(t("stats.mainFocus"), focusShare(counts, 1, total))}
@@ -606,26 +653,27 @@ function activityPanel(games: MatchRecord[]): string {
     }
   });
   const dayMax = Math.max(1, ...days.map((day) => day.games));
-  const active = hours.filter((hour) => hour.games);
-  const hourMax = Math.max(1, ...active.map((hour) => hour.games));
+  const hourMax = Math.max(1, ...hours.map((hour) => hour.games));
   const tone = (wins: number, count: number) => (wins / count >= 0.5 ? "is-good" : "is-bad");
   const body = `
     <h4 class="sub-head"><span>${esc(t("stats.weekday"))}</span></h4>
-    <div class="weekday-chart">${days.map((day) => `
-      <div class="weekday" data-tooltip="${esc(`${day.label}: ${t("stats.gamesCount", { count: day.games })}${day.games ? ` · ${t("profile.winLoss", { wins: day.wins, losses: day.games - day.wins })} · ${percent(day.wins / day.games)}` : ""}`)}">
+    <div class="weekday-chart">${days.map((day, index) => `
+      <div class="weekday" style="--k:${index}" data-tooltip="${esc(`${day.label}: ${t("stats.gamesCount", { count: day.games })}${day.games ? ` · ${t("profile.winLoss", { wins: day.wins, losses: day.games - day.wins })} · ${percent(day.wins / day.games)}` : ""}`)}">
         <span class="weekday-bar"><span class="${day.games ? tone(day.wins, day.games) : ""}" style="--p:${day.games / dayMax}"></span></span>
         <b>${day.games || ""}</b>
         <em>${esc(day.label)}</em>
       </div>`).join("")}
     </div>
-    <h4 class="sub-head"><span>${esc(t("stats.hourly"))}</span><span>${esc(t("stats.winRate"))}</span></h4>
-    <ul class="hour-list">${active.map((hour) => `
-      <li>
-        <span>${esc(`${String(hour.hour).padStart(2, "0")}:00`)}</span>
-        <span class="hour-bar ${tone(hour.wins, hour.games)}"><span style="--p:${hour.games / hourMax}"><em>${esc(t("stats.gamesCount", { count: hour.games }))}</em></span></span>
-        <b class="${tone(hour.wins, hour.games)}">${esc(percent(hour.wins / hour.games))}</b>
-      </li>`).join("")}
-    </ul>`;
+    <h4 class="sub-head"><span>${esc(t("stats.hourly"))}</span></h4>
+    <div class="hour-chart">${hours.map((hour) => {
+      const label = `${String(hour.hour).padStart(2, "0")}:00`;
+      return `
+      <div class="hour${hour.games ? "" : " is-empty"}" style="--k:${hour.hour}" data-tooltip="${esc(`${label}: ${t("stats.gamesCount", { count: hour.games })}${hour.games ? ` · ${t("profile.winLoss", { wins: hour.wins, losses: hour.games - hour.wins })} · ${percent(hour.wins / hour.games)}` : ""}`)}">
+        <span class="hour-col"><span class="${hour.games ? tone(hour.wins, hour.games) : ""}" style="--p:${hour.games / hourMax}"></span></span>
+      </div>`;
+    }).join("")}
+    </div>
+    <div class="hour-axis">${[0, 6, 12, 18, 23].map((hour) => `<span>${String(hour).padStart(2, "0")}</span>`).join("")}</div>`;
   return panel(t("stats.activity"), body);
 }
 

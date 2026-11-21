@@ -23,7 +23,8 @@ import { $, esc, fragment, leave, toast } from "./dom";
 import { icon } from "./icons";
 import { APEX, emblem, normalizeTier, palette, rankOf, type Mode } from "./ranks";
 import { accountValue, pricesUpdated, skinPrice } from "./prices";
-import { championIdOf, championNameOf, queueKey, statsHtml, type StatsFilters } from "./stats";
+import { championIdOf, championNameOf, queueKey, type StatsFilters } from "./stats";
+import { renderOverview, renderStats, type OverviewChange, type StatsChange } from "./statsfx";
 import { hideChartHover, pointsAttribute, wireChartHover, type HoverPoint } from "./charthover";
 
 export interface ProfileContext {
@@ -75,7 +76,13 @@ export function openProfile(context: ProfileContext): void {
   if (!initial) return;
   const id = keyId(keyOf(initial));
   let view: ProfileView = { profile: null, history: [], games: [], seasons: [] };
-  const statsFilters: StatsFilters = { queue: "all", range: 0, metric: "kda" };
+  const statsFilters: StatsFilters = { queue: "all", range: 0, metric: "kda", role: "" };
+  /** Why the Stats tab is drawn again (decides what moves): new data arrives quietly. */
+  let statsChange: StatsChange = "data";
+  /** The same for the Overview tab: "chart" redraws only the rank chart (zoom, queue). */
+  let overviewChange: OverviewChange = "data";
+  /** The first data to arrive comes in with the entrance; later refreshes are quiet. */
+  let loaded = false;
   let tab: Tab = "overview";
   let chartMode: ChartQueue = context.mode;
   let selectedChampion: number | null = null;
@@ -143,8 +150,10 @@ export function openProfile(context: ProfileContext): void {
       const count = view.profile?.champions.length;
       champions.textContent = count ? `${t("profile.champions")} (${count})` : t("profile.champions");
     }
-    if (tab === "overview") body.innerHTML = overviewHtml(account(), view, chartMode, context.mode);
-    if (tab === "stats") body.innerHTML = statsHtml(view.games, view.profile, statsFilters);
+    if (tab === "overview") renderOverview(body, overviewHtml(account(), view, chartMode, context.mode), overviewChange);
+    overviewChange = "data";
+    if (tab === "stats") renderStats(body, view.games, view.profile, statsFilters, statsChange);
+    statsChange = "data";
     if (tab === "champions") body.innerHTML = championsHtml(view.profile, { selectedChampion, championQuery, championSort, withSkins });
     if (tab === "value") body.innerHTML = valueHtml(view.profile, context.rpPerEuro);
     if (tab === "champions") {
@@ -164,6 +173,10 @@ export function openProfile(context: ProfileContext): void {
   const load = async () => {
     try {
       view = await api.getProfile(keyOf(account()));
+      if (!loaded) {
+        loaded = true;
+        overviewChange = "all";
+      }
     } catch (error) {
       toast("error", t("toast.openFailed"), describe(error), 5000);
     }
@@ -232,14 +245,18 @@ export function openProfile(context: ProfileContext): void {
     if (nextTab && nextTab !== tab) {
       tab = nextTab;
       body.scrollTop = 0;
+      overviewChange = "all";
       return renderBody();
     }
-    const statsButton = target.closest<HTMLElement>("[data-stats-queue], [data-stats-range], [data-stats-metric]");
+    const statsButton = target.closest<HTMLElement>("[data-stats-queue], [data-stats-range], [data-stats-metric], [data-stats-role]");
     if (statsButton) {
-      const { statsQueue, statsRange, statsMetric } = statsButton.dataset;
+      const { statsQueue, statsRange, statsMetric, statsRole } = statsButton.dataset;
       if (statsQueue) statsFilters.queue = statsQueue as StatsFilters["queue"];
       if (statsRange) statsFilters.range = Number(statsRange) as StatsFilters["range"];
       if (statsMetric) statsFilters.metric = statsMetric as StatsFilters["metric"];
+      // A role box filters on that lane; the same one again shows every role.
+      if (statsRole) statsFilters.role = statsFilters.role === statsRole ? "" : statsRole;
+      statsChange = statsMetric ? "metric" : "filters";
       return renderBody();
     }
     if (target.closest("[data-open-stats]")) {
@@ -250,11 +267,13 @@ export function openProfile(context: ProfileContext): void {
     const zoom = target.closest<HTMLElement>("[data-chart-zoom]")?.dataset.chartZoom;
     if (zoom !== undefined) {
       setChartZoom(Number(zoom));
+      overviewChange = "chart";
       return renderBody();
     }
     const mode = target.closest<HTMLElement>("[data-chart-mode]")?.dataset.chartMode as ChartQueue | undefined;
     if (mode && mode !== chartMode) {
       chartMode = mode;
+      overviewChange = "chart";
       return renderBody();
     }
     const sort = target.closest<HTMLElement>("[data-champion-sort]")?.dataset.championSort;
@@ -293,6 +312,7 @@ export function openProfile(context: ProfileContext): void {
     const next = ZOOMS[Math.min(ZOOMS.length - 1, Math.max(0, index + (event.deltaY < 0 ? 1 : -1)))];
     if (next !== chartZoom) {
       setChartZoom(next);
+      overviewChange = "chart";
       renderBody();
     }
   }, { passive: false });
@@ -377,13 +397,13 @@ function rankedCard(title: string, queue: Pick<RankedQueue, "tier" | "division" 
   const colors = palette(tier);
   const label = !ranked ? t("rank.unranked") : APEX.has(tier) || !queue?.division ? tierName(tier) : `${tierName(tier)} ${queue.division}`;
   return `
-    <section class="ranked-card${chart === shown ? " is-shown" : ""}" style="--tier:${colors.base};--tier-light:${colors.light};--tier-dark:${colors.dark}" data-tier="${tier}" data-chart-mode="${chart}" role="button" tabindex="0" aria-pressed="${chart === shown}">
+    <section class="ranked-card${chart === shown ? " is-shown" : ""}" data-reveal style="--tier:${colors.base};--tier-light:${colors.light};--tier-dark:${colors.dark}" data-tier="${tier}" data-chart-mode="${chart}" role="button" tabindex="0" aria-pressed="${chart === shown}">
       <h4>${esc(title)}</h4>
       <div class="ranked-card-body">
         <div class="ranked-emblem">${emblem(tier, 92, mode)}</div>
         <div>
           <div class="rank-name">${esc(label)}</div>
-          ${ranked ? `<div class="lp">${esc(String(queue?.lp ?? 0))} LP</div>` : ""}
+          ${ranked ? `<div class="lp" data-count>${esc(String(queue?.lp ?? 0))} LP</div>` : ""}
           ${games ? `
             <div class="ranked-record">${esc(t("profile.winLoss", { wins: queue?.wins ?? 0, losses: queue?.losses ?? 0 }))} · <b>${esc(t("profile.winRate", { rate }))}</b></div>
             <div class="winrate-bar"><span style="--p:${rate / 100}"></span></div>` : `<div class="ranked-record muted">${esc(t("profile.noGames"))}</div>`}
@@ -419,9 +439,10 @@ function overviewHtml(account: AccountView, view: ProfileView, chartMode: ChartQ
     points = [{ at: profile.syncedAt, mode: shown, tier: current.tier, division: current.division, lp: current.lp }];
   }
   return `
+    <div class="stats-view overview-view">
     ${profile ? "" : emptyNotice()}
     <div class="ranked-cards">${cards.join("")}</div>
-    <section class="profile-panel">
+    <section class="profile-panel rank-panel" data-reveal>
       <header class="panel-head">
         <h3>${esc(t("profile.lpHistory"))} <span class="chart-queue">${esc(t(QUEUE_TITLES[CHART_QUEUES[shown]]))}</span></h3>
         <div class="chart-tools">
@@ -434,7 +455,8 @@ function overviewHtml(account: AccountView, view: ProfileView, chartMode: ChartQ
       ${historyNote(points)}
     </section>
     ${seasonHistory(view.seasons ?? [])}
-    ${recentGames(view.games, profile, mode)}`;
+    ${recentGames(view.games, profile, mode)}
+    </div>`;
 }
 
 /** Explain a short chart: LP history only exists from the day it was first recorded. */
@@ -456,14 +478,14 @@ const seasonRankLabel = (tier: string, division: string, lp?: number): string =>
 function seasonHistory(seasons: SeasonRank[]): string {
   if (!seasons.length) return "";
   return `
-    <section class="profile-panel season-history">
+    <section class="profile-panel season-history" data-reveal>
       <h3>${esc(t("profile.seasons"))}</h3>
-      <div class="season-boxes">${seasons.map((season) => {
+      <div class="season-boxes">${seasons.map((season, index) => {
         const tier = normalizeTier(season.tier);
         const rank = APEX.has(tier) || !season.division ? tierName(tier) : `${tierName(tier)} ${season.division}`;
         const peak = season.peakTier ? seasonRankLabel(season.peakTier, season.peakDivision, season.peakLp) : "";
         return `
-        <div class="season-box" style="--tier:${palette(season.tier).base}" data-tooltip="${esc(peak ? `${season.season} · ${t("profile.seasonPeak", { rank: peak })}` : season.season)}">
+        <div class="season-box" style="--tier:${palette(season.tier).base};--k:${index}" data-tooltip="${esc(peak ? `${season.season} · ${t("profile.seasonPeak", { rank: peak })}` : season.season)}">
           <em>${esc(season.season)}</em>
           <span class="season-crest">${emblem(season.tier, 64, "lol")}</span>
           <b>${esc(rank)}</b>
@@ -551,9 +573,9 @@ function rankChart(points: RankPoint[], mode: Mode): string {
   const line_points = now - latest.point.at > 60_000 || head.length === 1
     ? [...head, { point: { ...latest.point, at: Math.max(now, latest.point.at + 60_000) }, score: latest.score }]
     : head;
-  const width = 760;
-  const height = 210;
-  const pad = { left: 74, right: 16, top: 14, bottom: 26 };
+  const width = 1180;
+  const height = 260;
+  const pad = { left: 92, right: 18, top: 16, bottom: 28 };
   const scores = line_points.map((entry) => entry.score);
   let low = Math.floor((Math.min(...scores) - 40) / 100) * 100;
   let high = Math.ceil((Math.max(...scores) + 40) / 100) * 100;
@@ -592,7 +614,7 @@ function rankChart(points: RankPoint[], mode: Mode): string {
   }).join("");
   const dots = scored.map((entry, index) => {
     const tier = normalizeTier(entry.point.tier);
-    return `<circle cx="${x(entry.point.at).toFixed(1)}" cy="${y(entry.score).toFixed(1)}" r="3.2" data-i="${index}" class="chart-dot" style="fill:${palette(tier).base}"/>`;
+    return `<circle cx="${x(entry.point.at).toFixed(1)}" cy="${y(entry.score).toFixed(1)}" r="3.6" data-i="${index}" class="chart-dot" style="fill:${palette(tier).base};--b:${(index / Math.max(1, scored.length - 1)).toFixed(3)}"/>`;
   }).join("");
   // Hover readout: rank, LP and the change since the previous point.
   const hover: HoverPoint[] = scored.map((entry, index) => {
@@ -621,8 +643,8 @@ function rankChart(points: RankPoint[], mode: Mode): string {
         </linearGradient>
       </defs>
       ${rules.join("")}
-      <polygon points="${area}" fill="url(#chart-fill)"/>
-      <polyline points="${line}" class="chart-line"/>
+      <polygon points="${area}" fill="url(#chart-fill)" class="chart-area"/>
+      <polyline points="${line}" class="chart-line" pathLength="1"/>
       ${dots}
       <g class="chart-hover" visibility="hidden"></g>
       <text x="${pad.left}" y="${height - 6}" class="axis">${esc(dateFormat.format(start))}</text>
@@ -639,7 +661,7 @@ const kda = (kills: number, deaths: number, assists: number): string =>
 function recentGames(archive: MatchRecord[], profile: Profile | null, mode: Mode): string {
   const games = archive.filter((game) => !game.remake).slice(0, 20);
   if (!games.length) {
-    return `<section class="profile-panel"><h3>${esc(t("profile.recent"))}</h3><p class="muted">${esc(t("profile.recentEmpty"))}</p></section>`;
+    return `<section class="profile-panel" data-reveal><h3>${esc(t("profile.recent"))}</h3><p class="muted">${esc(t("profile.recentEmpty"))}</p></section>`;
   }
   const wins = games.filter((game) => game.win).length;
   const totals = games.reduce((sum, game) => ({ k: sum.k + game.kills, d: sum.d + game.deaths, a: sum.a + game.assists }), { k: 0, d: 0, a: 0 });
@@ -655,14 +677,14 @@ function recentGames(archive: MatchRecord[], profile: Profile | null, mode: Mode
   const rate = Math.round((wins / games.length) * 100);
   const portrait = (id: number) => id ? `<img src="${esc(championIcon(id))}" alt="" draggable="false" />` : `<span class="portrait-blank"></span>`;
   return `
-    <section class="profile-panel">
+    <section class="profile-panel recent-panel" data-reveal>
       <header class="panel-head">
         <h3>${esc(t("profile.recent"))}</h3>
         <span class="muted">${esc(t("profile.recentSummary", { count: games.length, wins, losses: games.length - wins, kda: kda(totals.k, totals.d, totals.a) }))}
           · <button class="text-button" data-open-stats>${esc(t("stats.more"))}</button></span>
       </header>
       <div class="recent-summary">
-        <div class="donut-wrap" data-tooltip="${esc(t("profile.recentSummary", { count: games.length, wins, losses: games.length - wins, kda: kda(totals.k, totals.d, totals.a) }))}"><div class="donut" style="--p:${rate}"></div><span>${rate}%</span></div>
+        <div class="donut-wrap" data-tooltip="${esc(t("profile.recentSummary", { count: games.length, wins, losses: games.length - wins, kda: kda(totals.k, totals.d, totals.a) }))}"><div class="hero-ring ${rate >= 50 ? "is-good" : "is-bad"}" style="--p:${(rate / 100).toFixed(2)}"><svg viewBox="0 0 120 120" aria-hidden="true"><circle class="ring-track" cx="60" cy="60" r="52"/><circle class="ring-value" cx="60" cy="60" r="52" pathLength="100"/></svg><div class="hero-ring-text"><b data-count>${rate}%</b></div></div></div>
         <div class="top-champions">
           ${top.map(([name, entry]) => `
             <div class="top-champion">
@@ -673,11 +695,11 @@ function recentGames(archive: MatchRecord[], profile: Profile | null, mode: Mode
         </div>
       </div>
       <ol class="match-list" data-mode="${mode}">
-        ${games.map((game) => {
+        ${games.map((game, index) => {
           const detailed = game.source === "client" && game.durationSeconds > 0;
           const kp = game.teamKills ? Math.round(((game.kills + game.assists) / game.teamKills) * 100) : null;
           return `
-          <li class="match ${game.win ? "is-win" : "is-loss"}">
+          <li class="match ${game.win ? "is-win" : "is-loss"}" style="--k:${index}">
             <span class="match-champion">${portrait(championIdOf(game, profile))}</span>
             <div class="match-result">
               <b>${esc(t(game.win ? "profile.win" : "profile.loss"))}</b>

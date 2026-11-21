@@ -5,6 +5,7 @@ import "./league.css";
 import "./client-controls.css";
 import "./glow.css";
 import "./profile.css";
+import "./stats.css";
 import "./gamesettings.css";
 import "./builds.css";
 
