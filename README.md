@@ -127,11 +127,26 @@ Off by default. Turn it on in Settings › Recorder and every League game is rec
 - Bookmark key (F8 by default, set in Settings › Recorder): press it during a game to mark the last minute; after the game, Keep bookmarks saves a clip of each one and can delete the full game.
 - Music track: with the music player on, Settings › Recorder can record its sound on a separate track, so you keep it in a clip or leave it out.
 - Each sound strip under the timeline has its own mute button (game, microphone, Discord).
+- Safe against crashes: a game is written to disk as it goes, so a crash or a power cut loses only the last moment. At the next start the recording is repaired, named and added to the library.
+- Review notes: press N (or Add note) while watching to write a note at that moment. Notes show on the timeline, have their own filter, and stay with clips cut from that part.
+- Search the library by champion, game mode, result, K/D/A or the text of a note.
 - Slow motion and keyboard control: play from 0.25× to 2× (− and +, 0 for normal), Space to play or pause, J and L for 10 s, comma and period for one frame, Shift + arrows for the previous or next key moment, Up and Down for the volume, M to mute, F for full screen; press ? for the list. Each account in the Recordings list shows its rank crest.
 - Broadcast overlay while watching: hold Tab (or turn on HUD next to full screen) to see the game like a tournament broadcast at that exact moment, in the window or in full screen. A top banner with each team's kills, gold and lead, towers, voidgrubs, every dragon by its type and the Baron buff timer; dragon and Baron timers; and all ten players by lane with level, CS, K/D/A and the gold difference of each lane. Games recorded from this version also show everyone's items and who is dead with their respawn timer. Older recordings get it too, from the League client's match history (items over time only exist for new recordings).
 - Under the video, the game's end-of-game stats as in the League client: Scoreboard, Overview (gold advantage over time, kills and objectives, kill map), Stats, Graphs and Runes, with live values on hover. Click a time on the gold graph, the kill strips or the kill map to watch that moment. They are read from the League client's match history after the game and kept next to the recording. Hide them for a full-size view.
 - Built for low-end PCs: the picture is captured and converted on the graphics card and encoded by its own video encoder (NVIDIA, Intel or AMD) through Windows Media Foundation, with a software fallback. Nothing extra to download.
 - Capture only, the way OBS and Medal work (Windows Graphics Capture of the game window, or the whole screen). The game process is never opened, hooked, read or drawn over. Key moments come from Riot's local live game data.
+
+### Overview of all accounts
+
+The Overview row in the sidebar opens one window with every account: Solo/Duo LP won or lost today and over the last 7 days, games and wins, the last game, and days left before LP decay. Below it, the champions played across all accounts for the last 7 days, 30 days or everything, with win rate and KDA. Click an account to open its page. Everything comes from what the app already saved: nothing is fetched.
+
+### Windows notifications
+
+On by default, each with its own switch in Settings › Notifications: LP decay coming up (at 3 days, and again on the last day), a suspension that ended, and a recording saved. They are silent, also come while the app sits in the tray, and nothing is sent anywhere.
+
+### Accounts backup
+
+Settings › Backup writes an encrypted copy of your accounts and their passwords to a folder you choose, every day, week or month. You choose a passphrase (it is not stored); the backup opens with it on any PC. To restore, use Import and pick the backup file.
 
 ### Music player
 
@@ -160,6 +175,7 @@ Off by default. Turn it on in Settings › Experimental. It is still under devel
 ### Smaller changes
 
 - Closing the window keeps the app in the system tray; quit from the tray icon's menu.
+- A short feature guide is shown once and stays in Settings › Accounts and tools.
 - Settings opens on side tabs like the League client, and the sidebar lists Recordings, Game settings and Settings above the total value.
 - The account that is signed in right now gets a teal frame and a Connected or Playing badge, and its Log in button is disabled.
 - Since v5.0.0 the app has a new look: dark, minimal and rounded, with one blue accent (purple in TFT mode), glass menus, and soft motion. Cards lift and catch a light under the mouse, and rank crests glow in their tier color.
@@ -229,7 +245,7 @@ To fill an account's profile, log in to it once through the app with "Launch the
 ## Privacy and security
 
 - Passwords are stored in Windows Credential Manager (service `LeagueAccounts`), never in the app's files. The account list itself (login names, Riot IDs, notes) and Discord webhook addresses are encrypted with Windows Data Protection, so a copied file cannot be read on another PC or by another Windows user; use Export/Import to move to a new PC. Copied passwords are cleared from the clipboard after 30 seconds and kept out of clipboard history.
-- Exports contain passwords in plain text. Keep them private.
+- Exports contain passwords in plain text. Keep them private. Backups (Settings › Backup) are encrypted with your passphrase (AES-256-GCM); without it they cannot be opened by anyone.
 - The app contacts OP.GG for ranks and recent games, the Riot and League clients on `127.0.0.1`, CommunityDragon for champion and skin pictures, and GitHub for updates. There is no telemetry and no account server.
 - Accounts, settings, profiles, game history, cached pictures, game settings backups and logs live in `%APPDATA%\LeagueAccounts\`. Logs hold fixed event codes only, never account data.
 - Game settings only touches `PersistedSettings.json`, `game.cfg` and `input.ini` in League's Config folder, and backs the settings file up before every change.

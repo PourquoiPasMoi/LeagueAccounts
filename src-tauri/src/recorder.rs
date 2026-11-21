@@ -372,6 +372,7 @@ fn finish(app: &AppHandle, active: Active) {
     let error = match outcome {
         Outcome::Saved(entry) => {
             logging::record(Event::RecordingSaved, Reason::None);
+            crate::notify::send(app, crate::notify::Kind::RecordingSaved(entry.name.clone()));
             saved = Some(entry.path);
             String::new()
         }
@@ -582,6 +583,14 @@ fn relabel_old_recordings(root: &std::path::Path) -> bool {
 
 fn convert_old_recordings(app: &AppHandle) {
     let root = prefs().root();
+    // Games cut short by a crash or a power cut: index rebuilt, named, listed.
+    let recovered = session::recover(&root, &|path| is_being_recorded(path));
+    if !recovered.is_empty() {
+        logging::record(Event::RecordingSaved, Reason::None);
+        let _ = app.emit("recordings-changed", ());
+        let _ = app.emit("recordings-recovered", recovered.len());
+        crate::notify::send(app, crate::notify::Kind::Recovered(recovered.len()));
+    }
     if relabel_old_recordings(&root) {
         let _ = app.emit("recordings-changed", ());
     }
@@ -1253,6 +1262,29 @@ pub async fn rename_recording(app: AppHandle, path: String, name: String) -> Com
         .map_err(fail)?;
     let _ = app.emit("recordings-changed", ());
     Ok(renamed)
+}
+
+/// The player's notes on a recording (review): replaces the whole list.
+#[tauri::command]
+pub async fn set_recording_notes(path: String, notes: Vec<library::Note>) -> CommandResult<Vec<library::Note>> {
+    let root = prefs().root();
+    tauri::async_runtime::spawn_blocking(move || {
+        let file = library::resolve(&root, &path).ok_or("recording_missing")?;
+        let mut meta = library::read_meta(&file).unwrap_or_default();
+        let mut notes: Vec<library::Note> = notes
+            .into_iter()
+            .filter(|note| note.time.is_finite() && !note.text.trim().is_empty())
+            .map(|note| library::Note { time: note.time.max(0.0), text: note.text.trim().chars().take(500).collect() })
+            .take(300)
+            .collect();
+        notes.sort_by(|a, b| a.time.total_cmp(&b.time));
+        meta.notes = notes.clone();
+        library::write_meta(&file, &meta).map_err(|_| "file_write")?;
+        Ok(notes)
+    })
+    .await
+    .map_err(|_| fail("operation_failed"))?
+    .map_err(fail)
 }
 
 // ---------------------------------------------------------------- Discord webhooks

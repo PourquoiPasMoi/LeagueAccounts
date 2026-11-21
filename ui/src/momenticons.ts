@@ -30,6 +30,8 @@ const GLYPHS: Record<string, string> = {
   ace: `<path ${STROKE} d="M2.5 12.6h11M3 12.6 1.8 5.4l3.7 2.7L8 3l2.5 5.1 3.7-2.7-1.2 7.2z"/>`,
   // Bookmark ribbon (the player's own hotkey mark).
   bookmark: `<path ${STROKE} d="M4.2 2h7.6v12L8 10.9 4.2 14z"/>`,
+  // Speech bubble (the player's note).
+  note: `<path ${STROKE} d="M2.5 3h11v7.6H7.4l-3 2.4v-2.4H2.5zM5.2 5.7h5.6M5.2 7.9h3.6"/>`,
   // Flag (game end).
   gameEnd: `<path ${STROKE} d="M3.5 14.2V2M3.5 2.6h8.6l-2 3 2 3H3.5"/>`,
 };

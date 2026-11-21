@@ -6,9 +6,11 @@
 //! metadata; copy/login commands read the password on the Rust side.
 
 mod champselect;
+mod companion;
 mod login_control;
 mod live;
 mod music;
+mod notify;
 mod recorder;
 mod refresh;
 mod scale;
@@ -947,35 +949,24 @@ struct DecayInfo {
     bank: i64,
 }
 
-/// Decay countdowns: Riot's number when the client reported one, else an
-/// estimate from the last ranked game of the queue (client first, OP.GG
-/// games in the same archive otherwise).
+/// Decay countdowns (worked out in `overview::decay`).
 #[tauri::command]
 async fn decay_index(state: AppState<'_>) -> CommandResult<Vec<DecayInfo>> {
     let state = Arc::clone(&state);
     blocking(move || {
         let accounts = manager(&state)?.accounts.clone();
-        let mut list = Vec::new();
-        for (key, profile) in profiles::load_all(&accounts) {
-            let account_tier = accounts.iter().find(|account| account.account_id == key.account_id && account.region == key.region).map(|account| account.tier.clone()).unwrap_or_default();
-            let games = profiles::archive(&key);
-            for (queue, queue_id, opgg) in [("RANKED_SOLO_5x5", 420, "SOLORANKED"), ("RANKED_FLEX_SR", 440, "FLEXRANKED")] {
-                let ranked = profile.ranked.iter().find(|entry| entry.queue == queue);
-                let tier = ranked.map(|entry| entry.tier.clone()).filter(|tier| !tier.is_empty() && tier != "Unranked").unwrap_or_else(|| if queue_id == 420 { account_tier.clone() } else { String::new() });
-                let bank = match tier.to_ascii_lowercase().as_str() {
-                    "diamond" => 28,
-                    "master" | "grandmaster" | "challenger" => 14,
-                    _ => continue,
-                };
-                let last_game = games.iter().filter(|game| game.queue_id == queue_id || game.queue == opgg).map(|game| game.created).max().unwrap_or(0);
-                let days = ranked.and_then(|entry| entry.decay_days);
-                if days.is_none() && last_game == 0 {
-                    continue;
-                }
-                list.push(DecayInfo { key: view_key(&key), queue: queue.into(), tier, days, at: profile.synced_at, last_game, bank });
-            }
-        }
-        Ok(list)
+        Ok(leagueaccounts::overview::decay(&accounts)
+            .into_iter()
+            .map(|decay| DecayInfo {
+                key: Key { account_id: decay.account_id, region: decay.region },
+                queue: decay.queue,
+                tier: decay.tier,
+                days: decay.days,
+                at: decay.at,
+                last_game: decay.last_game,
+                bank: decay.bank,
+            })
+            .collect())
     }).await
 }
 
@@ -1142,7 +1133,7 @@ async fn import_data(state: AppState<'_>, title: String) -> CommandResult<Option
     let Some(path) = tauri::async_runtime::spawn_blocking(move || {
         rfd::FileDialog::new()
             .set_title(title)
-            .add_filter("JSON", &["json"])
+            .add_filter("League Companion", &["json", leagueaccounts::backup::EXTENSION])
             .pick_file()
     })
     .await
@@ -1156,6 +1147,10 @@ async fn import_data(state: AppState<'_>, title: String) -> CommandResult<Option
         logging::record(Event::ImportFailed, Reason::from_error(&error));
         fail_with("file_read", error)
     })?;
+    // An encrypted backup: the page asks for its passphrase, then `restore_backup`.
+    if leagueaccounts::backup::is_backup(json.as_bytes()) {
+        return Err(fail_with("backup_needs_passphrase", path.display()));
+    }
     let (added, skipped) = manager(&state)?.import_accounts(&json).map_err(|error| {
         logging::record(Event::ImportFailed, Reason::from_error(error.as_ref()));
         fail_with("import_failed", error)
@@ -1608,6 +1603,18 @@ fn main() {
             music::music_now_playing,
             music::music_now,
             music::music_tray,
+            companion::accounts_overview,
+            companion::backup_prefs,
+            companion::set_backup_prefs,
+            companion::set_backup_passphrase,
+            companion::pick_backup_folder,
+            companion::backup_now,
+            companion::restore_backup,
+            notify::notify_prefs,
+            notify::set_notify_prefs,
+            notify::set_notify_texts,
+            notify::test_notification,
+            recorder::set_recording_notes,
         ])
         // Champion and skin pictures: http://lacache.localhost/<game-data path>,
         // downloaded once from CommunityDragon and then served from disk.
@@ -1714,6 +1721,7 @@ fn main() {
             champselect::spawn_watcher(app.handle().clone());
             live::spawn(app.handle().clone());
             recorder::spawn(app.handle().clone());
+            notify::spawn(app.handle().clone(), Arc::clone(&shared));
             let handle = app.handle().clone();
             thread::spawn(move || migrate_autostart(&handle));
             Ok(())

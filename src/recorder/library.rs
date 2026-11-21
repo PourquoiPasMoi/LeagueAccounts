@@ -64,6 +64,17 @@ pub struct RecordingMeta {
     pub title: String,
     /// Clips: where it was posted on Discord (oldest first).
     pub posts: Vec<DiscordPost>,
+    /// The player's own notes on moments of the video (review), by time.
+    pub notes: Vec<Note>,
+}
+
+/// A note the player wrote at a moment of the video.
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct Note {
+    /// Video seconds.
+    pub time: f64,
+    pub text: String,
 }
 
 /// One successful post of a clip to a Discord webhook.
@@ -197,36 +208,9 @@ pub fn resolve_url(root: &Path, url_path: &str) -> Option<PathBuf> {
     resolve(root, &decoded)
 }
 
-/// A fragmented MP4 (recordings made before 2026-11-13 evening): players must
-/// read every fragment before they can show it. Reads only the first boxes.
+/// A recording still in fragments (see `defrag`).
 pub fn is_fragmented(path: &Path) -> bool {
-    use std::io::{Read, Seek, SeekFrom};
-    let Ok(mut file) = std::fs::File::open(path) else { return false };
-    let mut position = 0u64;
-    for _ in 0..16 {
-        let mut header = [0u8; 16];
-        if file.seek(SeekFrom::Start(position)).is_err() || file.read_exact(&mut header).is_err() {
-            return false;
-        }
-        let mut size = u64::from(u32::from_be_bytes([header[0], header[1], header[2], header[3]]));
-        if size == 1 {
-            size = u64::from_be_bytes([header[8], header[9], header[10], header[11], header[12], header[13], header[14], header[15]]);
-        }
-        let kind = &header[4..8];
-        if kind == b"moov" {
-            // A small box at the front; `mvex` inside means fragments follow.
-            if size > 16 * 1024 * 1024 {
-                return false;
-            }
-            let mut body = vec![0u8; size as usize];
-            return file.seek(SeekFrom::Start(position)).is_ok() && file.read_exact(&mut body).is_ok() && body.windows(4).any(|window| window == b"mvex");
-        }
-        if kind == b"mdat" || size < 8 {
-            return false;
-        }
-        position += size;
-    }
-    false
+    super::defrag::is_fragmented(path)
 }
 
 /// Hidden folder next to the games with each sound source of a recording as
@@ -273,6 +257,7 @@ pub fn delete(path: &Path) -> std::io::Result<()> {
     let _ = std::fs::remove_file(meta_path(path));
     let _ = std::fs::remove_file(path.with_extension("game.json"));
     let _ = std::fs::remove_file(path.with_extension("live.json"));
+    let _ = std::fs::remove_file(path.with_extension("recovery.json"));
     let _ = std::fs::remove_file(waves_file(path));
     for source in SOURCES {
         let _ = std::fs::remove_file(track_file(path, source));

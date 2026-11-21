@@ -16,9 +16,11 @@ import { openGameSettings } from "./gamesettings";
 import "./recordings.css";
 import "./gameinfo.css";
 import "./music.css";
+import "./companion.css";
 // Final layer of the design: must stay the last stylesheet.
 import "./polish.css";
 import { openRecordings } from "./recordings";
+import { askBackupPassphrase, companionNav, companionPages, guideDue, openGuide, openOverview, sendNotifyTexts, wireCompanionSettings } from "./companion";
 import { initMusic, musicOn, musicSpeed, openMusic, setMusicEnabled } from "./music";
 import type { DecayInfo, DiscordWebhook, ModeRule, RecorderPrefs, RecorderStatus } from "./api";
 import { experimentalOn, initBuilds, openCurrentBuild, resumeChampSelect, setExperimental, trackGames } from "./builds";
@@ -1020,6 +1022,7 @@ async function openSettings(): Promise<void> {
           <button type="button" role="tab" data-settings-tab="login" aria-selected="${settingsTab === "login"}">${esc(t("settings.login"))}</button>
           <button type="button" role="tab" data-settings-tab="refresh" aria-selected="${settingsTab === "refresh"}">${esc(t("settings.refresh"))}</button>
           <button type="button" role="tab" data-settings-tab="value" aria-selected="${settingsTab === "value"}">${esc(t("settings.value"))}</button>
+          ${companionNav(settingsTab)}
           <button type="button" role="tab" data-settings-tab="tools" aria-selected="${settingsTab === "tools"}">${esc(t("settings.tools"))}</button>
           <span class="settings-nav-group">${esc(t("settings.groupFeatures"))}</span>
           <button type="button" role="tab" data-settings-tab="recorder" aria-selected="${settingsTab === "recorder"}">${esc(t("settings.recorder"))}</button>
@@ -1076,8 +1079,10 @@ async function openSettings(): Promise<void> {
           <button type="button" class="btn btn-ghost" data-tool="export">${icon("upload", 14)}${esc(t("side.export"))}</button>
           <button type="button" class="btn btn-ghost" data-tool="logs">${icon("folder-open", 14)}${esc(t("side.logs"))}</button>
           <button type="button" class="btn btn-ghost" data-tool="shortcuts">${icon("keyboard", 14)}${esc(t("side.shortcuts"))}</button>
+          <button type="button" class="btn btn-ghost" data-tool="guide">${icon("layout-grid", 14)}${esc(t("guide.tool"))}</button>
         </div>
         </section>
+        ${companionPages(settingsTab)}
         <section class="settings-page" data-settings-page="recorder" ${settingsTab === "recorder" ? "" : "hidden"}>
           <h3 class="settings-page-title">${esc(t("settings.recorder"))}</h3>
         <div class="rec-settings-grid">
@@ -1204,6 +1209,7 @@ async function openSettings(): Promise<void> {
       return answer === "close" || answer === "save" ? answer : "stay";
     },
     onOpen: (root) => {
+      wireCompanionSettings(root);
       // Game modes: move a mode up or down the priority list.
       root.querySelector("[data-rec-modes]")?.addEventListener("click", (event) => {
         const button = (event.target as HTMLElement).closest<HTMLElement>("[data-mode-move]");
@@ -1413,6 +1419,7 @@ async function openSettings(): Promise<void> {
         if (tool === "export") void exportData();
         if (tool === "logs") void guard(() => api.openLogsFolder(), "toast.logsFailed");
         if (tool === "shortcuts") showShortcuts();
+        if (tool === "guide") void showGuide();
         const option = (event.target as HTMLElement).closest<HTMLElement>("[data-rec-option]");
         if (option) {
           option.parentElement?.querySelectorAll<HTMLElement>("[data-rec-option]").forEach((button) => button.setAttribute("aria-pressed", String(button === option)));
@@ -1751,10 +1758,61 @@ async function exportData(): Promise<void> {
   if (path.ok && path.value) toast("success", t("toast.exported"), path.value, 4500);
 }
 
+/** Settings on a given page (the window is reused when it is open). */
+function openSettingsAt(tab: string): void {
+  settingsTab = tab;
+  const open = document.querySelector<HTMLElement>(`.settings-modal [data-settings-tab="${tab}"]`);
+  if (open) open.click();
+  else void openSettings();
+}
+
+function showOverview(): void {
+  void openOverview((key) => {
+    const account = state.accounts.find((entry) => keyId(keyOf(entry)) === keyId(key));
+    if (account) showProfile(account);
+  });
+}
+
+/** The feature guide (shown once after an install or update; also in Settings › Tools). */
+async function showGuide(): Promise<void> {
+  await openGuide({
+    recorderOn: async () => (await api.recorderPrefs()).enabled,
+    setRecorder: async (on) => {
+      const prefs = await api.recorderPrefs();
+      await api.setRecorderPrefs({ ...prefs, enabled: on });
+    },
+    musicOn,
+    setMusic: (on) => setMusicEnabled(on),
+    openSettings: openSettingsAt,
+    openOverview: showOverview,
+    openGameSettings: () => void openGameSettings(),
+  });
+}
+
 async function importData(): Promise<void> {
-  const response = await guard(() => api.importData(t("import.dialog")), "toast.importFailed");
-  if (!response.ok || !response.value) return;
-  const result = response.value;
+  let result: { added: number; skipped: number } | null;
+  try {
+    result = await api.importData(t("import.dialog"));
+  } catch (error) {
+    // An encrypted backup: ask for its passphrase (again when it is wrong).
+    if (!(error instanceof ApiError) || error.code !== "backup_needs_passphrase" || !error.detail) {
+      toast("error", t("toast.importFailed"), describe(error));
+      return;
+    }
+    const path = error.detail;
+    for (;;) {
+      const passphrase = await askBackupPassphrase();
+      if (passphrase === null) return;
+      try {
+        result = await api.restoreBackup(path, passphrase);
+        break;
+      } catch (failure) {
+        toast("error", t("toast.importFailed"), describe(failure));
+        if (!(failure instanceof ApiError) || failure.code !== "backup_wrong_passphrase") return;
+      }
+    }
+  }
+  if (!result) return;
   state.accounts = await api.listAccounts();
   render();
   toast(
@@ -1852,6 +1910,7 @@ async function changeLanguage(next: Lang): Promise<boolean> {
   // Only publish the choice after its durable settings write succeeds.
   setLang(next);
   applyLanguage();
+  sendNotifyTexts();
   render();
   return true;
 }
@@ -1918,6 +1977,7 @@ function wire(): void {
       if (action === "settings") void openSettings();
       if (action === "game-settings") void openGameSettings();
       if (action === "recordings") void openRecordings();
+      if (action === "overview") showOverview();
       if (action === "music") void openMusic();
       if (action === "builds") openCurrentBuild();
     });
@@ -2161,6 +2221,7 @@ async function wireEvents(): Promise<void> {
   void initMusic();
   void api.recorderStatus().then(showRecorderStatus).catch(() => undefined);
   void events.onRecorderStatus(showRecorderStatus);
+  void events.onRecordingsRecovered((count) => toast("success", t("notify.recoveredTitle"), t("notify.recoveredBody", { count }), 9000));
   await trackGames();
   await events.onRefreshDone(({ error, exclusive }) => {
     if (error) toast("error", t("toast.ranksSaveFailed"), describe(new ApiError(error.code, error.detail)), 5000);
@@ -2222,6 +2283,7 @@ async function start(): Promise<void> {
     // settings file so the record survives the next cache rebuild.
     void guard(() => api.setUiLanguage(lang()), "toast.settingsFailed");
   }
+  sendNotifyTexts();
   $("#version").textContent = `v${boot.version}`;
   render();
   if (boot.loadError) toast("error", t("toast.loadFailed"), errorText(boot.loadError.code, boot.loadError.detail), 8000);
@@ -2240,6 +2302,8 @@ async function start(): Promise<void> {
   if (!(await launchUpdate(revealApp))) await revealApp();
   // First run: ask the user before anything else, in a language they chose.
   if (needsLanguageChoice()) await welcomeLanguage();
+  // Once: what the app can do besides signing in (most of it is off until asked for).
+  if (guideDue()) void showGuide();
   // Opened during champ select: show the build right away.
   resumeChampSelect();
 }

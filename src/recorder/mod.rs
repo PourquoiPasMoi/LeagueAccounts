@@ -7,6 +7,7 @@
 pub mod audio;
 pub mod capture;
 pub mod clip;
+pub mod defrag;
 pub mod encoder;
 pub mod gameinfo;
 pub mod hotkey;
@@ -198,6 +199,10 @@ fn format_time(seconds: f64) -> String {
 /// Rewrite a fragmented recording as a normal MP4 (stream copy, no quality
 /// loss) so it opens and seeks at once. The file keeps its name.
 pub fn make_seekable(path: &Path) -> Result<(), &'static str> {
+    // In place first: nothing is copied and every sound track is kept.
+    if defrag::defragment(path).is_ok() {
+        return Ok(());
+    }
     let temporary = path.with_extension("seekable.tmp");
     startup().map_err(|_| "recorder_media")?;
     let result = clip::cut(path, &temporary, &[(0.0, 1.0e7)], false, &clip::AudioPlan::Track(0));
@@ -445,6 +450,14 @@ pub fn save_clip(root: &Path, relative: &str, parts: &[(f64, f64)], mode: ClipMo
         discord: mode == ClipMode::Discord,
         // A new file: not posted anywhere yet.
         posts: Vec::new(),
+        notes: original
+            .notes
+            .iter()
+            .filter_map(|note| {
+                let part = landed.iter().find(|part| note.time >= part.source_start && note.time <= part.source_end)?;
+                Some(library::Note { time: part.clip_start + note.time - part.source_start, text: note.text.clone() })
+            })
+            .collect(),
         audio: !kept.is_empty(),
         audio_source: kept.join("+"),
         // One track in a clip.

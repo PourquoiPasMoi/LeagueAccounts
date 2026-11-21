@@ -16,7 +16,9 @@ const OBJECTIVES = new Set(["dragon", "baron", "herald", "grubs", "tower", "inhi
 
 type ClipMode = "fast" | "exact" | "discord";
 /** Moment filters of the viewer (side list and timeline). */
-type Filter = "all" | "kills" | "deaths" | "assists" | "objectives" | "bookmarks";
+type Filter = "all" | "kills" | "deaths" | "assists" | "objectives" | "bookmarks" | "notes";
+/** A key moment, or one of the player's notes (`note` = its place in the notes list). */
+type Mark = Moment & { note?: number };
 const FILTERS: [Filter, MessageKey][] = [
   ["all", "rec.filterAll"],
   ["kills", "rec.filterKills"],
@@ -24,6 +26,7 @@ const FILTERS: [Filter, MessageKey][] = [
   ["assists", "rec.filterAssists"],
   ["objectives", "rec.filterObjectives"],
   ["bookmarks", "rec.filterBookmarks"],
+  ["notes", "rec.filterNotes"],
 ];
 const KILLS = new Set(["kill", "multikill", "firstBlood"]);
 function matches(moment: Moment, filter: Filter): boolean {
@@ -32,6 +35,7 @@ function matches(moment: Moment, filter: Filter): boolean {
   if (filter === "assists") return moment.kind === "assist";
   if (filter === "objectives") return OBJECTIVES.has(moment.kind);
   if (filter === "bookmarks") return moment.kind === "bookmark";
+  if (filter === "notes") return moment.kind === "note";
   return true;
 }
 /** Seconds before and after a bookmark that its clip keeps (saved with it as "60+10"). */
@@ -251,7 +255,26 @@ const MOMENT_KEYS: Record<string, MessageKey> = {
   ace: "moment.ace",
   gameEnd: "moment.gameEnd",
   bookmark: "moment.bookmark",
+  note: "moment.note",
 };
+
+/** The recording's moments with the player's notes among them, by time. */
+function marksOf(entry: Recording | null): Mark[] {
+  const offset = entry?.meta?.gameStart ?? 0;
+  const notes: Mark[] = (entry?.meta?.notes ?? []).map((note, index) => ({ kind: "note", time: note.time, gameTime: Math.max(0, note.time - offset), detail: note.text, ally: null, mine: true, note: index }));
+  return [...cleanMoments(entry?.meta?.moments ?? []), ...notes].sort((a, b) => a.time - b.time);
+}
+
+/** Text a search looks through: name, champion, mode, result, score, notes. */
+function searchText(entry: Recording): string {
+  const meta = entry.meta;
+  const result = meta?.result === "Win" ? `win ${t("rec.win")}` : meta?.result === "Loss" ? `loss ${t("rec.loss")}` : "";
+  const score = kda(entry);
+  return [entry.name, meta?.title, meta?.champion, meta?.queue, result, score, score.replace(/\s+/g, ""), entry.account, ...(meta?.notes ?? []).map((note) => note.text)]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+}
 
 /** A first blood or multikill is the same moment as the kill it comes with:
  * keep one marker (recordings made before this was merged have both). */
@@ -265,6 +288,7 @@ export function cleanMoments(all: Moment[]): Moment[] {
 }
 
 function momentLabel(moment: Moment): string {
+  if (moment.kind === "note") return moment.detail;
   if (moment.kind === "multikill") {
     const size = Math.min(5, Math.max(2, Number(moment.detail) || 2));
     return t(`moment.multi${size}` as MessageKey);
@@ -276,6 +300,7 @@ function momentLabel(moment: Moment): string {
 /** Colour family of a marker. */
 function momentTone(moment: Moment): string {
   if (moment.kind === "bookmark") return "bookmark";
+  if (moment.kind === "note") return "note";
   if (moment.kind === "death") return "bad";
   if (moment.kind === "gameEnd") return moment.detail === "Win" ? "good" : "bad";
   if (moment.ally === false) return "bad";
@@ -285,6 +310,7 @@ function momentTone(moment: Moment): string {
 }
 
 function momentTooltip(moment: Moment): string {
+  if (moment.kind === "note") return `${t("moment.note")} · ${clock(moment.time)}\n${moment.detail}`;
   const parts = [momentLabel(moment), clock(moment.gameTime)];
   if (moment.ally === true) parts.push(t("rec.allyTeam"));
   if (moment.ally === false) parts.push(t("rec.enemyTeam"));
@@ -327,6 +353,8 @@ export async function openRecordings(): Promise<void> {
   };
   let mode_ = stored("recMode", "");
   let order: "new" | "old" = stored("recOrder", "new") === "old" ? "old" : "new";
+  /** Library search (name, champion, mode, result, score, notes). */
+  let query = "";
   /** Select mode: cards are ticked instead of opened, then deleted together. */
   let selecting = false;
   const picked = new Set<string>();
@@ -449,7 +477,7 @@ export async function openRecordings(): Promise<void> {
   let speed = 1;
   let keysShown = false;
 
-  const currentMoments = () => cleanMoments(selected?.meta?.moments ?? []).filter((moment) => matches(moment, filter));
+  const currentMoments = (): Mark[] => marksOf(selected).filter((moment) => matches(moment, filter));
   const isRecording = (entry: Recording) => status.recording && status.path === entry.path;
   const accounts = () => [...new Set(view.entries.map((entry) => entry.account))].sort((a, b) => (a === UNKNOWN ? 1 : b === UNKNOWN ? -1 : a.localeCompare(b)));
   const shown = () => view.entries.filter((entry) => entry.kind === kind && (!account || entry.account === account));
@@ -531,7 +559,7 @@ export async function openRecordings(): Promise<void> {
     const tag =
       entry.kind === "clip"
         ? `<span class="rec-clip-tag">${icon("scissors", 11)}${esc(t("rec.clip"))}</span>${meta?.highlights ? `<span class="rec-discord-tag">${esc(t("rec.highlights"))}</span>` : ""}${isDiscord(entry) ? `<span class="rec-discord-tag">${esc(t("rec.discord"))}</span>` : ""}${meta?.queue ? `<span class="rec-mode-tag">${esc(meta.queue)}</span>` : ""}${postedTag(entry)}`
-        : `<span class="rec-mode-tag">${esc(modeOf(entry))}</span>${bookmarksOf(entry).length ? `<span class="rec-discord-tag">${esc(t("rec.bookmarkCount", { count: bookmarksOf(entry).length }))}</span>` : ""}`;
+        : `<span class="rec-mode-tag">${esc(modeOf(entry))}</span>${meta?.notes?.length ? `<span class="rec-discord-tag">${esc(t("rec.noteCount", { count: meta.notes.length }))}</span>` : ""}${bookmarksOf(entry).length ? `<span class="rec-discord-tag">${esc(t("rec.bookmarkCount", { count: bookmarksOf(entry).length }))}</span>` : ""}`;
     const outcome = meta?.result === "Win" ? " is-win" : meta?.result === "Loss" ? " is-loss" : "";
     return `
       <div class="rec-row is-${entry.kind}${outcome}${selected?.path === entry.path ? " is-selected" : ""}${picked.has(entry.path) ? " is-picked" : ""}" role="button" tabindex="0" data-rec-path="${esc(entry.path)}"${selecting ? ` aria-pressed="${picked.has(entry.path)}"` : ""}>
@@ -546,7 +574,14 @@ export async function openRecordings(): Promise<void> {
 
   const renderList = () => {
     const inKind = (wanted: "game" | "clip") => view.entries.filter((entry) => entry.kind === wanted && (!account || entry.account === account));
-    const entries = shown().sort((a, b) => (order === "new" ? started(b) - started(a) : started(a) - started(b)));
+    const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+    const entries = shown()
+      .filter((entry) => {
+        if (!words.length) return true;
+        const text = searchText(entry);
+        return words.every((word) => text.includes(word));
+      })
+      .sort((a, b) => (order === "new" ? started(b) - started(a) : started(a) - started(b)));
     // Ticks only for what is on screen (another tab or account keeps nothing ticked).
     const onScreen = new Set(entries.map((entry) => entry.path));
     [...picked].forEach((path) => onScreen.has(path) || picked.delete(path));
@@ -554,7 +589,7 @@ export async function openRecordings(): Promise<void> {
     const modes = [...new Set(entries.map(modeOf))];
     if (mode_ && !modes.includes(mode_)) mode_ = "";
     const visible = mode_ ? entries.filter((entry) => modeOf(entry) === mode_) : entries;
-    const empty = `<p class="rec-empty">${esc(t(kind === "game" ? "rec.empty" : "rec.emptyClips"))}</p>`;
+    const empty = `<p class="rec-empty">${esc(words.length ? t("rec.searchNone") : t(kind === "game" ? "rec.empty" : "rec.emptyClips"))}</p>`;
     const grouped = !mode_ && modes.length > 1;
     list.classList.toggle("is-selecting", selecting);
     const body = !visible.length
@@ -573,6 +608,7 @@ export async function openRecordings(): Promise<void> {
       <div class="rec-lib-bar">
         <div class="rec-kind-tabs" role="tablist">${tab("game", "film", t("rec.games"))}${tab("clip", "scissors", t("rec.clips"))}</div>
         <div class="rec-lib-actions">
+          <label class="rec-search">${icon("search", 12)}<input type="search" data-rec-search value="${esc(query)}" placeholder="${esc(t("rec.search"))}" aria-label="${esc(t("rec.search"))}" autocomplete="off" spellcheck="false"/></label>
           ${
             selecting
               ? `<span class="rec-picked-count">${esc(t("rec.selectedCount", { count: picked.size }))}</span>
@@ -610,7 +646,7 @@ export async function openRecordings(): Promise<void> {
     const moments = currentMoments();
     track.querySelectorAll(".rec-marker").forEach((marker) => marker.remove());
     track.querySelector("[data-rec-handle]")?.insertAdjacentHTML("beforebegin", moments.map(markerHtml).join(""));
-    const all = cleanMoments(selected.meta?.moments ?? []);
+    const all = marksOf(selected);
     side.querySelectorAll<HTMLElement>("[data-rec-filter]").forEach((button) => {
       button.setAttribute("aria-pressed", String(button.dataset.recFilter === filter));
       const count = all.filter((moment) => matches(moment, button.dataset.recFilter as Filter)).length;
@@ -620,12 +656,53 @@ export async function openRecordings(): Promise<void> {
     const rows = moments
       .map((moment, index) => {
         const detail = moment.detail && !["multikill", "gameEnd", "bookmark"].includes(moment.kind) ? moment.detail : moment.ally === true ? t("rec.allyTeam") : moment.ally === false ? t("rec.enemyTeam") : "";
+        if (moment.kind === "note") {
+          // A note: its text in full, and a pencil to change or delete it.
+          return `<div class="rec-side-note"><button class="rec-side-row is-note tone-note" data-rec-moment="${index}">
+            ${momentIcon("note", 15)}<b>${clock(moment.time)}</b><span>${esc(moment.detail)}</span></button>
+            <button class="icon-btn rec-note-edit" data-rec-note="${moment.note ?? -1}" aria-label="${esc(t("rec.noteEdit"))}" data-tooltip="${esc(t("rec.noteEdit"))}">${icon("pencil", 12)}</button></div>`;
+        }
         return `<button class="rec-side-row tone-${momentTone(moment)}" data-rec-moment="${index}" data-tooltip="${esc(t("rec.momentClipHint"))}">
           ${momentIcon(moment.kind, 15)}<b>${clock(moment.time)}</b><span>${esc(momentLabel(moment))}</span>${detail ? `<em>${esc(detail)}</em>` : ""}</button>`;
       })
       .join("");
     $(".rec-side-list", side).innerHTML = rows || `<p class="rec-empty">${esc(t("rec.noMoments"))}</p>`;
     updateTimeline();
+  };
+
+  /** Write a note at the playhead (`index` < 0), or change / delete one. */
+  const editNote = async (index: number) => {
+    if (!selected || !video) return;
+    const entry = selected;
+    const notes = [...(entry.meta?.notes ?? [])];
+    const existing = index >= 0 ? notes[index] : undefined;
+    const time = existing?.time ?? video.currentTime;
+    if (!video.paused) video.pause();
+    let text = existing?.text ?? "";
+    const answer = await modal({
+      title: t(existing ? "rec.noteEdit" : "rec.noteAdd"),
+      body: `<label class="field"><span>${esc(t("rec.noteAt", { time: clock(time) }))}</span><textarea name="note" rows="4" maxlength="500" placeholder="${esc(t("rec.notePlaceholder"))}">${esc(text)}</textarea></label>`,
+      actions: [
+        ...(existing ? [{ label: t("menu.delete"), value: "delete" }] : []),
+        { label: t("common.cancel"), value: "cancel" },
+        { label: t("common.save"), value: "save", kind: "primary" as const },
+      ],
+      onSubmit: (value, root) => {
+        text = $<HTMLTextAreaElement>("textarea", root).value.trim();
+        return value !== "save" || text.length > 0;
+      },
+    });
+    if (answer !== "save" && answer !== "delete") return;
+    if (answer === "delete") notes.splice(index, 1);
+    else if (existing) notes[index] = { time, text };
+    else notes.push({ time, text });
+    try {
+      const saved = await api.setRecordingNotes(entry.path, notes);
+      if (entry.meta) entry.meta.notes = saved;
+      if (selected?.path === entry.path) renderMoments();
+    } catch (error) {
+      toast("error", t("rec.noteFailed"), describe(error));
+    }
   };
 
   const closeViewer = () => {
@@ -750,7 +827,7 @@ export async function openRecordings(): Promise<void> {
       </div>
       <div class="rec-parts" data-rec-parts hidden></div>`;
     side.innerHTML = `
-      <h3 class="rec-side-title">${esc(t("rec.moments"))}</h3>
+      <div class="rec-side-head"><h3 class="rec-side-title">${esc(t("rec.moments"))}</h3><button class="btn btn-ghost rec-note-add" data-rec="add-note" data-tooltip="${esc(t("rec.noteAddHint"))}">${icon("plus", 11)}<span>${esc(t("rec.noteAdd"))}</span></button></div>
       <div class="rec-filters">${FILTERS.map(([id, key]) => `<button data-rec-filter="${id}" aria-pressed="${id === filter}"><span>${esc(t(key))}</span><em></em></button>`).join("")}</div>
       <div class="rec-side-list"></div>
       <div class="rec-side-facts">${[entry.name, ...facts].map((fact) => `<span>${esc(String(fact))}</span>`).join("")}</div>`;
@@ -1433,7 +1510,7 @@ export async function openRecordings(): Promise<void> {
   const jumpMoment = (direction: number) => {
     if (!video) return;
     const now = video.currentTime;
-    const times = currentMoments().map((moment) => Math.max(0, moment.time - LEAD)).sort((a, b) => a - b);
+    const times = currentMoments().map((moment) => Math.max(0, moment.time - (moment.kind === "note" ? 2 : LEAD))).sort((a, b) => a - b);
     const target = direction > 0 ? times.find((time) => time > now + 0.5) : [...times].reverse().find((time) => time < now - 1.5);
     if (target === undefined) return;
     seek(target);
@@ -1443,7 +1520,7 @@ export async function openRecordings(): Promise<void> {
     const rows: [string, MessageKey][] = [
       ["Space", "rec.key.play"], ["← →", "rec.key.seek"], ["J  L", "rec.key.jump"], [",  .", "rec.key.frame"],
       ["Shift ← →", "rec.key.moment"], ["↑ ↓", "rec.key.volume"], ["−  +", "rec.key.speed"], ["0", "rec.key.speedReset"],
-      ["M", "rec.key.mute"], ["F", "rec.key.fullscreen"], ["Tab", "rec.key.hud"], ["?", "rec.key.help"],
+      ["M", "rec.key.mute"], ["F", "rec.key.fullscreen"], ["N", "rec.key.note"], ["Tab", "rec.key.hud"], ["?", "rec.key.help"],
     ];
     return `<h4>${esc(t("rec.shortcuts"))}</h4>${rows.map(([keys, label]) => `<div><kbd>${esc(keys)}</kbd><span>${esc(t(label))}</span></div>`).join("")}`;
   };
@@ -1856,6 +1933,9 @@ export async function openRecordings(): Promise<void> {
       filter = chosenFilter;
       return renderMoments();
     }
+    if (action === "add-note") return void editNote(-1);
+    const noteButton = target.closest<HTMLElement>("[data-rec-note]");
+    if (noteButton) return void editNote(Number(noteButton.dataset.recNote));
     if (action === "save-space") return void openConvert();
     if (action === "folder") {
       // The Games or Clips folder of the account shown (or of the only account).
@@ -1992,7 +2072,7 @@ export async function openRecordings(): Promise<void> {
     if (moment !== undefined) {
       const picked = currentMoments()[Number(moment)];
       const time = picked?.time ?? 0;
-      seek(picked?.kind === "bookmark" ? time - bookmarkSpan(picked)[0] : time - LEAD);
+      seek(picked?.kind === "bookmark" ? time - bookmarkSpan(picked)[0] : picked?.kind === "note" ? time - 2 : time - LEAD);
       if (video?.paused) void video.play().catch(() => undefined);
       return;
     }
@@ -2020,6 +2100,18 @@ export async function openRecordings(): Promise<void> {
       return renderList();
     }
     if (row) return select(row.dataset.recPath!);
+  });
+
+  // Search: the list is drawn again as the player types; the field keeps the caret.
+  overlay.addEventListener("input", (event) => {
+    const field = (event.target as HTMLElement).closest<HTMLInputElement>("[data-rec-search]");
+    if (!field) return;
+    query = field.value;
+    const caret = field.selectionStart ?? query.length;
+    renderList();
+    const again = list.querySelector<HTMLInputElement>("[data-rec-search]");
+    again?.focus();
+    again?.setSelectionRange(caret, caret);
   });
 
   // Right-click on a moment (timeline or side list): a clip range around it to adjust and save.
@@ -2274,6 +2366,10 @@ export async function openRecordings(): Promise<void> {
     if (key === "f" || key === "F") {
       handled();
       return toggleFullscreen();
+    }
+    if (key === "n" || key === "N") {
+      handled();
+      return void editNote(-1);
     }
     if (key === "?") {
       handled();

@@ -7,6 +7,7 @@
 
 pub mod account_manager;
 pub mod autotype;
+pub mod backup;
 pub mod builds;
 pub mod clipboard;
 pub mod credentials;
@@ -26,9 +27,12 @@ pub mod music;
 #[cfg(windows)]
 pub mod music_wave;
 pub mod models;
+pub mod overview;
 pub mod rank_fetcher;
 pub mod riot_client;
 pub mod self_update;
+#[cfg(windows)]
+pub mod toast;
 pub mod updates;
 pub mod vn_hosts;
 pub mod utils;

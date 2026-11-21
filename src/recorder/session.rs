@@ -9,10 +9,11 @@
 //! short GPU transition (`transition.rs`), all in one file.
 
 use super::audio::{self, AudioMixer};
+use super::defrag;
 use super::capture::{find_client_window, find_game_window, monitor_size, window_process_id, Capture, Gpu};
 use super::encoder::{AudioFile, Codec, EncoderSettings, Rate, VideoEncoder};
 use super::library::{self, Entry, RecordingMeta, GAMES};
-use super::moments::MomentTracker;
+use super::moments::{GameFacts, Moment, MomentTracker};
 use super::{output_size, shutdown, startup, transition};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicIsize, Ordering};
@@ -73,6 +74,168 @@ const POSTGAME_LIMIT: Duration = Duration::from_secs(10 * 60);
 const WINDOW_CAPTURE_PATIENCE: Duration = Duration::from_secs(10);
 /// A game window that never draws: transition anyway (into the dark colour).
 const GAME_NO_PICTURE: Duration = Duration::from_secs(15);
+
+/// How often the game's details so far are saved next to the file being
+/// written (what a recording cut short by a crash is rebuilt from).
+const JOURNAL_EVERY: Duration = Duration::from_secs(20);
+
+/// The details of a game while it is being recorded: `<file>.recovery.json`.
+/// Removed when the recording ends normally; found at the next start after a
+/// crash or a power cut (`recover`).
+#[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+struct Journal {
+    /// Date and time for the file name.
+    stamp: String,
+    meta: RecordingMeta,
+}
+
+fn journal_path(video: &Path) -> PathBuf {
+    video.with_extension("recovery.json")
+}
+
+fn write_journal(video: &Path, stamp: &str, meta: &RecordingMeta) {
+    let Ok(body) = serde_json::to_vec(&Journal { stamp: stamp.to_owned(), meta: meta.clone() }) else { return };
+    // Written beside, then swapped in: never half a file.
+    let target = journal_path(video);
+    let temporary = target.with_extension("tmp");
+    if std::fs::write(&temporary, body).is_ok() {
+        let _ = std::fs::rename(&temporary, &target);
+    }
+}
+
+/// What does not change during a recording.
+struct Details<'a> {
+    request: &'a RecordRequest,
+    started_at: u64,
+    size: (u32, u32),
+    fps: u32,
+    codec: String,
+    encoder: String,
+    audio: bool,
+    audio_source: String,
+    audio_tracks: Vec<String>,
+}
+
+/// The game so far.
+struct Progress {
+    facts: GameFacts,
+    bookmarks: Vec<(f64, u32, u32)>,
+    duration: f64,
+    game_from: f64,
+    post_from: f64,
+    screen: bool,
+}
+
+impl Details<'_> {
+    fn meta(&self, progress: Progress) -> RecordingMeta {
+        let Progress { mut facts, bookmarks, duration, game_from, post_from, screen } = progress;
+        // Bookmarks join the key moments; `detail` keeps the seconds before and
+        // after the press that a clip of the bookmark holds ("60+10").
+        for (time, before, after) in bookmarks {
+            let time = time.min(duration);
+            facts.moments.push(Moment {
+                kind: "bookmark".into(),
+                time,
+                game_time: facts.offset.map_or(0.0, |offset| (time - offset).max(0.0)),
+                detail: format!("{before}+{after}"),
+                ally: None,
+                mine: true,
+            });
+        }
+        facts.moments.sort_by(|a, b| a.time.total_cmp(&b.time));
+        RecordingMeta {
+            kind: "game".into(),
+            account: self.request.account.clone(),
+            riot_id: self.request.riot_id.clone(),
+            puuid: self.request.puuid.clone(),
+            champion: facts.champion,
+            queue: self.request.queue.clone(),
+            queue_id: self.request.queue_id,
+            result: facts.result,
+            started_at: self.started_at,
+            duration,
+            game_start: facts.offset,
+            champ_select: game_from,
+            post_game: post_from,
+            highlights: false,
+            codec: self.codec.clone(),
+            width: self.size.0,
+            height: self.size.1,
+            fps: self.fps,
+            encoder: self.encoder.clone(),
+            capture: if screen { "screen".into() } else { "window".into() },
+            audio: self.audio,
+            audio_source: self.audio_source.clone(),
+            audio_tracks: self.audio_tracks.clone(),
+            moments: facts.moments,
+            source: String::new(),
+            clip_start: 0.0,
+            discord: false,
+            title: String::new(),
+            posts: Vec::new(),
+            notes: Vec::new(),
+        }
+    }
+}
+
+/// "2026-11-13 21-40 Ahri Ranked Solo Win".
+fn file_title(stamp: &str, meta: &RecordingMeta) -> String {
+    [stamp, meta.champion.as_str(), meta.queue.as_str(), meta.result.as_str()].iter().filter(|part| !part.is_empty()).copied().collect::<Vec<_>>().join(" ")
+}
+
+/// Recordings cut short (the app or the PC stopped mid-game): their index is
+/// rebuilt from what reached the disk, and they get their name and details
+/// from the journal. `busy` = the file being recorded right now. Returns the
+/// recovered files.
+pub fn recover(root: &Path, busy: &dyn Fn(&Path) -> bool) -> Vec<PathBuf> {
+    let mut recovered = Vec::new();
+    let Ok(accounts) = std::fs::read_dir(root) else { return recovered };
+    for folder in accounts.flatten().map(|account| account.path().join(GAMES)) {
+        let Ok(files) = std::fs::read_dir(&folder) else { continue };
+        for journal_file in files.flatten().map(|file| file.path()) {
+            let name = journal_file.file_name().map(|name| name.to_string_lossy().into_owned()).unwrap_or_default();
+            let Some(stem) = name.strip_suffix(".recovery.json") else { continue };
+            let video = folder.join(format!("{stem}.mp4"));
+            if busy(&video) {
+                continue;
+            }
+            let journal: Option<Journal> = std::fs::read(&journal_file).ok().and_then(|bytes| serde_json::from_slice(&bytes).ok());
+            let _ = std::fs::remove_file(journal_file.with_extension("tmp"));
+            // The sound files of an unfinished recording have no index either;
+            // they are made again from the recording when it is first played.
+            let forget_sounds = || {
+                for source in library::SOURCES {
+                    let _ = std::fs::remove_file(library::track_file(&video, source));
+                }
+            };
+            // Still in fragments, or stopped between the index and the clean-up.
+            let seconds = if video.is_file() { defrag::defragment(&video).ok().map(|fixed| fixed.seconds) } else { None };
+            let (Some(seconds), Some(journal)) = (seconds.filter(|seconds| *seconds >= 1.0), journal) else {
+                // Nothing usable reached the disk.
+                if video.is_file() && std::fs::metadata(&video).is_ok_and(|metadata| metadata.len() < 4 * 1024 * 1024) || seconds.is_some() {
+                    let _ = std::fs::remove_file(&video);
+                    forget_sounds();
+                }
+                let _ = std::fs::remove_file(&journal_file);
+                continue;
+            };
+            forget_sounds();
+            let mut meta = journal.meta;
+            meta.duration = seconds;
+            meta.moments.retain(|moment| moment.time <= seconds);
+            if meta.post_game > seconds {
+                meta.post_game = 0.0;
+            }
+            let wanted = library::unique_file(&folder, &library::safe_name(&file_title(&journal.stamp, &meta)));
+            let target = if std::fs::rename(&video, &wanted).is_ok() { wanted } else { video };
+            let _ = library::write_meta(&target, &meta);
+            let _ = std::fs::remove_file(&journal_file);
+            recovered.push(target);
+        }
+    }
+    recovered
+}
 
 pub enum Outcome {
     Saved(Box<Entry>),
@@ -226,6 +389,8 @@ enum Stage {
 
 fn record(request: &RecordRequest, shared: &Shared, path: &Path, stamp: &str, started_at: u64) -> Outcome {
     let outcome = record_inner(request, shared, path, stamp, started_at);
+    // The recording ended on its own: its details are in its `.json` now.
+    let _ = std::fs::remove_file(journal_path(path));
     if shared.discard.load(Ordering::Relaxed) && !shared.in_game.load(Ordering::Relaxed) {
         let _ = std::fs::remove_file(path);
         return Outcome::Failed("recorder_cancelled");
@@ -303,9 +468,10 @@ fn record_inner(request: &RecordRequest, shared: &Shared, path: &Path, stamp: &s
         fps,
         bitrate: settings.bitrate.clamp(1_000_000, 100_000_000),
         hardware: settings.hardware,
-        // A normal MP4: the index is written once at the end and players open it at once.
-        // (Fragmented MP4 made the player read the whole file before showing anything.)
-        fragmented: false,
+        // In fragments while recording, so a crash or a power cut loses only
+        // the last moment; made a normal MP4 in place when the game ends
+        // (`defrag`), because players read every fragment before showing anything.
+        fragmented: true,
         audio_tracks: mixer.tracks().len(),
         codec: settings.codec,
         rate: settings.rate,
@@ -319,6 +485,20 @@ fn record_inner(request: &RecordRequest, shared: &Shared, path: &Path, stamp: &s
             source_files = audio_tracks.iter().skip(1).map(|label| AudioFile::create(&library::track_file(path, label)).ok()).collect();
         }
     }
+
+    let details = Details {
+        request,
+        started_at,
+        size: (width, height),
+        fps,
+        codec: encoder.codec.name().into(),
+        encoder: if encoder.hardware { encoder.name.clone() } else { format!("{} (software)", encoder.name) },
+        audio: encoder.has_audio(),
+        audio_source: audio_source.join("+"),
+        audio_tracks: audio_tracks.iter().map(|track| (*track).to_owned()).collect(),
+    };
+    let mut journal_written = Instant::now();
+    write_journal(path, stamp, &details.meta(Progress { facts: GameFacts::default(), bookmarks: Vec::new(), duration: 0.0, game_from: 0.0, post_from: 0.0, screen: capture.is_screen() }));
 
     // Key moments: their own light thread, so a slow answer never delays frames.
     let video_start = Arc::clone(&shared.video_start);
@@ -508,6 +688,18 @@ fn record_inner(request: &RecordRequest, shared: &Shared, path: &Path, stamp: &s
             }
         }
         tick += 1;
+        if journal_written.elapsed() >= JOURNAL_EVERY {
+            journal_written = Instant::now();
+            let so_far = Progress {
+                facts: facts.lock().ok().and_then(|facts| facts.clone()).unwrap_or_default(),
+                bookmarks: shared.bookmarks.lock().map(|bookmarks| bookmarks.clone()).unwrap_or_default(),
+                duration: tick as f64 / f64::from(fps),
+                game_from,
+                post_from,
+                screen: capture.is_screen(),
+            };
+            write_journal(path, stamp, &details.meta(so_far));
+        }
         // Running late (the PC was busy): skip ticks instead of piling up.
         let due = start.elapsed().as_nanos() as u64 / frame_ns;
         tick = tick.max(due);
@@ -518,12 +710,13 @@ fn record_inner(request: &RecordRequest, shared: &Shared, path: &Path, stamp: &s
         idle_since = Instant::now();
     }
     moments_done.store(true, Ordering::Relaxed);
-    let encoder_name = encoder.name.clone();
-    let hardware = encoder.hardware;
-    let codec = encoder.codec;
-    let has_audio = encoder.has_audio();
     let wrote = clock.is_some();
-    let finished = encoder.finish().is_ok();
+    let _ = encoder.finish();
+    // The index of a normal MP4, written at the end of the same file. Should
+    // it fail, the recording stays in fragments and is done at the next start.
+    if wrote && !shared.discard.load(Ordering::Relaxed) {
+        let _ = defrag::defragment(path);
+    }
     // After the video, so the sound files count as up to date (newer than it).
     let mut written_sources = Vec::new();
     for (label, file) in audio_tracks.iter().skip(1).zip(source_files) {
@@ -548,68 +741,22 @@ fn record_inner(request: &RecordRequest, shared: &Shared, path: &Path, stamp: &s
         let _ = std::fs::remove_file(path);
         return Outcome::Failed(if failed { "recorder_capture" } else { "recorder_no_frames" });
     }
-    let _ = finished;
 
-    let mut facts = facts.lock().ok().and_then(|mut facts| facts.take()).unwrap_or_default();
     let duration = tick as f64 / f64::from(fps);
-    // Bookmarks join the key moments; `detail` keeps the seconds before and
-    // after the press that a clip of the bookmark holds ("60+10").
-    let bookmarks = shared.bookmarks.lock().map(|bookmarks| bookmarks.clone()).unwrap_or_default();
-    for (time, before, after) in bookmarks {
-        let time = time.min(duration);
-        facts.moments.push(super::moments::Moment {
-            kind: "bookmark".into(),
-            time,
-            game_time: facts.offset.map_or(0.0, |offset| (time - offset).max(0.0)),
-            detail: format!("{before}+{after}"),
-            ally: None,
-            mine: true,
-        });
-    }
-    facts.moments.sort_by(|a, b| a.time.total_cmp(&b.time));
-    let title = [stamp, facts.champion.as_str(), request.queue.as_str(), facts.result.as_str()]
-        .iter()
-        .filter(|part| !part.is_empty())
-        .copied()
-        .collect::<Vec<_>>()
-        .join(" ");
+    let meta = details.meta(Progress {
+        facts: facts.lock().ok().and_then(|mut facts| facts.take()).unwrap_or_default(),
+        bookmarks: shared.bookmarks.lock().map(|bookmarks| bookmarks.clone()).unwrap_or_default(),
+        duration,
+        game_from,
+        post_from,
+        screen,
+    });
     let directory = path.parent().map(Path::to_path_buf).unwrap_or_default();
-    let final_path = library::unique_file(&directory, &library::safe_name(&title));
+    let final_path = library::unique_file(&directory, &library::safe_name(&file_title(stamp, &meta)));
     let final_path = if std::fs::rename(path, &final_path).is_ok() { final_path } else { path.to_path_buf() };
     for label in &written_sources {
         let _ = std::fs::rename(library::track_file(path, label), library::track_file(&final_path, label));
     }
-    let meta = RecordingMeta {
-        kind: "game".into(),
-        account: request.account.clone(),
-        riot_id: request.riot_id.clone(),
-        puuid: request.puuid.clone(),
-        champion: facts.champion,
-        queue: request.queue.clone(),
-        queue_id: request.queue_id,
-        result: facts.result,
-        started_at,
-        duration,
-        game_start: facts.offset,
-        champ_select: game_from,
-        post_game: post_from,
-        highlights: false,
-        codec: codec.name().into(),
-        width,
-        height,
-        fps,
-        encoder: if hardware { encoder_name } else { format!("{encoder_name} (software)") },
-        capture: if screen { "screen".into() } else { "window".into() },
-        audio: has_audio,
-        audio_source: audio_source.join("+"),
-        audio_tracks: audio_tracks.iter().map(|track| (*track).to_owned()).collect(),
-        moments: facts.moments,
-        source: String::new(),
-        clip_start: 0.0,
-        discord: false,
-        title: String::new(),
-        posts: Vec::new(),
-    };
     let _ = library::write_meta(&final_path, &meta);
     if !live.snapshots.is_empty() {
         if let Ok(text) = serde_json::to_string(&live) {

@@ -582,6 +582,21 @@ export const api = {
   saveHighlights: (path: string) => call<Recording>("save_highlights", { path }),
   /** Decay countdowns (Diamond and above) from the last snapshots. */
   decayIndex: () => call<DecayInfo[]>("decay_index"),
+  /** Every account at a glance; times are Unix ms (local midnight, a week back, pool start). */
+  accountsOverview: (dayStart: number, weekStart: number, poolSince: number) => call<Overview>("accounts_overview", { dayStart, weekStart, poolSince }),
+  backupPrefs: () => call<BackupView>("backup_prefs"),
+  setBackupPrefs: (enabled: boolean, folder: string, everyDays: number, keep: number) => call<BackupView>("set_backup_prefs", { enabled, folder, everyDays, keep }),
+  setBackupPassphrase: (passphrase: string) => call<BackupView>("set_backup_passphrase", { passphrase }),
+  pickBackupFolder: (title: string) => call<string | null>("pick_backup_folder", { title }),
+  /** Writes a backup now; the file's path. */
+  backupNow: () => call<string>("backup_now"),
+  restoreBackup: (path: string, passphrase: string) => call<BatchResult>("restore_backup", { path, passphrase }),
+  notifyPrefs: () => call<NotifyView>("notify_prefs"),
+  setNotifyPrefs: (view: NotifyView) => call<NotifyView>("set_notify_prefs", { view }),
+  /** The notification texts in the interface language. */
+  setNotifyTexts: (texts: Record<string, string>) => call<void>("set_notify_texts", { texts }),
+  testNotification: () => call<void>("test_notification"),
+  setRecordingNotes: (path: string, notes: RecordingNote[]) => call<RecordingNote[]>("set_recording_notes", { path, notes }),
   /** All recordings not in AV1 yet, or only `paths`. */
   startConvert: (paths: string[] | null = null) => call<ConvertStatus>("start_convert", { paths }),
   stopConvert: () => call<void>("stop_convert"),
@@ -974,6 +989,74 @@ export interface RecordingMeta {
   title?: string;
   /** Clips: successful posts to Discord, oldest first. */
   posts?: DiscordPost[];
+  /** The player's own notes on moments of the video. */
+  notes?: RecordingNote[];
+}
+
+/** A note written at a moment of a recording. */
+export interface RecordingNote {
+  /** Video seconds. */
+  time: number;
+  text: string;
+}
+
+/** One account in the Overview. */
+export interface AccountOverview {
+  accountId: string;
+  region: string;
+  name: string;
+  regionDisplay: string;
+  tier: string;
+  division: string;
+  lp: string;
+  /** Solo/Duo LP won or lost since today / the week began; null = not known. */
+  lpDay: number | null;
+  lpWeek: number | null;
+  gamesDay: number;
+  winsDay: number;
+  gamesWeek: number;
+  winsWeek: number;
+  lastGame: number;
+  /** Days before LP decay (Diamond and above), else null. */
+  decayLeft: number | null;
+  decayQueue: string;
+}
+
+export interface ChampionOverview {
+  championId: number;
+  champion: string;
+  games: number;
+  wins: number;
+  kills: number;
+  deaths: number;
+  assists: number;
+  /** Accounts it was played on. */
+  accounts: number;
+}
+
+export interface Overview {
+  accounts: AccountOverview[];
+  champions: ChampionOverview[];
+  poolGames: number;
+}
+
+/** The automatic, passphrase-encrypted accounts backup. */
+export interface BackupView {
+  enabled: boolean;
+  folder: string;
+  everyDays: number;
+  keep: number;
+  lastAt: number;
+  hasPassphrase: boolean;
+  lastError: string;
+  files: number;
+}
+
+/** Which Windows notifications are on. */
+export interface NotifyView {
+  decay: boolean;
+  ban: boolean;
+  recording: boolean;
 }
 
 export interface DiscordPost {
@@ -1053,6 +1136,8 @@ export const events = {
     listen<ConvertStatus>("convert-status", (event) => handler(event.payload)),
   /** A recording or clip was saved or deleted. */
   onRecordingsChanged: (handler: () => void): Promise<UnlistenFn> => listen("recordings-changed", () => handler()),
+  /** Recordings cut short by a crash were repaired at start (how many). */
+  onRecordingsRecovered: (handler: (count: number) => void): Promise<UnlistenFn> => listen<number>("recordings-recovered", (event) => handler(event.payload)),
   /** A game recording's end-of-game details were saved (its path). */
   onRecordingGame: (handler: (path: string) => void): Promise<UnlistenFn> => listen<string>("recording-game", (event) => handler(event.payload)),
   /** 48 sound levels (0-255) of the music, ~30 a second while asked for. */
