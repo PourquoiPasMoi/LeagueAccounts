@@ -1,5 +1,43 @@
 [
  {
+  "version": "5.11.0",
+  "date": "2026-11-22",
+  "items": {
+   "en": [
+    "New animated opening: the logo comes together, the name appears, and the app glides in.",
+    "The opening is skipped when the app starts hidden in the tray, and it stays still if Windows animations are turned off."
+   ],
+   "tr": [
+    "Yeni animasyonlu açılış: logo birleşir, isim belirir ve uygulama süzülerek gelir.",
+    "Uygulama tepside gizli başladığında açılış atlanır; Windows animasyonları kapalıysa hareketsiz kalır."
+   ],
+   "de": [
+    "Neue animierte Eröffnung: Das Logo setzt sich zusammen, der Name erscheint und die App gleitet herein.",
+    "Die Eröffnung wird übersprungen, wenn die App versteckt im Infobereich startet, und bleibt ruhig, wenn Windows-Animationen aus sind."
+   ],
+   "es": [
+    "Nueva apertura animada: el logo se une, aparece el nombre y la app entra con suavidad.",
+    "La apertura se omite cuando la app se inicia oculta en la bandeja, y no se mueve si las animaciones de Windows están desactivadas."
+   ],
+   "fr": [
+    "Nouvelle ouverture animée : le logo s'assemble, le nom apparaît et l'application entre en douceur.",
+    "L'ouverture est ignorée quand l'application démarre cachée dans la zone de notification, et reste fixe si les animations de Windows sont désactivées."
+   ],
+   "pt": [
+    "Nova abertura animada: o logótipo junta-se, o nome aparece e a app entra suavemente.",
+    "A abertura é ignorada quando a app inicia escondida na bandeja, e fica parada se as animações do Windows estiverem desligadas."
+   ],
+   "zh": [
+    "全新的启动动画：标志合拢，名称浮现，程序平滑进入。",
+    "程序隐藏到托盘启动时会跳过动画；如果关闭了 Windows 动画，画面将保持静止。"
+   ],
+   "zhTw": [
+    "全新的啟動動畫：標誌合攏，名稱浮現，程式平滑進入。",
+    "程式隱藏到系統匣啟動時會略過動畫；如果關閉了 Windows 動畫，畫面將保持靜止。"
+   ]
+  }
+ },
+ {
   "version": "5.10.4",
   "date": "2026-11-22",
   "items": {

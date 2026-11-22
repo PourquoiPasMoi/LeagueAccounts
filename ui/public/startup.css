@@ -3,10 +3,49 @@ html, body { margin: 0; min-height: 100%; background: #0b0b0d; }
 body:not(.ready) { overflow: hidden; }
 body:not(.ready) > :not(#startup-loader) { visibility: hidden !important; pointer-events: none !important; }
 body:not(.ready) > :not(#startup-loader) *, body:not(.ready) > :not(#startup-loader) *::before, body:not(.ready) > :not(#startup-loader) *::after { animation: none !important; transition: none !important; }
-#startup-loader { position: fixed; inset: 0; z-index: 2147483647; display: grid; place-items: center; background: #0b0b0d; color: #a1a1aa; font: 14px/1.5 "Segoe UI Variable Text", "Segoe UI", sans-serif; }
-#startup-animation { grid-area: 1 / 1; display: grid; place-items: center; pointer-events: none; }
-.startup-ring, .spinner-ring { width: 28px; height: 28px; border-radius: 50%; border: 2.5px solid rgb(255 255 255 / .12); border-top-color: #f5f5f7; animation: startup-spin .8s linear infinite; }
+#startup-loader { position: fixed; inset: 0; z-index: 2147483647; display: grid; place-items: center; background: #0b0b0d; color: #a1a1aa; font: 14px/1.5 "Segoe UI Variable Text", "Segoe UI", sans-serif; overflow: hidden; }
+.spinner-ring { width: 28px; height: 28px; border-radius: 50%; border: 2.5px solid rgb(255 255 255 / .12); border-top-color: #f5f5f7; animation: startup-spin .8s linear infinite; }
 #startup-loader[data-failed] #startup-animation { display: none; }
 #startup-error { grid-area: 1 / 1; max-width: 360px; padding: 24px; text-align: center; }
 #startup-retry { margin-top: 16px; padding: 8px 22px; border: 0; border-radius: 999px; background: #f5f5f7; color: #0b0b0d; font: inherit; font-weight: 600; cursor: pointer; }
 @keyframes startup-spin { to { transform: rotate(1turn); } }
+
+/* The opening: the two halves of the mark glide together, a light passes over them, the name rises.
+   Pure CSS (transform and opacity only), so it plays while the app's code is still loading. */
+#startup-animation { grid-area: 1 / 1; position: relative; display: grid; justify-items: center; pointer-events: none; transition: transform .5s cubic-bezier(.16, 1, .3, 1); }
+.startup-glow { position: absolute; left: 50%; top: 60px; width: 640px; height: 640px; margin: -320px 0 0 -320px; border-radius: 50%; background: radial-gradient(closest-side, rgb(10 132 255 / .2), rgb(15 200 214 / .07) 46%, transparent 72%); opacity: 0; transform: scale(.6); animation: startup-glow 1.8s cubic-bezier(.16, 1, .3, 1) .05s forwards; }
+.startup-logo { position: relative; width: 120px; height: 120px; animation: startup-settle 1.5s cubic-bezier(.16, 1, .3, 1) both; }
+.startup-mark { display: block; width: 100%; height: 100%; overflow: visible; }
+.startup-piece { opacity: 0; animation: startup-piece-a 1s cubic-bezier(.16, 1, .3, 1) .12s forwards; }
+.startup-piece-b { animation-name: startup-piece-b; animation-delay: .2s; }
+.startup-sheen { position: absolute; inset: 0; overflow: hidden; -webkit-mask: url("/icon.png") center / contain no-repeat; mask: url("/icon.png") center / contain no-repeat; }
+.startup-sheen::before { content: ""; position: absolute; inset: -30%; background: linear-gradient(115deg, transparent 40%, rgb(255 255 255 / .9) 50%, transparent 60%); transform: translateX(-110%); animation: startup-sheen 1.1s cubic-bezier(.45, 0, .2, 1) .85s forwards; }
+.startup-name { margin: 26px 0 0; font: 600 20px/1.2 "Segoe UI Variable Display", "Segoe UI", sans-serif; letter-spacing: -.012em; color: #f5f5f7; opacity: 0; animation: startup-rise .8s cubic-bezier(.16, 1, .3, 1) .6s forwards; }
+.startup-line { display: block; width: 132px; height: 2px; margin-top: 20px; border-radius: 2px; background: rgb(255 255 255 / .07); overflow: hidden; opacity: 0; animation: startup-fade .6s ease .95s forwards; }
+.startup-line i { display: block; width: 45%; height: 100%; border-radius: 2px; background: linear-gradient(90deg, transparent, #0a84ff, #0fc8d6, transparent); animation: startup-run 1.2s cubic-bezier(.45, 0, .55, 1) infinite; }
+@keyframes startup-glow { to { opacity: 1; transform: none; } }
+@keyframes startup-settle { from { transform: scale(.82); } to { transform: none; } }
+@keyframes startup-piece-a { from { opacity: 0; transform: translate(-260px, -260px); } 55% { opacity: 1; } to { opacity: 1; transform: none; } }
+@keyframes startup-piece-b { from { opacity: 0; transform: translate(260px, 260px); } 55% { opacity: 1; } to { opacity: 1; transform: none; } }
+@keyframes startup-sheen { to { transform: translateX(110%); } }
+@keyframes startup-rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+@keyframes startup-fade { to { opacity: 1; } }
+@keyframes startup-run { from { transform: translateX(-110%); } to { transform: translateX(240%); } }
+
+/* Leaving: the mark grows towards the viewer and dissolves, the app settles into place behind it. */
+#startup-loader[data-leaving] { pointer-events: none; animation: startup-out .55s cubic-bezier(.4, 0, .2, 1) forwards; }
+#startup-loader[data-leaving] #startup-animation { animation: startup-through .55s cubic-bezier(.5, 0, .75, 0) forwards; }
+@keyframes startup-out { to { opacity: 0; } }
+@keyframes startup-through { to { transform: scale(1.5); } }
+body.entering > .titlebar, body.entering > .shell { animation: startup-app .7s cubic-bezier(.16, 1, .3, 1) both; }
+@keyframes startup-app { from { opacity: 0; transform: scale(.985) translateY(8px); } to { opacity: 1; transform: none; } }
+
+/* The update screen shares this page: the mark moves up, the name and the line make room. */
+#startup-loader:has(.update-screen) #startup-animation { transform: translateY(-150px); }
+#startup-loader:has(.update-screen) :is(.startup-name, .startup-line) { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .startup-glow, .startup-logo, .startup-piece, .startup-name, .startup-line { animation: none; opacity: 1; transform: none; }
+  .startup-sheen, .startup-line i { display: none; }
+  #startup-loader[data-leaving] #startup-animation, body.entering > .titlebar, body.entering > .shell { animation: none; }
+}
