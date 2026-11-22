@@ -86,6 +86,13 @@ footer img { width:46px; height:46px; border-radius:10px; background:var(--fill)
 footer .name { flex:1; min-width:0; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 footer button { padding:15px 22px; font-size:17px; }
 .note { margin:10px 4px; font-size:13px; color:var(--t3); }
+.grid.cards { grid-template-columns:repeat(auto-fit, minmax(96px, 1fr)); gap:12px; }
+.grid.cards .champ span { font-size:13px; color:var(--text); }
+.mine { display:flex; align-items:center; gap:14px; padding:12px; margin-bottom:12px; border-radius:16px; background:var(--s1); border:1px solid var(--line); }
+.mine img { width:72px; height:72px; border-radius:14px; }
+.mine b { display:block; font-size:18px; }
+.mine span { font-size:13px; color:var(--t2); }
+.mine button { margin-left:auto; }
 .toast { position:fixed; left:50%; bottom:96px; transform:translateX(-50%); padding:10px 16px; border-radius:999px; background:var(--s2); border:1px solid var(--line); font-size:13px; opacity:0; transition:opacity .2s; pointer-events:none; }
 .toast.show { opacity:1; }
 [hidden] { display:none !important; }
@@ -99,7 +106,7 @@ footer button { padding:15px 22px; font-size:17px; }
 <script>
 "use strict";
 // Texts in English; the PC sends them in the app's language (/texts).
-const T = { waiting:"Waiting for a match", waitingText:"Keep this page open. It connects by itself when League finds a match.", found:"Match found", accept:"Accept", decline:"Decline", accepted:"Accepted. Waiting for the others.", declined:"Declined", ban:"Ban a champion", pick:"Pick your champion", soon:"Your turn is coming", wait:"Waiting for the others", done:"You are locked in", planning:"Show what you want to play", champions:"Champions", runes:"Runes and spells", search:"Search", lockBan:"Ban", lockPick:"Lock in", pages:"Rune pages", spells:"Summoner spells", auto:"Replace with the most played runes and spells", autoOn:"Auto accept is on. League Companion is accepting for you.", acceptedAuto:"Accepted automatically. Waiting for the others.", acceptNow:"Accept now", primary:"Primary", secondary:"Secondary", shards:"Shards", keep:"Your selected page stays as it is unless you change it here.", autoDone:"Runes and spells set", failed:"League refused that", pin:"Type the PIN shown in League Companion", pinWrong:"Wrong PIN", pinLocked:"Too many tries. Wait a minute.", pair:"Pair this phone", none:"No champion chosen", noPages:"No rune page to choose from" };
+const T = { waiting:"Waiting for a match", waitingText:"This page shows the match as soon as League finds one. Keep it open.", found:"Match found", accept:"Accept", decline:"Decline", accepted:"Accepted. Waiting for the others.", declined:"Declined", ban:"Ban a champion", pick:"Pick your champion", soon:"Your turn is coming", wait:"Waiting for the others", done:"You are locked in", planning:"Show what you want to play", champions:"Champions", runes:"Runes and spells", search:"Search", lockBan:"Ban", lockPick:"Lock in", pages:"Rune pages", spells:"Summoner spells", auto:"Replace with the most played runes and spells", autoOn:"Auto accept is on. League Companion is accepting for you.", acceptedAuto:"Accepted automatically. Waiting for the others.", acceptNow:"Accept now", primary:"Primary", secondary:"Secondary", shards:"Shards", keep:"Your selected page stays as it is unless you change it here.", inLobby:"In the lobby", inQueue:"In queue", flowText:"This page shows the match as soon as it is found. Keep it open.", cards:"Choose your champion", yours:"Your champion", bench:"Bench: tap a champion to take it", benchEmpty:"The bench is empty", reroll:"Reroll", rerollsLeft:"left", back:"Connection lost. Reconnecting…", autoDone:"Runes and spells set", failed:"League refused that", pin:"Type the PIN shown in League Companion", pinWrong:"Wrong PIN", pinLocked:"Too many tries. Wait a minute.", pair:"Pair this phone", none:"No champion chosen", noPages:"No rune page to choose from" };
 const $ = (id) => document.getElementById(id);
 const main = $("main");
 let key = localStorage.getItem("lcKey") || "";
@@ -110,10 +117,17 @@ const img = (id) => id > 0 ? `<img src="/c/${id}.png" alt="" loading="lazy" deco
 const esc = (text) => String(text).replace(/[&<>"]/g, (c) => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" }[c]));
 const toast = (text) => { const box = $("toast"); box.textContent = text; box.classList.add("show"); clearTimeout(toast.timer); toast.timer = setTimeout(() => box.classList.remove("show"), 1800); };
 
-async function call(path, body) {
-  const response = await fetch(path, { method: body ? "POST" : "GET", headers: { "X-Key": key, ...(body ? { "Content-Type": "application/json" } : {}) }, body: body ? JSON.stringify(body) : undefined, cache: "no-store" });
-  if (response.status === 401) { key = ""; localStorage.removeItem("lcKey"); throw new Error("key"); }
-  return { ok: response.ok, data: await response.json().catch(() => ({})) };
+let flight = null;
+async function call(path, body, limit = 6000) {
+  // A phone that slept can leave a request hanging for minutes: every request has a time limit.
+  const control = new AbortController();
+  const timer = setTimeout(() => control.abort(), limit);
+  if (path.startsWith("/state")) flight = control;
+  try {
+    const response = await fetch(path, { method: body ? "POST" : "GET", headers: { "X-Key": key, ...(body ? { "Content-Type": "application/json" } : {}) }, body: body ? JSON.stringify(body) : undefined, cache: "no-store", signal: control.signal });
+    if (response.status === 401) { key = ""; localStorage.removeItem("lcKey"); throw new Error("key"); }
+    return { ok: response.ok, data: await response.json().catch(() => ({})) };
+  } finally { clearTimeout(timer); }
 }
 async function act(body) {
   try { const result = await call("/act", body); if (!result.ok) toast(T.failed); return result.ok; } catch { toast(T.failed); return false; }
@@ -135,7 +149,11 @@ function drawPin(error) {
   input.oninput = () => { if (input.value.trim().length === 6) go(); };
   input.focus();
 }
-function drawIdle() { center(`<h1>${esc(T.waiting)}</h1><p>${esc(T.waitingText)}</p>`); }
+function drawIdle() {
+  if (!online) return center(`<h1>${esc(T.waiting)}</h1><p>${esc(T.waitingText)}</p>`);
+  const title = state.flow === "Matchmaking" ? T.inQueue : state.flow === "Lobby" ? T.inLobby : T.waiting;
+  center(`<h1>${esc(title)}</h1><p>${esc(T.flowText)}</p>`);
+}
 function drawReady() {
   const answer = state.answer;
   if (answer !== "None") center(`<h1>${esc(T.found)}</h1><p>${esc(answer === "Accepted" ? (state.auto ? T.acceptedAuto : T.accepted) : T.declined)}</p>`);
@@ -201,8 +219,11 @@ function spellsHtml() {
   return `<div class="card"><h3>${esc(T.spells)}</h3><div class="slots">${[0, 1].map((index) => `<button class="slot${slot === index ? " on" : ""}" data-slot="${index}"><img src="${gfx(spell(mine[index]).icon)}" alt=""><span><em>${index ? "F" : "D"}</em>${esc(spell(mine[index]).name)}</span></button>`).join("")}</div><div class="sgrid">${spells.map((entry) => `<button class="${entry.id === mine[slot] ? "on" : mine.includes(entry.id) ? "used" : ""}" data-spell="${entry.id}" aria-label="${esc(entry.name)}"><img src="${gfx(entry.icon)}" alt="" loading="lazy"></button>`).join("")}</div></div>`;
 }
 function myAction() { return state.action || null; }
+// A few champions offered to me (ARAM cards) instead of the whole list.
+function offered() { const action = myAction(); return action && action.type === "pick" && (state.subset || []).length ? state.subset : null; }
 function available() {
   const action = myAction();
+  if (offered()) return offered();
   const ids = action && action.type === "ban" ? state.bannable : state.pickable;
   const taken = new Set([...(state.bans || []), ...state.team.map((p) => p.champ), ...state.enemy.map((p) => p.champ)]);
   return (ids || []).filter((id) => !taken.has(id));
@@ -212,7 +233,8 @@ function drawSelect() {
   const turn = !!(action && action.active);
   document.body.classList.toggle("turn", turn);
   document.querySelector("header").hidden = false;
-  $("title").textContent = !action ? T.done : turn ? (action.type === "ban" ? T.ban : T.pick) : state.step === "PLANNING" ? T.planning : T.soon;
+  const benched = !action && Array.isArray(state.bench);
+  $("title").textContent = benched ? T.yours : !action ? T.done : offered() && turn ? T.cards : turn ? (action.type === "ban" ? T.ban : T.pick) : state.step === "PLANNING" ? T.planning : T.soon;
   $("sub").textContent = turn ? "" : action ? T.wait : "";
   if (action && action.id !== shownAction) {
     // A new turn: start from what the client already shows, vibrate when it is mine.
@@ -227,7 +249,11 @@ function drawSelect() {
     if (action) {
       const words = query.toLowerCase();
       const list = available().map((id) => ({ id, name: names.get(id) || `#${id}` })).filter((c) => !words || c.name.toLowerCase().includes(words)).sort((a, b) => a.name.localeCompare(b.name));
-      body += `<input class="search" id="search" placeholder="${esc(T.search)}" value="${esc(query)}" autocomplete="off" autocapitalize="off" spellcheck="false"><div class="grid" id="grid">${list.map((c) => `<button class="champ${c.id === chosen ? " on" : ""}" data-champ="${c.id}">${img(c.id)}<span>${esc(c.name)}</span></button>`).join("")}</div>`;
+      body += `${offered() ? "" : `<input class="search" id="search" placeholder="${esc(T.search)}" value="${esc(query)}" autocomplete="off" autocapitalize="off" spellcheck="false">`}<div class="grid${offered() ? " cards" : ""}" id="grid">${list.map((c) => `<button class="champ${c.id === chosen ? " on" : ""}" data-champ="${c.id}">${img(c.id)}<span>${esc(c.name)}</span></button>`).join("")}</div>`;
+    } else if (benched) {
+      // ARAM: my champion, a reroll, and the bench everyone can take from.
+      body += `<div class="mine">${img(state.mine)}<div><b>${esc(names.get(state.mine) || "")}</b><span>${esc(T.yours)}</span></div><button class="primary" data-reroll${state.rerolls > 0 ? "" : " disabled"}>${esc(T.reroll)} · ${state.rerolls} ${esc(T.rerollsLeft)}</button></div>`;
+      body += `<p class="note">${esc(state.bench.length ? T.bench : T.benchEmpty)}</p><div class="grid cards">${state.bench.map((id) => `<button class="champ" data-swap="${id}">${img(id)}<span>${esc(names.get(id) || "")}</span></button>`).join("")}</div>`;
     } else body += `<p class="note">${esc(T.done)}</p>`;
   } else {
     body += `<div class="list">${runesHtml()}${spellsHtml()}<button class="ghost" data-auto>${esc(T.auto)}</button></div>`;
@@ -248,7 +274,7 @@ function drawSelect() {
 }
 function draw() {
   if (!key) return drawPin();
-  if (!online || state.phase === "idle") return drawIdle();
+  if (!online || state.phase === "idle" || !state.phase) return drawIdle();
   if (state.phase === "ready") return drawReady();
   if (state.phase === "select") return drawSelect();
   drawIdle();
@@ -271,6 +297,8 @@ main.addEventListener("click", (event) => {
     return draw();
   }
   if (target.dataset.page) return void act({ t:"page", id: Number(target.dataset.page) });
+  if (target.dataset.swap) return void act({ t:"swap", id: Number(target.dataset.swap) });
+  if ("reroll" in target.dataset) { target.disabled = true; return void act({ t:"reroll" }); }
   if (target.classList.contains("rune") && state.rune) return editRune(target);
   if (target.dataset.slot) { slot = Number(target.dataset.slot); return draw(); }
   if (target.dataset.spell) {
@@ -286,13 +314,15 @@ main.addEventListener("input", (event) => { if (event.target.id === "search") { 
 $("lock").onclick = () => { const action = myAction(); if (action && chosen > 0) { $("lock").disabled = true; act({ t:"lock", action: action.id, id: chosen }).then((ok) => { if (!ok) $("lock").disabled = false; }); } };
 
 // ---- following the PC: one request that is answered when something changes
-let looping = false;
+let looping = false, kick = false;
+// The page came back (screen on, tab shown, network back): drop the old request and ask again now.
+function wake() { if (document.hidden) return; kick = true; version = 0; if (flight) flight.abort(); loop(); }
 async function loop() {
   if (looping) return; looping = true;
   while (key) {
     try {
       if (!names.size) { const result = await call("/names"); (result.data.champions || []).forEach((c) => names.set(c.id, c.name)); spells = (result.data.spells || []).sort((a, b) => a.name.localeCompare(b.name)); styles = result.data.styles || []; perks = result.data.perks || {}; }
-      const result = await call(`/state?v=${version}`);
+      const result = await call(`/state?v=${version}`, null, 26000);
       const fresh = result.data.v !== version || !online;
       online = true; version = result.data.v; offset = result.data.now - Date.now(); state = result.data.s || { phase:"idle" };
       if (state.phase !== "select") { shownAction = -1; chosen = 0; query = ""; }
@@ -302,13 +332,17 @@ async function loop() {
       if (!key) break;
       // The PC is not serving (no match right now): show it and try again shortly.
       if (online) { online = false; version = 0; draw(); }
-      await new Promise((resolve) => setTimeout(resolve, 1500));
+      // Woken up on purpose (the page came back to the front): ask again at once.
+      if (kick) kick = false; else await new Promise((resolve) => setTimeout(resolve, 1200));
     }
   }
   looping = false; draw();
 }
 fetch("/texts").then((response) => response.json()).then((texts) => { Object.assign(T, texts); draw(); }).catch(() => {});
-document.addEventListener("visibilitychange", () => { if (!document.hidden) loop(); });
+document.addEventListener("visibilitychange", wake);
+window.addEventListener("pageshow", wake);
+window.addEventListener("online", wake);
+window.addEventListener("focus", wake);
 draw(); loop();
 </script>
 </body>

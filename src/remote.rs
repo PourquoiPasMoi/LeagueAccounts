@@ -149,6 +149,8 @@ struct Extras {
     pages: Value,
     /// The selected rune page (whoever made it: the player, Blitz, ...).
     rune: Value,
+    /// The champions this player may choose from when the mode offers only a few (ARAM cards).
+    subset: Value,
 }
 
 fn ids(value: Option<Value>) -> Value {
@@ -179,6 +181,7 @@ fn read_extras(client: &LeagueApi) -> Extras {
         bannable: ids(client.get_json("/lol-champ-select/v1/bannable-champion-ids")),
         pages: Value::Array(pages),
         rune,
+        subset: ids(client.get_json("/lol-lobby-team-builder/champ-select/v1/subset-champion-list")),
     }
 }
 
@@ -225,7 +228,60 @@ fn select_state(client: &LeagueApi, extras: &Extras) -> Option<Value> {
         "bannable": extras.bannable,
         "pages": extras.pages,
         "rune": extras.rune,
+        "subset": extras.subset,
+        // ARAM: the champion I hold, the bench anyone may take from, rerolls left.
+        "mine": me["championId"].as_i64().unwrap_or(0),
+        "bench": if session["benchEnabled"].as_bool() == Some(true) {
+            Value::Array(list(&session["benchChampions"]).iter().filter_map(|champion| champion["championId"].as_i64()).map(Value::from).collect())
+        } else {
+            Value::Null
+        },
+        "rerolls": session["rerollsRemaining"].as_i64().unwrap_or(0),
     }))
+}
+
+/// For working out a game mode's champ select (ARAM: Mayhem cards): while the
+/// file `capture-champselect.on` exists in the app's folder, what the client
+/// reports during champ select is kept in `champselect-capture.json` (the
+/// last 60 different snapshots). Local only, never sent anywhere.
+fn capture(client: &LeagueApi) {
+    let Ok(directory) = app_data_dir() else { return };
+    if !directory.join("capture-champselect.on").exists() {
+        return;
+    }
+    let paths = [
+        "/lol-champ-select/v1/session",
+        "/lol-champ-select/v1/pickable-champion-ids",
+        "/lol-lobby-team-builder/champ-select/v1/subset-champion-list",
+        "/lol-champ-select/v1/current-champion",
+        "/lol-champ-select/v1/session/my-selection",
+    ];
+    let mut snapshot = serde_json::Map::new();
+    for path in paths {
+        snapshot.insert(path.to_owned(), client.get_json(path).unwrap_or(Value::Null));
+    }
+    let flow = client.get_json("/lol-gameflow/v1/session").unwrap_or(Value::Null);
+    snapshot.insert("queue".to_owned(), flow["gameData"]["queue"].clone());
+    let snapshot = Value::Object(snapshot);
+    let file = directory.join("champselect-capture.json");
+    let mut list: Vec<Value> = std::fs::read(&file).ok().and_then(|bytes| serde_json::from_slice(&bytes).ok()).unwrap_or_default();
+    // The countdown changes every time: compare without it.
+    let plain = |value: &Value| {
+        let mut copy = value.clone();
+        if let Some(session) = copy.get_mut("/lol-champ-select/v1/session").and_then(Value::as_object_mut) {
+            session.remove("timer");
+        }
+        copy
+    };
+    if list.last().is_some_and(|last| plain(&last["data"]) == plain(&snapshot)) {
+        return;
+    }
+    list.push(json!({ "at": now_ms(), "data": snapshot }));
+    let extra = list.len().saturating_sub(60);
+    list.drain(..extra);
+    if let Ok(body) = serde_json::to_vec(&list) {
+        let _ = std::fs::write(file, body);
+    }
 }
 
 /// Auto accept as set in the app (`autoaccept.json`): (on, seconds waited first).
@@ -334,6 +390,9 @@ fn act(body: &Value) -> Result<(), &'static str> {
             done(sent(&client, "POST", &format!("{path}/complete"), None))
         }
         "page" => done(sent(&client, "PUT", "/lol-perks/v1/currentpage", Some(&json!(number("id").ok_or("bad")?)))),
+        // ARAM: take a champion from the bench (mine goes there), or roll a new one.
+        "swap" => done(sent(&client, "POST", &format!("/lol-champ-select/v1/session/bench/swap/{}", number("id").ok_or("bad")?), None)),
+        "reroll" => done(sent(&client, "POST", "/lol-champ-select/v1/session/my-selection/reroll", None)),
         "spells" => {
             let (first, second) = (number("a").ok_or("bad")?, number("b").ok_or("bad")?);
             done(sent(&client, "PATCH", "/lol-champ-select/v1/session/my-selection", Some(&json!({ "spell1Id": first, "spell2Id": second }))))
@@ -635,7 +694,9 @@ fn start(shared: &Arc<Shared>) -> Option<(Arc<AtomicBool>, u16)> {
     // LC_REMOTE_LOCAL: this PC only (the test program; no firewall question).
     let local = std::env::var_os("LC_REMOTE_LOCAL").is_some();
     let host = if local { Ipv4Addr::LOCALHOST } else { Ipv4Addr::UNSPECIFIED };
-    let (listener, port) = PORTS.iter().find_map(|port| TcpListener::bind(SocketAddrV4::new(host, *port)).ok().map(|listener| (listener, *port)))?;
+    // The test program keeps away from the port of an app that is running.
+    let ports: &[u16] = if local { &[8799] } else { &PORTS };
+    let (listener, port) = ports.iter().find_map(|port| TcpListener::bind(SocketAddrV4::new(host, *port)).ok().map(|listener| (listener, *port)))?;
     listener.set_nonblocking(true).ok()?;
     let stop = Arc::new(AtomicBool::new(false));
     {
@@ -696,7 +757,9 @@ pub fn spawn(status: impl Fn(bool) + Send + 'static) {
             }
             let client = riot_client::league_client();
             let phase = client.as_ref().and_then(|client| client.get_json("/lol-gameflow/v1/gameflow-phase")).and_then(|phase| phase.as_str().map(str::to_owned)).unwrap_or_default();
-            let live = matches!(phase.as_str(), "ReadyCheck" | "ChampSelect");
+            // On for as long as the setting is on (the owner's choice: a server that
+            // came and went left the phone guessing). It closes with the switch and with the app.
+            let live = true;
             let open = OPEN_UNTIL.load(Ordering::Relaxed) > now_ms();
             if !live && !open {
                 // Not needed: close it (after a moment, for a dodge) and look again later.
@@ -738,10 +801,12 @@ pub fn spawn(status: impl Fn(bool) + Send + 'static) {
                         let forced = shared.refresh.swap(false, Ordering::Relaxed);
                         if forced || extras.read.is_none_or(|read| read.elapsed() >= Duration::from_secs(3)) {
                             extras = read_extras(client);
+                            capture(client);
                         }
                         select_state(client, &extras).unwrap_or_else(|| json!({ "phase": "idle" }))
                     }
-                    _ => json!({ "phase": "idle" }),
+                    // Lobby or queue: the page says which while it waits.
+                    other => json!({ "phase": "idle", "flow": other }),
                 };
                 publish(&shared, &state);
             } else {
@@ -749,7 +814,10 @@ pub fn spawn(status: impl Fn(bool) + Send + 'static) {
             }
             // A phone is there: follow the client closely. Nobody: once a second is enough.
             let watched = shared.waiting.load(Ordering::Relaxed) > 0 || now_ms().saturating_sub(shared.last_request.load(Ordering::Relaxed)) < 5_000;
-            let pause = if watched { 250 } else { 1000 };
+            // Only the ready check and champ select need a close watch; the rest
+            // of the time one look a second (two without a client) is plenty.
+            let busy = matches!(phase.as_str(), "ReadyCheck" | "ChampSelect");
+            let pause = if client.is_none() { 2000 } else if busy && watched { 250 } else { 1000 };
             // An action from the phone cuts the pause short.
             for _ in 0..pause / 50 {
                 if shared.refresh.load(Ordering::Relaxed) {

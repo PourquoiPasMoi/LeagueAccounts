@@ -158,8 +158,8 @@ Off by default (Settings › Phone remote). Away from the PC when the match pops
 
 - Accept or decline the match, ban and pick with search, lock in.
 - Runes: your selected page is kept as it is (also one another app made); change it with an editor laid out like the client's, with the game's icons. Summoner spells with icons.
-- Works in custom games too. ARAM is detected, but swapping from the bench and rerolling are not there yet.
-- The page only exists while a match is found or champ select runs; the rest of the time nothing listens on the network. It closes with the app.
+- Works in custom games too. In ARAM you can reroll and take a champion from the bench.
+- While the setting is on, the page stays reachable on your network for as long as the app runs, so the phone can keep it open between matches. It closes when you turn the setting off or quit the app.
 - A phone is paired once with a PIN shown in Settings. Everything goes through the League client; the game is never touched.
 
 ### Music player

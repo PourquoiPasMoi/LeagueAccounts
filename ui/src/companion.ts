@@ -37,7 +37,7 @@ export function sendNotifyTexts(): void {
 
 /** Give the phone page its texts in the interface language. */
 export function sendRemoteTexts(): void {
-  const keys = ["waiting", "waitingText", "found", "accept", "decline", "accepted", "declined", "ban", "pick", "soon", "wait", "done", "planning", "champions", "runes", "search", "lockBan", "lockPick", "pages", "spells", "auto", "autoDone", "failed", "pin", "pinWrong", "pinLocked", "pair", "none", "noPages", "autoOn", "acceptedAuto", "acceptNow", "primary", "secondary", "shards", "keep"];
+  const keys = ["waiting", "waitingText", "found", "accept", "decline", "accepted", "declined", "ban", "pick", "soon", "wait", "done", "planning", "champions", "runes", "search", "lockBan", "lockPick", "pages", "spells", "auto", "autoDone", "failed", "pin", "pinWrong", "pinLocked", "pair", "none", "noPages", "autoOn", "acceptedAuto", "acceptNow", "primary", "secondary", "shards", "keep", "inLobby", "inQueue", "flowText", "cards", "yours", "bench", "benchEmpty", "reroll", "rerollsLeft", "back"];
   const texts = Object.fromEntries(keys.map((key) => [key, t(`remote.p.${key}` as MessageKey)]));
   void api.setRemoteTexts(texts).catch(() => undefined);
 }
@@ -77,7 +77,6 @@ export function remotePage(current: string): string {
           <span class="toggle-text"><strong>${esc(t("remote.address"))}</strong><span class="remote-address" data-remote-name></span><span class="remote-address" data-remote-ip></span></span>
           <span class="remote-buttons">
             <button type="button" class="btn btn-ghost" data-remote-test>${esc(t("remote.test"))}</button>
-            <button type="button" class="btn btn-ghost" data-remote-open>${esc(t("remote.openNow"))}</button>
           </span>
         </div>
         <p class="settings-note" data-remote-result hidden></p>
@@ -240,7 +239,6 @@ export function wireCompanionSettings(root: HTMLElement): void {
   const loadRemote = () => void api.remoteInfo().then(showRemote).catch(() => undefined);
   loadRemote();
   remote?.addEventListener("change", () => void api.setRemoteEnabled(remote.checked).then(showRemote).catch(failed));
-  field("[data-remote-open]")?.addEventListener("click", () => void api.remoteOpen(5).then(showRemote).catch(failed));
   field<HTMLButtonElement>("[data-remote-test]")?.addEventListener("click", (event) => {
     const button = event.currentTarget as HTMLButtonElement;
     const result = field("[data-remote-result]");
