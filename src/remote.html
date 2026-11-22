@@ -107,6 +107,8 @@ footer button { padding:15px 22px; font-size:17px; }
 "use strict";
 // Texts in English; the PC sends them in the app's language (/texts).
 const T = { waiting:"Waiting for a match", waitingText:"This page shows the match as soon as League finds one. Keep it open.", found:"Match found", accept:"Accept", decline:"Decline", accepted:"Accepted. Waiting for the others.", declined:"Declined", ban:"Ban a champion", pick:"Pick your champion", soon:"Your turn is coming", wait:"Waiting for the others", done:"You are locked in", planning:"Show what you want to play", champions:"Champions", runes:"Runes and spells", search:"Search", lockBan:"Ban", lockPick:"Lock in", pages:"Rune pages", spells:"Summoner spells", auto:"Replace with the most played runes and spells", autoOn:"Auto accept is on. League Companion is accepting for you.", acceptedAuto:"Accepted automatically. Waiting for the others.", acceptNow:"Accept now", primary:"Primary", secondary:"Secondary", shards:"Shards", keep:"Your selected page stays as it is unless you change it here.", inLobby:"In the lobby", inQueue:"In queue", flowText:"This page shows the match as soon as it is found. Keep it open.", cards:"Choose your champion", yours:"Your champion", bench:"Bench: tap a champion to take it", benchEmpty:"The bench is empty", reroll:"Reroll", rerollsLeft:"left", back:"Connection lost. Reconnecting…", autoDone:"Runes and spells set", failed:"League refused that", pin:"Type the PIN shown in League Companion", pinWrong:"Wrong PIN", pinLocked:"Too many tries. Wait a minute.", pair:"Pair this phone", none:"No champion chosen", noPages:"No rune page to choose from" };
+// The build of the app this page came from (filled in by the PC).
+const BUILD = "__BUILD__";
 const $ = (id) => document.getElementById(id);
 const main = $("main");
 let key = localStorage.getItem("lcKey") || "";
@@ -152,7 +154,7 @@ function drawPin(error) {
 function drawIdle() {
   if (!online) return center(`<h1>${esc(T.waiting)}</h1><p>${esc(T.waitingText)}</p>`);
   const title = state.flow === "Matchmaking" ? T.inQueue : state.flow === "Lobby" ? T.inLobby : T.waiting;
-  center(`<h1>${esc(title)}</h1><p>${esc(T.flowText)}</p>`);
+  center(`<h1>${esc(title)}</h1><p>${esc(T.flowText)}</p><p class="note">League Companion ${esc(BUILD.split("-")[0])}</p>`);
 }
 function drawReady() {
   const answer = state.answer;
@@ -322,7 +324,9 @@ async function loop() {
   while (key) {
     try {
       if (!names.size) { const result = await call("/names"); (result.data.champions || []).forEach((c) => names.set(c.id, c.name)); spells = (result.data.spells || []).sort((a, b) => a.name.localeCompare(b.name)); styles = result.data.styles || []; perks = result.data.perks || {}; }
-      const result = await call(`/state?v=${version}`, null, 26000);
+      const result = await call(`/state?v=${version}`, null, 12000);
+      // The app was updated while this page stayed open: load the new page.
+      if (result.data.b && result.data.b !== BUILD) { location.reload(); return; }
       const fresh = result.data.v !== version || !online;
       online = true; version = result.data.v; offset = result.data.now - Date.now(); state = result.data.s || { phase:"idle" };
       if (state.phase !== "select") { shownAction = -1; chosen = 0; query = ""; }

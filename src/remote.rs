@@ -36,7 +36,14 @@ const PAGE: &str = include_str!("remote.html");
 /// The server stays a moment after champ select ends (dodge → next match).
 const LINGER: Duration = Duration::from_secs(6);
 /// A waiting phone gets an (unchanged) answer after this long and asks again.
-const LONG_POLL: Duration = Duration::from_secs(20);
+const LONG_POLL: Duration = Duration::from_secs(8);
+
+/// Which page this build serves. A phone that still runs the page of an older
+/// build (the app was updated while the page stayed open) sees another id in
+/// the state and loads the page again by itself.
+fn build_id() -> String {
+    format!("{}-{}", env!("CARGO_PKG_VERSION"), PAGE.len())
+}
 
 // ---------------------------------------------------------------- preferences
 
@@ -544,7 +551,7 @@ fn handle(mut stream: TcpStream, shared: Arc<Shared>, stop: Arc<AtomicBool>) {
         let get = request.method == "GET";
         let post = request.method == "POST";
         let ok = match request.path.as_str() {
-            "/" | "/index.html" if get => respond(&mut stream, "200 OK", "text/html; charset=utf-8", "no-cache", PAGE.as_bytes()),
+            "/" | "/index.html" if get => respond(&mut stream, "200 OK", "text/html; charset=utf-8", "no-store", PAGE.replace("__BUILD__", &build_id()).as_bytes()),
             "/texts" if get => {
                 let texts = TEXTS.lock().ok().and_then(|texts| texts.clone()).unwrap_or_default();
                 respond_json(&mut stream, "200 OK", &json!(texts))
@@ -582,7 +589,7 @@ fn handle(mut stream: TcpStream, shared: Arc<Shared>, stop: Arc<AtomicBool>) {
                 while state.0 == seen && started.elapsed() < LONG_POLL && !stop.load(Ordering::Relaxed) {
                     state = shared.changed.wait_timeout(state, Duration::from_millis(500)).map(|(guard, _)| guard).unwrap_or_else(|error| error.into_inner().0);
                 }
-                let body = format!("{{\"v\":{},\"now\":{},\"s\":{}}}", state.0, now_ms(), state.1);
+                let body = format!("{{\"v\":{},\"now\":{},\"b\":\"{}\",\"s\":{}}}", state.0, now_ms(), build_id(), state.1);
                 drop(state);
                 shared.waiting.fetch_sub(1, Ordering::Relaxed);
                 respond(&mut stream, "200 OK", "application/json", "no-store", body.as_bytes())

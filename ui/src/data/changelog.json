@@ -1,5 +1,51 @@
 [
  {
+  "version": "5.10.2",
+  "date": "2026-11-22",
+  "items": {
+   "en": [
+    "Phone remote: the page on your phone reloads itself after League Companion updates, so it no longer stays on \"Waiting for a match\" during champ select.",
+    "The phone page comes back within a few seconds after it lost the connection to your PC.",
+    "ARAM: Mayhem on the phone: choose one of the champion cards the game offers, then swap with the bench."
+   ],
+   "tr": [
+    "Telefon kumandası: League Companion güncellendikten sonra telefondaki sayfa kendini yeniler; şampiyon seçimi sırasında artık \"Maç bekleniyor\" ekranında kalmaz.",
+    "Telefondaki sayfa, bilgisayarınla bağlantısı koptuktan sonra birkaç saniye içinde geri gelir.",
+    "Telefonda ARAM: Kargaşa: oyunun sunduğu şampiyon kartlarından birini seç, ardından yedeklerle değiştir."
+   ],
+   "de": [
+    "Handy-Fernbedienung: Die Seite auf dem Handy lädt sich nach einem Update von League Companion selbst neu und bleibt in der Championauswahl nicht mehr bei „Warten auf ein Spiel“ stehen.",
+    "Die Handyseite ist nach einem Verbindungsabbruch zum PC innerhalb weniger Sekunden wieder da.",
+    "ARAM: Chaos am Handy: Wähle eine der angebotenen Championkarten und tausche danach mit der Bank."
+   ],
+   "es": [
+    "Mando desde el móvil: la página del móvil se recarga sola cuando League Companion se actualiza, así ya no se queda en «Esperando una partida» durante la selección de campeón.",
+    "La página del móvil vuelve en pocos segundos después de perder la conexión con tu PC.",
+    "ARAM: Caos en el móvil: elige una de las cartas de campeón que ofrece el juego y luego cambia con el banquillo."
+   ],
+   "fr": [
+    "Télécommande mobile : la page sur votre téléphone se recharge toute seule après une mise à jour de League Companion, elle ne reste donc plus sur « En attente d'une partie » pendant la sélection des champions.",
+    "La page mobile revient en quelques secondes après avoir perdu la connexion avec votre PC.",
+    "ARAM : Chaos sur le téléphone : choisissez l'une des cartes de champion proposées par le jeu, puis échangez avec le banc."
+   ],
+   "pt": [
+    "Comando no telemóvel: a página no telemóvel recarrega-se sozinha depois de o League Companion ser atualizado, por isso já não fica em \"À espera de uma partida\" durante a seleção de campeões.",
+    "A página do telemóvel volta em poucos segundos depois de perder a ligação ao PC.",
+    "ARAM: Caos no telemóvel: escolhe uma das cartas de campeão que o jogo oferece e depois troca com o banco."
+   ],
+   "zh": [
+    "手机遥控：League Companion 更新后，手机上的页面会自动重新加载，英雄选择时不会再停留在“等待对局”。",
+    "手机页面与电脑断开连接后，几秒内即可恢复。",
+    "手机上的极地大乱斗：混乱模式：先从游戏提供的英雄卡牌中选择一张，然后可与备选席交换。"
+   ],
+   "zhTw": [
+    "手機遙控：League Companion 更新後，手機上的頁面會自動重新載入，英雄選擇時不會再停留在「等待對戰」。",
+    "手機頁面與電腦中斷連線後，幾秒內即可恢復。",
+    "手機上的隨機單中：混亂模式：先從遊戲提供的英雄卡牌中選擇一張，然後可與備選席交換。"
+   ]
+  }
+ },
+ {
   "version": "5.10.1",
   "date": "2026-11-22",
   "items": {
