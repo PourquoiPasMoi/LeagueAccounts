@@ -168,9 +168,22 @@ pub struct SeasonRank {
     pub peak_lp: i64,
 }
 
+/// Place on the server's Solo/Duo ladder as OP.GG shows it ("Ladder Rank 1,142,342 (30.3% of top)").
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct LadderRank {
+    pub rank: u64,
+    /// The share of players at or above this place, as text ("30.3").
+    pub top: String,
+    /// Unix ms when it was read.
+    pub at: u64,
+}
+
 /// Values returned by the rank provider.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct RankInfo {
+    /// `None` when the page shows no ladder place (unranked, or the page changed).
+    pub ladder: Option<LadderRank>,
     /// `None` when a lookup cannot verify the Riot ID (for example a timeout).
     pub riot_id_not_found: Option<bool>,
     pub tier: String,

@@ -1,5 +1,51 @@
 [
  {
+  "version": "5.12.1",
+  "date": "2026-11-22",
+  "items": {
+   "en": [
+    "3D view: preview a skin's chromas with the colour swatches at the top of the panel.",
+    "Account page: your place on your server's Solo/Duo ladder is shown in the header (from OP.GG). It appears after Sync now or the next rank update.",
+    "3D view: the app's own loading screen now covers the page until the model is ready."
+   ],
+   "tr": [
+    "3D görünüm: panelin üstündeki renk örnekleriyle bir kostümün kromalarını önizle.",
+    "Hesap sayfası: sunucundaki Tekli/Çiftli sıralamasındaki yerin başlıkta gösterilir (OP.GG'den). Şimdi eşitle'den veya bir sonraki rütbe güncellemesinden sonra görünür.",
+    "3D görünüm: model hazır olana kadar sayfayı artık uygulamanın kendi yükleme ekranı kaplıyor."
+   ],
+   "de": [
+    "3D-Ansicht: Sieh dir die Chromas eines Skins über die Farbfelder oben im Fenster an.",
+    "Kontoseite: Dein Platz in der Solo/Duo-Rangliste deines Servers steht im Kopf (von OP.GG). Er erscheint nach „Jetzt synchronisieren“ oder der nächsten Rangaktualisierung.",
+    "3D-Ansicht: Der eigene Ladebildschirm der App verdeckt die Seite jetzt, bis das Modell bereit ist."
+   ],
+   "es": [
+    "Vista 3D: previsualiza los chromas de un aspecto con las muestras de color en la parte superior del panel.",
+    "Página de la cuenta: tu puesto en la clasificación Solo/Dúo de tu servidor aparece en la cabecera (de OP.GG). Se muestra tras Sincronizar ahora o la próxima actualización de rangos.",
+    "Vista 3D: la pantalla de carga de la app cubre ahora la página hasta que el modelo está listo."
+   ],
+   "fr": [
+    "Vue 3D : prévisualisez les chromas d'un skin avec les pastilles de couleur en haut du panneau.",
+    "Page du compte : votre place au classement Solo/Duo de votre serveur s'affiche dans l'en-tête (depuis OP.GG). Elle apparaît après « Synchroniser » ou la prochaine mise à jour des rangs.",
+    "Vue 3D : l'écran de chargement de l'application couvre désormais la page jusqu'à ce que le modèle soit prêt."
+   ],
+   "pt": [
+    "Vista 3D: pré-visualiza os chromas de uma skin com as amostras de cor no topo do painel.",
+    "Página da conta: o teu lugar na classificação Solo/Duo do teu servidor aparece no cabeçalho (do OP.GG). Aparece depois de Sincronizar agora ou da próxima atualização de ranks.",
+    "Vista 3D: o ecrã de carregamento da app cobre agora a página até o modelo estar pronto."
+   ],
+   "zh": [
+    "3D 视图：通过面板顶部的色块预览皮肤的炫彩。",
+    "账号页面：页头显示你在所在服务器单双排天梯中的名次（来自 OP.GG）。点击立即同步或下次段位更新后显示。",
+    "3D 视图：模型就绪前，页面由程序自己的加载画面遮盖。"
+   ],
+   "zhTw": [
+    "3D 檢視：透過面板頂部的色塊預覽造型的炫彩。",
+    "帳號頁面：頁首顯示你在所在伺服器單雙排天梯中的名次（來自 OP.GG）。點擊立即同步或下次牌位更新後顯示。",
+    "3D 檢視：模型就緒前，頁面由程式自己的載入畫面遮蓋。"
+   ]
+  }
+ },
+ {
   "version": "5.12.0",
   "date": "2026-11-22",
   "items": {

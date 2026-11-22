@@ -255,6 +255,26 @@ pub fn seasons(key: &AccountKey) -> Vec<SeasonRank> {
         .unwrap_or_default()
 }
 
+fn ladder_path(directory: &Path, key: &AccountKey) -> PathBuf {
+    directory.join(format!("{}.ladder.json", file_stem(key)))
+}
+
+/// The account's place on its server's ladder, as last read from OP.GG.
+pub fn ladder(key: &AccountKey) -> Option<crate::models::LadderRank> {
+    let ladder: crate::models::LadderRank = directory().map(|directory| read_json(&ladder_path(&directory, key))).unwrap_or_default();
+    (ladder.rank > 0).then_some(ladder)
+}
+
+/// Keep the ladder place OP.GG shows (nothing changes when the page gave none).
+pub fn store_ladder(key: &AccountKey, ladder: Option<&crate::models::LadderRank>) {
+    let Some(ladder) = ladder else { return };
+    let _lock = WRITE_LOCK.lock();
+    let Ok(directory) = directory() else { return };
+    if let Err(error) = write_json(&ladder_path(&directory, key), ladder) {
+        logging::record(Event::ProfileSaveFailed, Reason::from_error(&error));
+    }
+}
+
 /// Keep OP.GG's latest list of past seasons.
 pub fn store_seasons(key: &AccountKey, seasons: &[SeasonRank]) {
     if seasons.is_empty() {

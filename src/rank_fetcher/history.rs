@@ -24,6 +24,8 @@ pub struct OpggHistory {
     pub games: Vec<MatchRecord>,
     /// The match list ran out before the page limit (the whole history is in).
     pub reached_end: bool,
+    /// The place on the server's ladder shown on the same page.
+    pub ladder: Option<crate::models::LadderRank>,
 }
 
 fn parse_time(value: &Value) -> Option<u64> {
@@ -226,7 +228,7 @@ impl RankFetcher {
         let decoded = decode_html_entities(&body).replace("\\\"", "\"");
         let puuid = super::renewal::ProfileUpdate::parse(&decoded).map(|profile| profile.puuid).ok_or(Reason::ProfileMissing)?;
         let actions = self.opgg_actions(&body)?;
-        let mut history = OpggHistory::default();
+        let mut history = OpggHistory { ladder: super::parse_ladder(&body), ..OpggHistory::default() };
         for period in ["MONTH", "WEEK", "DAY"] {
             let Ok(response) = self.call_action(&url, &actions["getTierGraph"], json!({"puuid": puuid, "region": region, "lpHistoryType": period})) else { continue };
             if let Some(entries) = flight_row(&response, |value| value.as_array().is_some_and(|list| list.iter().any(|entry| entry.get("tier_info").is_some()))) {

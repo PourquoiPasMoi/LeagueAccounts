@@ -369,6 +369,7 @@ impl RankFetcher {
         let (reached, finished) = self.parse_last_season_from_opgg(&decoded_payload);
         rank.reached_last_season = reached;
         rank.finished_last_season = finished;
+        rank.ladder = parse_ladder(body);
         rank.riot_id_not_found = Some(false);
         rank.recent_games = parse_opgg_games(body);
         rank.lp_history = parse_opgg_lp_history(&decoded_payload);
@@ -871,4 +872,13 @@ fn title_case(value: &str) -> String {
         })
         .collect::<Vec<_>>()
         .join(" ")
+}
+
+/// "Ladder Rank <span ...>1,142,342</span> (30.3% of top)" on the profile page.
+pub(crate) fn parse_ladder(body: &str) -> Option<crate::models::LadderRank> {
+    static LADDER: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"Ladder Rank\s*<span[^>]*>([\d,.\s]+)</span>\s*\(([\d.]+)%").expect("valid ladder regex"));
+    let found = LADDER.captures(body)?;
+    let rank: u64 = found[1].chars().filter(char::is_ascii_digit).collect::<String>().parse().ok()?;
+    let at = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |time| time.as_millis() as u64);
+    (rank > 0).then(|| crate::models::LadderRank { rank, top: found[2].to_owned(), at })
 }

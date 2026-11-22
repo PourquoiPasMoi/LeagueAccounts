@@ -204,6 +204,7 @@ export interface SkinInfo {
   tile: string;
   rarity: string;
   chromas: number;
+  chromaList: { id: number; name: string; colors: string[] }[];
 }
 
 export interface MatchSummary {
@@ -293,6 +294,8 @@ export interface ProfileView {
   seasons: SeasonRank[];
   /** Every archived game, newest first. */
   games: MatchRecord[];
+  /** Place on the server's Solo/Duo ladder (OP.GG): `top` is the share of players at or above it. */
+  ladder?: { rank: number; top: string; at: number } | null;
 }
 
 /** One value in League's shared settings file. */
@@ -538,7 +541,8 @@ export const api = {
   updateIdle: () => call<boolean>("update_idle"),
   restartToUpdate: () => call<void>("restart_to_update"),
   openRelease: (url: string) => call<void>("open_release", { url }),
-  showModelViewer: (skinId: number, x: number, y: number, width: number, height: number) => call<void>("show_model_viewer", { skinId, x, y, width, height }),
+  showModelViewer: (skinId: number, chroma: number | null, x: number, y: number, width: number, height: number) =>
+    call<void>("show_model_viewer", { skinId, chroma, x, y, width, height }),
   placeModelViewer: (x: number, y: number, width: number, height: number) => call<void>("place_model_viewer", { x, y, width, height }),
   closeModelViewer: () => call<void>("close_model_viewer"),
   championSkins: (championId: number) => call<SkinInfo[]>("champion_skins", { championId }),

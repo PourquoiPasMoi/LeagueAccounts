@@ -769,6 +769,8 @@ struct ProfileView {
     games: Vec<MatchRecord>,
     /// Past seasons' Solo/Duo ranks from OP.GG, newest first.
     seasons: Vec<leagueaccounts::models::SeasonRank>,
+    /// Place on the server's Solo/Duo ladder from OP.GG; `None` until a rank refresh read one.
+    ladder: Option<leagueaccounts::models::LadderRank>,
 }
 
 fn profile_view(key: &AccountKey) -> ProfileView {
@@ -777,7 +779,7 @@ fn profile_view(key: &AccountKey) -> ProfileView {
         profile.champions.retain(|champion| profiles::is_real_champion(champion.id));
         profile
     });
-    ProfileView { profile, history: profiles::history(key), games: profiles::archive(key), seasons: profiles::seasons(key) }
+    ProfileView { profile, history: profiles::history(key), games: profiles::archive(key), seasons: profiles::seasons(key), ladder: profiles::ladder(key) }
 }
 
 /// Who is signed in right now, so the UI can mark that account.
@@ -862,10 +864,14 @@ async fn sync_opgg_history(app: AppHandle, state: AppState<'_>, key: Key, force:
                 fail("opgg_history_failed")
             })?;
         let before = (profiles::history(&key).len(), profiles::archive(&key));
+        // The ladder place is on the same page: "Sync now" brings it up to date too.
+        let ladder_before = profiles::ladder(&key).map(|ladder| ladder.rank);
+        profiles::store_ladder(&key, history.ladder.as_ref());
+        let ladder_changed = history.ladder.as_ref().is_some_and(|ladder| Some(ladder.rank) != ladder_before);
         profiles::record_opgg_lp(&key, &history.lp);
         profiles::merge_games(&key, history.games);
         profiles::store_opgg_sync(&key, &profiles::OpggSync { at: now, complete: sync.complete || history.reached_end || pages == OPGG_FIRST_PAGES });
-        let changed = before != (profiles::history(&key).len(), profiles::archive(&key));
+        let changed = ladder_changed || before != (profiles::history(&key).len(), profiles::archive(&key));
         if changed {
             let _ = app.emit("profile-update", view_key(&key));
         }
@@ -1234,11 +1240,14 @@ const MODEL_VIEWER: &str = "model-viewer";
 /// skin id comes from the page: the address is built here. A remote page has no access to the
 /// app's commands (the capabilities are for local pages).
 #[tauri::command]
-async fn show_model_viewer(app: AppHandle, skin_id: i64, x: f64, y: f64, width: f64, height: f64) -> CommandResult<()> {
-    if !(1000..10_000_000).contains(&skin_id) || width < 80.0 || height < 80.0 {
+async fn show_model_viewer(app: AppHandle, skin_id: i64, chroma: Option<i64>, x: f64, y: f64, width: f64, height: f64) -> CommandResult<()> {
+    let known = |id: &i64| (1000..10_000_000).contains(id);
+    if !known(&skin_id) || width < 80.0 || height < 80.0 {
         return Err(fail("browser"));
     }
-    let url: tauri::Url = format!("https://modelviewer.lol/model-viewer?id={skin_id}").parse().map_err(|_| fail("browser"))?;
+    // A chroma is the skin's address with its own id added.
+    let chroma = chroma.filter(known).map(|id| format!("&chroma={id}")).unwrap_or_default();
+    let url: tauri::Url = format!("https://modelviewer.lol/model-viewer?id={skin_id}{chroma}").parse().map_err(|_| fail("browser"))?;
     let position = tauri::PhysicalPosition::new(x.round() as i32, y.round() as i32);
     let size = tauri::PhysicalSize::new(width.round() as u32, height.round() as u32);
     if let Some(webview) = app.get_webview(MODEL_VIEWER) {

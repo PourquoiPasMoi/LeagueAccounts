@@ -159,6 +159,10 @@ export function openProfile(context: ProfileContext): void {
           ...(favouriteName ? [[favouriteName, t("profile.mostPlayed")] as [string, string]] : []),
         ]
       : [];
+    // The place on the server's ladder, with how many players are above it.
+    if (view.ladder?.rank) {
+      figures.push([`#${new Intl.NumberFormat(localeTag()).format(view.ladder.rank)}`, t("profile.ladderRank", { region: current.regionDisplay, top: view.ladder.top })]);
+    }
     head.innerHTML = `
       <div class="profile-avatar">
         ${profile?.profileIconId ? `<img src="${esc(profileIcon(profile.profileIconId))}" alt="" draggable="false" />` : `<div class="avatar-emblem">${emblem(rank.tier, 72, context.mode)}</div>`}

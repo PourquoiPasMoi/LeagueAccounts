@@ -1391,6 +1391,9 @@ const en = {
   "profile.notOwned": "Not owned",
   "profile.skinsOf": "{owned} of {total} owned",
   "profile.skinsLoading": "Loading the skins…",
+  "profile.ladderRank": "{region} ladder · top {top}%",
+  "profile.chromasLabel": "Chromas",
+  "profile.chromaNone": "No chroma",
 };
 
 type MessageKey = keyof typeof en;
@@ -2786,6 +2789,9 @@ const tr: Dict = {
   "profile.notOwned": "Sahip değil",
   "profile.skinsOf": "{total} kostümden {owned} tanesi sende",
   "profile.skinsLoading": "Kostümler yükleniyor…",
+  "profile.ladderRank": "{region} sıralaması · ilk %{top}",
+  "profile.chromasLabel": "Kromalar",
+  "profile.chromaNone": "Kroma yok",
 };
 
 const de: Dict = {
@@ -4178,6 +4184,9 @@ const de: Dict = {
   "profile.notOwned": "Nicht im Besitz",
   "profile.skinsOf": "{owned} von {total} im Besitz",
   "profile.skinsLoading": "Skins werden geladen…",
+  "profile.ladderRank": "{region}-Rangliste · Top {top} %",
+  "profile.chromasLabel": "Chromas",
+  "profile.chromaNone": "Kein Chroma",
 };
 
 const es: Dict = {
@@ -5570,6 +5579,9 @@ const es: Dict = {
   "profile.notOwned": "No lo tienes",
   "profile.skinsOf": "{owned} de {total} en propiedad",
   "profile.skinsLoading": "Cargando los aspectos…",
+  "profile.ladderRank": "Clasificación {region} · top {top} %",
+  "profile.chromasLabel": "Chromas",
+  "profile.chromaNone": "Sin chroma",
 };
 
 const fr: Dict = {
@@ -6962,6 +6974,9 @@ const fr: Dict = {
   "profile.notOwned": "Non possédé",
   "profile.skinsOf": "{owned} sur {total} possédés",
   "profile.skinsLoading": "Chargement des skins…",
+  "profile.ladderRank": "Classement {region} · top {top} %",
+  "profile.chromasLabel": "Chromas",
+  "profile.chromaNone": "Sans chroma",
 };
 
 const pt: Dict = {
@@ -8354,6 +8369,9 @@ const pt: Dict = {
   "profile.notOwned": "Não tens",
   "profile.skinsOf": "{owned} de {total} em posse",
   "profile.skinsLoading": "A carregar as skins…",
+  "profile.ladderRank": "Classificação {region} · top {top}%",
+  "profile.chromasLabel": "Chromas",
+  "profile.chromaNone": "Sem chroma",
 };
 
 const zh: Dict = {
@@ -9729,6 +9747,9 @@ const zh: Dict = {
   "profile.notOwned": "未拥有",
   "profile.skinsOf": "已拥有 {owned} / {total}",
   "profile.skinsLoading": "正在加载皮肤…",
+  "profile.ladderRank": "{region} 天梯 · 前 {top}%",
+  "profile.chromasLabel": "炫彩",
+  "profile.chromaNone": "无炫彩",
 };
 
 const zhTw: Dict = {
@@ -11104,6 +11125,9 @@ const zhTw: Dict = {
   "profile.notOwned": "未擁有",
   "profile.skinsOf": "已擁有 {owned} / {total}",
   "profile.skinsLoading": "正在載入造型…",
+  "profile.ladderRank": "{region} 天梯 · 前 {top}%",
+  "profile.chromasLabel": "炫彩",
+  "profile.chromaNone": "無炫彩",
 };
 
 export const LANGUAGES = [

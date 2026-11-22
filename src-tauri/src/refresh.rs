@@ -267,6 +267,7 @@ pub fn start_refresh(app: AppHandle, shared: Arc<Shared>, accounts: Vec<Account>
                     // OP.GG's LP points and past seasons fill the rank history.
                     leagueaccounts::profiles::record_opgg_lp(&key, &info.lp_history);
                     leagueaccounts::profiles::store_seasons(&key, &info.seasons);
+                    leagueaccounts::profiles::store_ladder(&key, info.ladder.as_ref());
                     let Ok(mut manager) = shared.manager.lock() else { break };
                     if !manager.apply_rank_info(&job, &info) {
                         continue;

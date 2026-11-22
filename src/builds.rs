@@ -724,6 +724,17 @@ pub struct SkinInfo {
     pub tile: String,
     pub rarity: String,
     pub chromas: u32,
+    /// The skin's chromas in the game's order.
+    pub chroma_list: Vec<ChromaInfo>,
+}
+
+/// One chroma of a skin: its own id, name and the two colours of its swatch.
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ChromaInfo {
+    pub id: i64,
+    pub name: String,
+    pub colors: Vec<String>,
 }
 
 /// Every skin of a champion except the base one: from the running client
@@ -769,6 +780,26 @@ pub fn champion_skins(champion: i64, client: Option<&LeagueApi>) -> Vec<SkinInfo
                 tile: path(&skin["tilePath"]),
                 rarity: std::path::Path::new(&path(&skin["rarityGemPath"])).file_stem().map(|stem| stem.to_string_lossy().to_lowercase()).unwrap_or_default(),
                 chromas: skin["chromas"].as_array().map_or(0, |chromas| chromas.len() as u32),
+                chroma_list: skin["chromas"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .filter_map(|chroma| {
+                        Some(ChromaInfo {
+                            id: chroma["id"].as_i64()?,
+                            name: chroma["name"].as_str().unwrap_or_default().to_owned(),
+                            // Only plain "#rrggbb" values reach the page's styles.
+                            colors: chroma["colors"]
+                                .as_array()
+                                .into_iter()
+                                .flatten()
+                                .filter_map(Value::as_str)
+                                .filter(|color| color.len() == 7 && color.starts_with('#') && color[1..].chars().all(|digit| digit.is_ascii_hexdigit()))
+                                .map(str::to_owned)
+                                .collect(),
+                        })
+                    })
+                    .collect(),
             })
         })
         .collect()
