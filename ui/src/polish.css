@@ -98,3 +98,8 @@
 .overlay .modal { transform-origin: 50% 60%; }
 .drawer { animation: drawer-in .55s var(--ease) both; }
 .toast { animation: toast-in .5s var(--spring) both; }
+
+/* Summoner's Rift, barely there, behind the whole app (the picture is the League client's own lobby art). */
+.backdrop::after { content: ""; position: absolute; inset: 0; background: url("/rift.webp") center 38% / cover no-repeat; opacity: .16; -webkit-mask-image: linear-gradient(180deg, #000 0%, #000 60%, transparent 100%); mask-image: linear-gradient(180deg, #000 0%, #000 60%, transparent 100%); pointer-events: none; }
+/* The page colour stays on html; body's own would paint over the backdrop layer. */
+body { background: transparent; }

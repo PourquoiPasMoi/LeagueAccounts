@@ -1,5 +1,51 @@
 [
  {
+  "version": "5.10.3",
+  "date": "2026-11-22",
+  "items": {
+   "en": [
+    "Phone remote: leaguecompanion.local now opens on your phone right away, even in the middle of champ select. You no longer need to press Test first.",
+    "The phone remote address moved to the top of the main page, next to the rank update timer.",
+    "New look: a very faint Summoner's Rift picture behind the app."
+   ],
+   "tr": [
+    "Telefon kumandası: leaguecompanion.local artık şampiyon seçiminin ortasında bile telefonunda hemen açılır. Önce Test'e basman gerekmez.",
+    "Telefon kumandası adresi ana sayfanın üstüne, rütbe güncelleme sayacının yanına taşındı.",
+    "Yeni görünüm: uygulamanın arkasında çok silik bir Sihirdar Vadisi resmi."
+   ],
+   "de": [
+    "Handy-Fernbedienung: leaguecompanion.local öffnet sich jetzt sofort auf dem Handy, auch mitten in der Championauswahl. Du musst nicht mehr zuerst auf Testen drücken.",
+    "Die Adresse der Handy-Fernbedienung steht jetzt oben auf der Hauptseite neben dem Timer für die Rangaktualisierung.",
+    "Neuer Look: ein sehr dezentes Bild der Kluft der Beschwörer hinter der App."
+   ],
+   "es": [
+    "Mando desde el móvil: leaguecompanion.local ahora se abre en el móvil al instante, incluso en plena selección de campeón. Ya no hace falta pulsar Probar antes.",
+    "La dirección del mando desde el móvil está ahora arriba en la página principal, junto al temporizador de actualización de rangos.",
+    "Nuevo aspecto: una imagen muy tenue de la Grieta del Invocador detrás de la app."
+   ],
+   "fr": [
+    "Télécommande mobile : leaguecompanion.local s'ouvre désormais tout de suite sur votre téléphone, même en pleine sélection des champions. Plus besoin d'appuyer d'abord sur Tester.",
+    "L'adresse de la télécommande mobile est maintenant en haut de la page principale, à côté du minuteur de mise à jour des rangs.",
+    "Nouveau look : une image très discrète de la Faille de l'invocateur derrière l'application."
+   ],
+   "pt": [
+    "Comando no telemóvel: leaguecompanion.local abre agora de imediato no telemóvel, mesmo a meio da seleção de campeões. Já não é preciso carregar primeiro em Testar.",
+    "O endereço do comando no telemóvel passou para o topo da página principal, ao lado do temporizador de atualização de ranks.",
+    "Novo visual: uma imagem muito ténue de Summoner's Rift por trás da app."
+   ],
+   "zh": [
+    "手机遥控：现在即使在英雄选择进行中，leaguecompanion.local 也能立即在手机上打开，无需先点击测试。",
+    "手机遥控的地址移到了主页顶部，位于段位更新计时器旁边。",
+    "新外观：程序背景中加入了非常淡的召唤师峡谷画面。"
+   ],
+   "zhTw": [
+    "手機遙控：現在即使在英雄選擇進行中，leaguecompanion.local 也能立即在手機上開啟，不必先按測試。",
+    "手機遙控的位址移到了主頁頂部，位於牌位更新計時器旁邊。",
+    "新外觀：程式背景中加入了非常淡的召喚峽谷畫面。"
+   ]
+  }
+ },
+ {
   "version": "5.10.2",
   "date": "2026-11-22",
   "items": {

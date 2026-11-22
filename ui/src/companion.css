@@ -91,11 +91,7 @@
 .remote-address { font: 600 13.5px/1.5 var(--font-text); color: var(--text) !important; user-select: text; -webkit-user-select: text; }
 .remote-pin { font: 700 26px/1 var(--font-display); letter-spacing: .04em; font-variant-numeric: tabular-nums; color: var(--text); user-select: text; -webkit-user-select: text; }
 .remote-buttons { display: flex; gap: 8px; flex: none; }
-.side-remote { display: flex; flex-direction: column; gap: 2px; width: 100%; margin-bottom: 8px; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--r-lg); background: rgb(var(--tint-rgb) / .03); text-align: left; cursor: pointer; transition: border-color .2s var(--ease), background-color .2s var(--ease); }
-.side-remote[hidden] { display: none; }
-.side-remote:hover { border-color: var(--line-2); background: var(--fill-1); }
-.side-remote strong { font: 600 12px/1.3 var(--font-text); color: var(--text-2); }
-.side-remote.is-live { border-color: rgb(var(--accent-rgb) / .5); }
-.side-remote.is-live strong { color: var(--accent); }
-.side-remote span { font-size: 11.5px; line-height: 1.4; color: var(--text-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-variant-numeric: tabular-nums; }
-.side-remote span:empty { display: none; }
+.summary-pills { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.remote-pill { padding-left: 12px; }
+.remote-pill[hidden] { display: none; }
+.remote-pill.is-live .ladder-update-time { color: var(--accent); }

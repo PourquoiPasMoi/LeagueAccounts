@@ -59,11 +59,6 @@
         </section>
 
         <section class="side-section side-bottom">
-          <button id="remote-note" class="side-remote" data-action="remote" hidden>
-            <strong></strong>
-            <span data-remote-note-name></span>
-            <span data-remote-note-ip></span>
-          </button>
           <button id="total-value" class="side-value" hidden data-i18n-title="finder.title">
             <span class="side-value-label"><span data-icon="gem"></span><span data-i18n="value.total"></span></span>
             <span class="side-value-amount"></span>
@@ -80,10 +75,15 @@
             <h1 data-i18n="page.title"></h1>
           </div>
           <div class="collection-summary">
-            <button class="ladder-update" id="schedule" data-i18n-title="refresh.idle" data-i18n-aria="refresh.idle">
-              <span class="ladder-update-label"></span><span class="ladder-update-time"></span>
-              <span class="ladder-update-icon" data-icon="refresh-cw"></span>
-            </button>
+            <div class="summary-pills">
+              <button id="remote-note" class="ladder-update remote-pill" data-action="remote" hidden>
+                <span class="ladder-update-label"></span><span class="ladder-update-time"></span>
+              </button>
+              <button class="ladder-update" id="schedule" data-i18n-title="refresh.idle" data-i18n-aria="refresh.idle">
+                <span class="ladder-update-label"></span><span class="ladder-update-time"></span>
+                <span class="ladder-update-icon" data-icon="refresh-cw"></span>
+              </button>
+            </div>
             <div class="summary-count">
               <button id="clear-filters" class="text-button" data-i18n="empty.clear" hidden></button>
               <span id="account-count" role="status"></span>

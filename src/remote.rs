@@ -624,42 +624,60 @@ fn lan_address() -> Option<Ipv4Addr> {
 }
 
 /// The name in a DNS question (labels joined by dots, lower case) and where the question ends.
-fn question_name(packet: &[u8], mut at: usize) -> Option<(String, usize)> {
+/// Phones pack several questions in one packet and write the later names as a
+/// pointer to the first one: pointers are followed.
+fn question_name(packet: &[u8], start: usize) -> Option<(String, usize)> {
     let mut name = String::new();
-    loop {
+    let mut at = start;
+    // Where the question goes on (right after the first pointer, when there is one).
+    let mut end = None;
+    for _ in 0..40 {
         let length = *packet.get(at)? as usize;
-        at += 1;
         if length == 0 {
-            return Some((name, at));
+            return Some((name, end.unwrap_or(at + 1)));
         }
-        // Compressed names do not appear in the questions we answer.
+        if length & 0xC0 == 0xC0 {
+            let target = ((length & 0x3F) << 8) | *packet.get(at + 1)? as usize;
+            end.get_or_insert(at + 2);
+            // Pointers only go backwards (no loops).
+            if target >= at {
+                return None;
+            }
+            at = target;
+            continue;
+        }
         if length > 63 {
             return None;
         }
+        at += 1;
         if !name.is_empty() {
             name.push('.');
         }
         name.push_str(&String::from_utf8_lossy(packet.get(at..at + length)?).to_ascii_lowercase());
         at += length;
     }
+    None
 }
 
-/// Answer "who is leaguecompanion.local?" on the home network while the
-/// server runs. Phones and PCs ask this by themselves for `.local` names.
-fn answer_name(address: Ipv4Addr, stop: Arc<AtomicBool>) {
+const NAME_GROUP: Ipv4Addr = Ipv4Addr::new(224, 0, 0, 251);
+
+/// A socket on the name service's port, listening on the home network.
+fn name_socket(address: Ipv4Addr) -> Option<UdpSocket> {
     use socket2::{Domain, Protocol, Socket, Type};
-    const GROUP: Ipv4Addr = Ipv4Addr::new(224, 0, 0, 251);
-    let Ok(socket) = Socket::new(Domain::IPV4, Type::DGRAM, Some(Protocol::UDP)) else { return };
+    let socket = Socket::new(Domain::IPV4, Type::DGRAM, Some(Protocol::UDP)).ok()?;
     // Windows' own name service listens on the same port: share it.
     let _ = socket.set_reuse_address(true);
-    if socket.bind(&SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 5353).into()).is_err() {
-        return;
-    }
-    let _ = socket.join_multicast_v4(&GROUP, &address);
+    socket.bind(&SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 5353).into()).ok()?;
+    socket.join_multicast_v4(&NAME_GROUP, &address).ok()?;
     let _ = socket.set_multicast_if_v4(&address);
     let _ = socket.set_multicast_ttl_v4(255);
     let socket: UdpSocket = socket.into();
     let _ = socket.set_read_timeout(Some(Duration::from_millis(500)));
+    Some(socket)
+}
+
+/// "leaguecompanion.local is at <address>", as sent on the network.
+fn name_answer(address: Ipv4Addr) -> Vec<u8> {
     let mut answer = vec![0, 0, 0x84, 0, 0, 0, 0, 1, 0, 0, 0, 0];
     for label in HOST.split('.') {
         answer.push(label.len() as u8);
@@ -668,28 +686,69 @@ fn answer_name(address: Ipv4Addr, stop: Arc<AtomicBool>) {
     // End of name, type A, class IN with the cache-flush bit, 120 s, 4 bytes.
     answer.extend_from_slice(&[0, 0, 1, 0x80, 1, 0, 0, 0, 120, 0, 4]);
     answer.extend_from_slice(&address.octets());
+    answer
+}
+
+/// Does this packet ask for our name (in any of its questions, for any record type)?
+/// The second value: the asker wants the answer sent straight back to it.
+fn asked(packet: &[u8]) -> Option<bool> {
+    // Questions only (not other devices' answers).
+    if packet.len() < 12 || packet[2] & 0x80 != 0 {
+        return None;
+    }
+    let questions = u16::from_be_bytes([packet[4], packet[5]]);
+    let mut at = 12;
+    for _ in 0..questions.min(16) {
+        let (name, end) = question_name(packet, at)?;
+        let kind = packet.get(end..end + 4)?;
+        at = end + 4;
+        if name == HOST {
+            return Some(kind[2] & 0x80 != 0);
+        }
+    }
+    None
+}
+
+/// Answer "who is leaguecompanion.local?" on the home network while the
+/// server runs. Phones and PCs ask this by themselves for `.local` names.
+/// The name is also said aloud every 30 s, so a phone knows it before it asks
+/// (some routers do not pass a phone's question on to a wired PC). The PC's
+/// address is looked at again every 10 s (network not up yet at Windows start,
+/// Wi-Fi changed), and the socket is renewed every 5 minutes, which tells the
+/// router again that this PC listens.
+pub fn answer_name(stop: Arc<AtomicBool>) {
+    let mut current: Option<(Ipv4Addr, UdpSocket, Vec<u8>)> = None;
+    let mut checked: Option<Instant> = None;
+    let mut built = Instant::now();
+    let mut said: Option<Instant> = None;
     let mut packet = [0u8; 1500];
     while !stop.load(Ordering::Relaxed) {
-        let Ok((length, from)) = socket.recv_from(&mut packet) else { continue };
-        let packet = &packet[..length];
-        // Questions only (not other devices' answers).
-        if length < 12 || packet[2] & 0x80 != 0 {
-            continue;
+        if checked.is_none_or(|checked| checked.elapsed() >= Duration::from_secs(10)) {
+            checked = Some(Instant::now());
+            let address = lan_address();
+            let old = built.elapsed() >= Duration::from_secs(300);
+            if address != current.as_ref().map(|current| current.0) || old {
+                // The old socket closes before the new one opens.
+                drop(current.take());
+                current = address.and_then(|address| name_socket(address).map(|socket| (address, socket, name_answer(address))));
+                built = Instant::now();
+                said = None;
+            }
         }
-        let questions = u16::from_be_bytes([packet[4], packet[5]]);
-        let mut at = 12;
-        for _ in 0..questions.min(8) {
-            let Some((name, end)) = question_name(packet, at) else { break };
-            let Some(kind) = packet.get(end..end + 4) else { break };
-            at = end + 4;
-            let wanted = u16::from_be_bytes([kind[0], kind[1]]);
-            if name == HOST && (wanted == 1 || wanted == 255) {
-                let _ = socket.send_to(&answer, SocketAddrV4::new(GROUP, 5353));
-                // "Answer me directly" (the top bit of the class), as phones ask at first.
-                if kind[2] & 0x80 != 0 {
-                    let _ = socket.send_to(&answer, from);
-                }
-                break;
+        let Some((_, socket, answer)) = &current else {
+            thread::sleep(Duration::from_millis(500));
+            continue;
+        };
+        if said.is_none_or(|said| said.elapsed() >= Duration::from_secs(30)) {
+            said = Some(Instant::now());
+            let _ = socket.send_to(answer, SocketAddrV4::new(NAME_GROUP, 5353));
+        }
+        let Ok((length, from)) = socket.recv_from(&mut packet) else { continue };
+        if let Some(direct) = asked(&packet[..length]) {
+            let _ = socket.send_to(answer, SocketAddrV4::new(NAME_GROUP, 5353));
+            // "Answer me directly", as phones ask at first.
+            if direct {
+                let _ = socket.send_to(answer, from);
             }
         }
     }
@@ -722,9 +781,9 @@ fn start(shared: &Arc<Shared>) -> Option<(Arc<AtomicBool>, u16)> {
             }
         });
     }
-    if let Some(address) = lan_address().filter(|_| !local) {
+    if !local {
         let stop = Arc::clone(&stop);
-        thread::spawn(move || answer_name(address, stop));
+        thread::spawn(move || answer_name(stop));
     }
     Some((stop, port))
 }
@@ -983,7 +1042,5 @@ pub fn set_texts(texts: HashMap<String, String>) {
 
 /// For the test program: does this name question ask for our name?
 pub fn asks_for_us(packet: &[u8]) -> Option<bool> {
-    let (name, end) = question_name(packet, 12)?;
-    let kind = packet.get(end..end + 2)?;
-    Some(name == HOST && matches!(u16::from_be_bytes([kind[0], kind[1]]), 1 | 255))
+    Some(asked(packet).is_some())
 }

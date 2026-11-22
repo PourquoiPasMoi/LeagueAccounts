@@ -42,7 +42,7 @@ export function sendRemoteTexts(): void {
   void api.setRemoteTexts(texts).catch(() => undefined);
 }
 
-/** The note in the sidebar while the phone remote is on: where to find the page. */
+/** The pill in the header (beside the rank update) while the phone remote is on: where to find the page. */
 export function showRemoteNote(view: RemoteView): void {
   const note = document.querySelector<HTMLElement>("#remote-note");
   if (!note) return;
@@ -51,11 +51,13 @@ export function showRemoteNote(view: RemoteView): void {
     const element = note.querySelector<HTMLElement>(selector);
     if (element) element.textContent = text;
   };
-  set("strong", t(view.running ? "remote.noteLive" : "remote.noteOn"));
-  set("[data-remote-note-name]", view.name.replace(/^http:\/\//, ""));
-  set("[data-remote-note-ip]", view.address.replace(/^http:\/\//, ""));
+  const name = view.name.replace(/^http:\/\//, "");
+  const address = view.address.replace(/^http:\/\//, "");
+  set(".ladder-update-label", `${t("settings.remote")}:`);
+  set(".ladder-update-time", name);
   note.classList.toggle("is-live", view.running);
-  note.dataset.tooltip = t("remote.noteHint");
+  // The tooltip keeps line breaks: the hint, then both addresses.
+  note.dataset.tooltip = [t(view.running ? "remote.noteLive" : "remote.noteOn"), name, address, t("remote.noteHint")].filter(Boolean).join("\n");
 }
 
 /** Read the phone remote's state and show the sidebar note; keeps it current. */
