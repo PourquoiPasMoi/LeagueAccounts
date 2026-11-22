@@ -465,6 +465,12 @@ async fn update_settings(app: AppHandle, state: AppState<'_>, input: SettingsInp
     if previous_autostart != input.launch_at_startup {
         let result = if input.launch_at_startup { autolaunch.enable() } else { autolaunch.disable() };
         result.map_err(|error| fail_with("autostart_failed", error))?;
+        // The plugin writes the path without quotes; ours has a space in it.
+        if input.launch_at_startup {
+            if let Ok(exe) = std::env::current_exe() {
+                leagueaccounts::exe_name::repair_autostart(&exe, AUTOSTART_FLAG, true);
+            }
+        }
     }
     if let Err(error) = candidate.save(state.settings_path.as_ref()) {
         if previous_autostart != input.launch_at_startup {
@@ -1464,6 +1470,11 @@ fn migrate_autostart(app: &AppHandle) {
     };
     if reg(&["query", RUN, "/v", "League Accounts"]) && reg(&["delete", RUN, "/v", "League Accounts", "/f"]) {
         let _ = app.autolaunch().enable();
+    }
+    // The entry may still start a copy that is gone (the app was moved or
+    // renamed since the setting was turned on): start this one.
+    if let Ok(exe) = std::env::current_exe() {
+        leagueaccounts::exe_name::repair_autostart(&exe, AUTOSTART_FLAG, false);
     }
 }
 

@@ -110,6 +110,68 @@ fn fix_autostart(old: &Path, new: &Path) {
 #[cfg(not(windows))]
 fn fix_autostart(_old: &Path, _new: &Path) {}
 
+/// Name of the app's value under Windows' Run key (what the autostart plugin writes).
+const AUTOSTART_NAME: &str = "League Companion";
+
+/// The Run entry that starts `exe` with `flag`. Quoted: the path may hold
+/// spaces ("C:\League Companion\..."), which Windows otherwise has to guess at.
+pub fn autostart_command(exe: &Path, flag: &str) -> String {
+    format!("\"{}\" {flag}", exe.display())
+}
+
+/// The exe a Run entry starts (quoted, or unquoted up to ".exe").
+pub fn autostart_target(data: &str) -> Option<PathBuf> {
+    let data = data.trim();
+    if let Some(rest) = data.strip_prefix('"') {
+        return rest.split_once('"').map(|(path, _)| PathBuf::from(path));
+    }
+    let end = data.to_lowercase().find(".exe")? + 4;
+    Some(PathBuf::from(&data[..end]))
+}
+
+/// A build made by cargo (a `release` folder inside `target*`): a test copy, not the installed app.
+pub fn is_build_output(exe: &Path) -> bool {
+    let folder = |path: Option<&Path>| path.and_then(Path::file_name).map(|name| name.to_string_lossy().to_lowercase()).unwrap_or_default();
+    let profile = exe.parent();
+    matches!(folder(profile).as_str(), "release" | "debug") && folder(profile.and_then(Path::parent)).starts_with("target")
+}
+
+/// "Launch when Windows starts" is on but its entry starts another file (the
+/// app was moved, renamed or first enabled from another copy) or is not
+/// quoted: point it at this exe. A test build leaves the entry alone unless
+/// `force` (the player just turned the setting on in it). Returns true when
+/// the entry was rewritten.
+#[cfg(windows)]
+pub fn repair_autostart(exe: &Path, flag: &str, force: bool) -> bool {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    const RUN: &str = r"HKCU\Software\Microsoft\Windows\CurrentVersion\Run";
+    if !force && is_build_output(exe) {
+        return false;
+    }
+    let Ok(output) = std::process::Command::new("reg").args(["query", RUN, "/v", AUTOSTART_NAME]).creation_flags(CREATE_NO_WINDOW).output() else { return false };
+    if !output.status.success() {
+        // Not enabled: nothing to repair.
+        return false;
+    }
+    let text = String::from_utf8_lossy(&output.stdout);
+    let Some(data) = text.lines().find_map(|line| line.trim_start().strip_prefix(AUTOSTART_NAME)?.trim_start().strip_prefix("REG_SZ").map(|data| data.trim().to_owned())) else { return false };
+    let wanted = autostart_command(exe, flag);
+    if data == wanted {
+        return false;
+    }
+    std::process::Command::new("reg")
+        .args(["add", RUN, "/v", AUTOSTART_NAME, "/t", "REG_SZ", "/d", &wanted, "/f"])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output()
+        .is_ok_and(|output| output.status.success())
+}
+
+#[cfg(not(windows))]
+pub fn repair_autostart(_exe: &Path, _flag: &str, _force: bool) -> bool {
+    false
+}
+
 /// Desktop, Start menu and pinned taskbar/Start items of this Windows user.
 fn shortcut_folders() -> Vec<PathBuf> {
     let mut folders = Vec::new();
