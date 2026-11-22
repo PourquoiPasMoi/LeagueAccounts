@@ -1,5 +1,35 @@
 [
  {
+  "version": "5.12.2",
+  "date": "2026-11-22",
+  "items": {
+   "en": [
+    "Champions tab: click a skin to see it in 3D. The separate View in 3D link under each skin is gone."
+   ],
+   "tr": [
+    "Şampiyonlar sekmesi: bir kostümü 3D görmek için üzerine tıkla. Her kostümün altındaki ayrı 3D olarak gör bağlantısı kaldırıldı."
+   ],
+   "de": [
+    "Champions-Tab: Klicke auf einen Skin, um ihn in 3D zu sehen. Der eigene Link „In 3D ansehen“ unter jedem Skin ist weg."
+   ],
+   "es": [
+    "Pestaña Campeones: haz clic en un aspecto para verlo en 3D. El enlace «Ver en 3D» bajo cada aspecto ya no está."
+   ],
+   "fr": [
+    "Onglet Champions : cliquez sur un skin pour le voir en 3D. Le lien « Voir en 3D » sous chaque skin a disparu."
+   ],
+   "pt": [
+    "Separador Campeões: clica numa skin para a ver em 3D. A ligação Ver em 3D por baixo de cada skin desapareceu."
+   ],
+   "zh": [
+    "英雄页：点击皮肤即可查看 3D 模型，每个皮肤下方单独的“查看 3D 模型”链接已移除。"
+   ],
+   "zhTw": [
+    "英雄頁：點擊造型即可查看 3D 模型，每個造型下方單獨的「查看 3D 模型」連結已移除。"
+   ]
+  }
+ },
+ {
   "version": "5.12.1",
   "date": "2026-11-22",
   "items": {

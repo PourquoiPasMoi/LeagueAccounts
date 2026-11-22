@@ -944,11 +944,10 @@ function championSkins(champion: OwnedChampion, allSkins: boolean, list: SkinInf
   const card = (skin: { id: number; name: string; tile: string; rarity: string }, chromas: string, unowned: boolean) => {
     const price = skinPrice(skin);
     return `
-          <figure class="skin-card rarity-${esc(skin.rarity || "none")}${unowned ? " is-unowned" : ""}">
+          <figure class="skin-card rarity-${esc(skin.rarity || "none")}${unowned ? " is-unowned" : ""}" data-model="${skin.id}" data-model-name="${esc(skin.name)}" data-tooltip="${esc(t("profile.view3d"))}" tabindex="0" role="button">
             <div class="skin-art">${skin.tile ? `<img src="${esc(gameImage(skin.tile))}" alt="" loading="lazy" draggable="false" />` : ""}${unowned ? `<span class="skin-tag">${esc(t("profile.notOwned"))}</span>` : ""}</div>
             <figcaption>
               <b>${esc(skin.name)}</b>
-              <button class="text-button skin-3d" data-model="${skin.id}" data-model-name="${esc(skin.name)}">${esc(t("profile.view3d"))}</button>
               <span class="skin-meta">
                 <span class="skin-price price-${price.kind}">${esc(priceLabel(price))}</span>
                 ${chromas ? `<span>${esc(chromas)}</span>` : ""}
