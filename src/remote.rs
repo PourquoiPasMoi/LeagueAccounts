@@ -158,6 +158,8 @@ struct Extras {
     rune: Value,
     /// The champions this player may choose from when the mode offers only a few (ARAM cards).
     subset: Value,
+    /// The step and turn these lists were read for: a new step or turn reads them again at once.
+    stamp: Option<String>,
 }
 
 fn ids(value: Option<Value>) -> Value {
@@ -189,6 +191,7 @@ fn read_extras(client: &LeagueApi) -> Extras {
         pages: Value::Array(pages),
         rune,
         subset: ids(client.get_json("/lol-lobby-team-builder/champ-select/v1/subset-champion-list")),
+        stamp: None,
     }
 }
 
@@ -201,7 +204,10 @@ fn select_state(client: &LeagueApi, extras: &Extras) -> Option<Value> {
     let actions: Vec<Value> = list(&session["actions"]).iter().flat_map(list).collect();
     // My turn: the first of my actions that is not done (the one in progress first).
     let mine: Vec<&Value> = actions.iter().filter(|action| action["actorCellId"].as_i64() == Some(cell) && action["completed"].as_bool() != Some(true)).collect();
-    let action = mine.iter().find(|action| action["isInProgress"].as_bool() == Some(true)).or(mine.first()).map(|action| {
+    // Before the bans (planning) the player shows the champion they intend to pick: that is their pick, not their ban.
+    let planning = session["timer"]["phase"].as_str() == Some("PLANNING");
+    let intent = mine.iter().find(|action| planning && action["type"].as_str() == Some("pick"));
+    let action = intent.or(mine.iter().find(|action| action["isInProgress"].as_bool() == Some(true))).or(mine.first()).map(|action| {
         json!({ "id": action["id"], "type": action["type"], "active": action["isInProgress"].as_bool().unwrap_or(false), "champ": action["championId"] })
     });
     let player = |member: &Value| {
@@ -866,10 +872,21 @@ pub fn spawn(status: impl Fn(bool) + Send + 'static) {
                         // The lists of champions and rune pages change rarely: every 3 s, and after an action.
                         let forced = shared.refresh.swap(false, Ordering::Relaxed);
                         if forced || extras.read.is_none_or(|read| read.elapsed() >= Duration::from_secs(3)) {
+                            let stamp = extras.stamp.take();
                             extras = read_extras(client);
+                            extras.stamp = stamp;
                             capture(client);
                         }
-                        select_state(client, &extras).unwrap_or_else(|| json!({ "phase": "idle" }))
+                        let mut state = select_state(client, &extras);
+                        // A new step or turn (planning, bans, picks): the client's lists of
+                        // champions change with it, so they are read again now, not up to 3 s later.
+                        let stamp = state.as_ref().map(|state| format!("{}:{}", state["step"], state["action"]["id"]));
+                        if stamp != extras.stamp {
+                            extras = read_extras(client);
+                            extras.stamp = stamp;
+                            state = select_state(client, &extras);
+                        }
+                        state.unwrap_or_else(|| json!({ "phase": "idle" }))
                     }
                     // Lobby or queue: the page says which while it waits.
                     other => json!({ "phase": "idle", "flow": other }),

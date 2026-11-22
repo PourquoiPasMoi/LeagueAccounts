@@ -1,5 +1,43 @@
 [
  {
+  "version": "5.10.4",
+  "date": "2026-11-22",
+  "items": {
+   "en": [
+    "Phone remote: the champions now show in the first ban phase too.",
+    "The phone page follows each step of champ select right away (planning, bans, picks)."
+   ],
+   "tr": [
+    "Telefon kumandası: şampiyonlar artık ilk yasaklama aşamasında da görünüyor.",
+    "Telefondaki sayfa şampiyon seçiminin her adımını anında takip eder (planlama, yasaklamalar, seçimler)."
+   ],
+   "de": [
+    "Handy-Fernbedienung: Die Champions werden jetzt auch in der ersten Bannphase angezeigt.",
+    "Die Handyseite folgt jedem Schritt der Championauswahl sofort (Planung, Banns, Picks)."
+   ],
+   "es": [
+    "Mando desde el móvil: los campeones ahora también aparecen en la primera fase de bloqueos.",
+    "La página del móvil sigue al instante cada paso de la selección de campeón (planificación, bloqueos, elecciones)."
+   ],
+   "fr": [
+    "Télécommande mobile : les champions s'affichent désormais aussi pendant la première phase de bannissement.",
+    "La page mobile suit immédiatement chaque étape de la sélection des champions (préparation, bannissements, choix)."
+   ],
+   "pt": [
+    "Comando no telemóvel: os campeões aparecem agora também na primeira fase de banimentos.",
+    "A página do telemóvel acompanha de imediato cada passo da seleção de campeões (planeamento, banimentos, escolhas)."
+   ],
+   "zh": [
+    "手机遥控：第一轮禁用阶段现在也会显示英雄。",
+    "手机页面会立即跟上英雄选择的每个步骤（预选、禁用、选择）。"
+   ],
+   "zhTw": [
+    "手機遙控：第一輪禁用階段現在也會顯示英雄。",
+    "手機頁面會立即跟上英雄選擇的每個步驟（預選、禁用、選擇）。"
+   ]
+  }
+ },
+ {
   "version": "5.10.3",
   "date": "2026-11-22",
   "items": {

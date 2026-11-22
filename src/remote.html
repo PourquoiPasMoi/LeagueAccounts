@@ -226,9 +226,12 @@ function offered() { const action = myAction(); return action && action.type ===
 function available() {
   const action = myAction();
   if (offered()) return offered();
-  const ids = action && action.type === "ban" ? state.bannable : state.pickable;
+  const ban = !!(action && action.type === "ban");
+  let ids = (ban ? state.bannable : state.pickable) || [];
+  // The client gave no ban list (it happens in the first ban phase): every champion can be banned.
+  if (ban && !ids.length) ids = [...names.keys()].filter((id) => id > 0);
   const taken = new Set([...(state.bans || []), ...state.team.map((p) => p.champ), ...state.enemy.map((p) => p.champ)]);
-  return (ids || []).filter((id) => !taken.has(id));
+  return ids.filter((id) => !taken.has(id));
 }
 function drawSelect() {
   const action = myAction();

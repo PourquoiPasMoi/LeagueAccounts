@@ -1,6 +1,6 @@
 [package]
 name = "leagueaccounts-app"
-version = "5.10.3"
+version = "5.10.4"
 edition = "2021"
 description = "League of Legends account manager for Windows"
 license = "MIT"
