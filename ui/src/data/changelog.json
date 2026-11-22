@@ -1,5 +1,51 @@
 [
  {
+  "version": "5.10.1",
+  "date": "2026-11-22",
+  "items": {
+   "en": [
+    "Phone remote: the page now stays on for as long as the setting is on, so your phone can keep it open between matches.",
+    "The phone page reconnects by itself after the phone slept, and shows whether you are in the lobby or in queue.",
+    "ARAM on the phone: reroll and take a champion from the bench."
+   ],
+   "tr": [
+    "Telefon kumandası: ayar açık olduğu sürece sayfa artık açık kalır; telefonun maçlar arasında sayfayı açık tutabilir.",
+    "Telefon uykudan çıktıktan sonra sayfa kendiliğinden yeniden bağlanır ve lobide mi sırada mı olduğunu gösterir.",
+    "Telefonda ARAM: yeniden çevir ve yedeklerden bir şampiyon al."
+   ],
+   "de": [
+    "Handy-Fernbedienung: Die Seite bleibt jetzt an, solange die Einstellung an ist, sodass dein Handy sie zwischen den Spielen offen lassen kann.",
+    "Die Handyseite verbindet sich von selbst neu, nachdem das Handy geschlafen hat, und zeigt, ob du in der Lobby oder in der Warteschlange bist.",
+    "ARAM am Handy: neu würfeln und einen Champion von der Bank nehmen."
+   ],
+   "es": [
+    "Mando desde el móvil: la página ahora sigue activa mientras el ajuste esté activado, así el móvil puede dejarla abierta entre partidas.",
+    "La página del móvil se reconecta sola después de que el móvil haya estado en reposo y muestra si estás en la sala o en cola.",
+    "ARAM en el móvil: vuelve a tirar y coge un campeón del banquillo."
+   ],
+   "fr": [
+    "Télécommande mobile : la page reste désormais active tant que le réglage est activé, votre téléphone peut donc la garder ouverte entre les parties.",
+    "La page mobile se reconnecte toute seule après la veille du téléphone et indique si vous êtes dans le salon ou en file d'attente.",
+    "ARAM sur le téléphone : relancez et prenez un champion sur le banc."
+   ],
+   "pt": [
+    "Comando no telemóvel: a página fica agora ligada enquanto a definição estiver ligada, para o telemóvel a manter aberta entre partidas.",
+    "A página do telemóvel volta a ligar-se sozinha depois de o telemóvel ter estado em suspensão e mostra se estás na sala ou na fila.",
+    "ARAM no telemóvel: volta a lançar e leva um campeão do banco."
+   ],
+   "zh": [
+    "手机遥控：只要设置开启，页面就会一直保持可用，手机可以在对局之间一直开着页面。",
+    "手机休眠后页面会自动重新连接，并显示你是在房间中还是在排队。",
+    "手机上的极地大乱斗：可以重随，也可以从备选席换取英雄。"
+   ],
+   "zhTw": [
+    "手機遙控：只要設定開啟，頁面就會一直保持可用，手機可以在對戰之間一直開著頁面。",
+    "手機休眠後頁面會自動重新連線，並顯示你是在房間中還是在排隊。",
+    "手機上的隨機單中：可以重骰，也可以從備選席換取英雄。"
+   ]
+  }
+ },
+ {
   "version": "5.10.0",
   "date": "2026-11-22",
   "items": {
