@@ -227,6 +227,14 @@ pub enum Reason {
     LocaleRejected,
     LocaleUnavailable,
     Other,
+    /// Why a game was not recorded.
+    RecorderGpu,
+    RecorderCapture,
+    RecorderEncoder,
+    RecorderNoFrames,
+    RecorderMedia,
+    RecorderCrashed,
+    RecorderFile,
 }
 
 impl Reason {
@@ -304,6 +312,13 @@ impl Reason {
             Self::LocaleRejected => "locale_rejected",
             Self::LocaleUnavailable => "locale_unavailable",
             Self::Other => "other",
+            Self::RecorderGpu => "recorder_gpu",
+            Self::RecorderCapture => "recorder_capture",
+            Self::RecorderEncoder => "recorder_encoder",
+            Self::RecorderNoFrames => "recorder_no_frames",
+            Self::RecorderMedia => "recorder_media",
+            Self::RecorderCrashed => "recorder_crashed",
+            Self::RecorderFile => "recorder_file",
         }
     }
 

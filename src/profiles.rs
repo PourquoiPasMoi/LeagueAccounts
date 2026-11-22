@@ -303,9 +303,11 @@ fn archive_path(directory: &Path, key: &AccountKey) -> PathBuf {
 
 /// Every archived game, newest first.
 pub fn archive(key: &AccountKey) -> Vec<MatchRecord> {
-    directory()
+    let mut games: Vec<MatchRecord> = directory()
         .map(|directory| read_json(&archive_path(&directory, key)))
-        .unwrap_or_default()
+        .unwrap_or_default();
+    dedupe(&mut games);
+    games
 }
 
 /// The same game reported twice: by id, or (across sources) by a close start
@@ -321,9 +323,20 @@ fn same_game(a: &MatchRecord, b: &MatchRecord) -> bool {
             && (a.created.abs_diff(b.created) < 120_000
                 || (a.created.abs_diff(b.created) < 20 * 60_000 && (a.kills, a.deaths, a.assists) == (b.kills, b.deaths, b.assists)));
     }
+    // The client gives the time the game was created, OP.GG a time up to a whole
+    // game later: the same score and CS within three hours is the same game.
+    let gap = a.created.abs_diff(b.created);
     a.source != b.source
-        && a.created.abs_diff(b.created) < 20 * 60_000
         && (a.kills, a.deaths, a.assists) == (b.kills, b.deaths, b.assists)
+        && (gap < 20 * 60_000 || (gap < 3 * 3_600_000 && a.cs == b.cs))
+}
+
+/// Remove games kept twice by an older version (an OP.GG copy beside the
+/// client's): everything is merged again from nothing, client records first.
+fn dedupe(archive: &mut Vec<MatchRecord>) {
+    let mut old = std::mem::take(archive);
+    old.sort_by_key(|record| record.source != "client");
+    merge_into(archive, old);
 }
 
 /// Add games to the archive; client records replace OP.GG copies of the same
@@ -363,6 +376,7 @@ pub fn merge_games(key: &AccountKey, incoming: Vec<MatchRecord>) -> usize {
     let path = archive_path(&directory, key);
     let mut games: Vec<MatchRecord> = read_json(&path);
     let before = games.clone();
+    dedupe(&mut games);
     let added = merge_into(&mut games, incoming);
     if games != before {
         if let Err(error) = write_json(&path, &games) {

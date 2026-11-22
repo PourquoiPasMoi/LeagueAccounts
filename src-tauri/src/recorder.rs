@@ -305,6 +305,33 @@ fn queue_recorded(prefs: &RecorderPrefs) -> bool {
     prefs.records(id, &name)
 }
 
+/// The log's reason for a recording that failed.
+fn failure_reason(code: &str) -> Reason {
+    match code {
+        "recorder_gpu" => Reason::RecorderGpu,
+        "recorder_capture" => Reason::RecorderCapture,
+        "recorder_encoder" => Reason::RecorderEncoder,
+        "recorder_no_frames" => Reason::RecorderNoFrames,
+        "recorder_media" => Reason::RecorderMedia,
+        "recorder_crashed" => Reason::RecorderCrashed,
+        _ => Reason::Other,
+    }
+}
+
+/// `attempt`: 0 = as set; after a failed try the same game is tried again
+/// another way: 1 = the whole screen cropped to the game, 2 = also without the
+/// graphics card's encoder.
+fn start_recording_attempt(app: &AppHandle, window: leagueaccounts::recorder::capture::WindowHandle, prefs: &RecorderPrefs, attempt: u32) {
+    let mut prefs = prefs.clone();
+    if attempt >= 1 {
+        prefs.capture = "screen".into();
+    }
+    if attempt >= 2 {
+        prefs.encoder = "software".into();
+    }
+    start_recording(app, window, &prefs, false);
+}
+
 fn start_recording(app: &AppHandle, window: leagueaccounts::recorder::capture::WindowHandle, prefs: &RecorderPrefs, pregame: bool) {
     let client = riot_client::league_client();
     let summoner = client.as_ref().and_then(|client| client.get_json("/lol-summoner/v1/current-summoner")).unwrap_or(Value::Null);
@@ -358,17 +385,19 @@ fn start_recording(app: &AppHandle, window: leagueaccounts::recorder::capture::W
             }
         }
         Err(_) => {
-            logging::record(Event::RecordingFailed, Reason::None);
+            logging::record(Event::RecordingFailed, Reason::RecorderFile);
             set_status(app, RecorderStatus { enabled: true, error: "file_write".into(), ..RecorderStatus::default() });
         }
     }
 }
 
 /// Wait for the recording thread, then apply the disk limit and tell the interface.
-fn finish(app: &AppHandle, active: Active) {
+/// True when the recording failed (not when it was cancelled on purpose).
+fn finish(app: &AppHandle, active: Active) -> bool {
     let outcome = active.recording.wait();
     let prefs = prefs();
     let mut saved = None;
+    let failed = matches!(outcome, Outcome::Failed(code) if code != "recorder_cancelled" && code != "recorder_stopped");
     let error = match outcome {
         Outcome::Saved(entry) => {
             logging::record(Event::RecordingSaved, Reason::None);
@@ -379,7 +408,7 @@ fn finish(app: &AppHandle, active: Active) {
         // Match declined or dodged before the game: nothing kept, nothing to report.
         Outcome::Failed("recorder_cancelled") => String::new(),
         Outcome::Failed(code) => {
-            logging::record(Event::RecordingFailed, Reason::None);
+            logging::record(Event::RecordingFailed, failure_reason(code));
             code.to_owned()
         }
     };
@@ -425,6 +454,7 @@ fn finish(app: &AppHandle, active: Active) {
             }
         });
     }
+    failed
 }
 
 fn gameflow_phase() -> Option<String> {
@@ -596,6 +626,13 @@ fn convert_old_recordings(app: &AppHandle) {
     }
     for entry in library::list(&root).into_iter().filter(|entry| entry.kind == "game") {
         let Some(path) = library::resolve(&root, &entry.path) else { continue };
+        // Finished by an older version: one data box, so the player opens it at once.
+        if !is_being_recorded(&path) && leagueaccounts::recorder::defrag::is_chained(&path) {
+            if let Ok(true) = leagueaccounts::recorder::defrag::unchain(&path) {
+                let _ = app.emit("recordings-changed", ());
+            }
+            continue;
+        }
         if is_being_recorded(&path) || !library::is_fragmented(&path) {
             continue;
         }
@@ -642,9 +679,22 @@ pub fn spawn(app: AppHandle) {
             convert_old_recordings(&app);
         });
     }
-    thread::spawn(move || {
+    thread::spawn(move || loop {
+        // A fault in one round must not end recording until the app restarts.
+        if std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| watch(&app))).is_err() {
+            logging::record(Event::RecordingFailed, Reason::WorkerPanicked);
+        }
+        thread::sleep(Duration::from_secs(5));
+    });
+}
+
+/// The recorder's watcher (never returns).
+fn watch(app: &AppHandle) {
+    {
         // The window of the game that was just recorded: not recorded twice.
         let mut finished_window: Option<isize> = None;
+        // A game whose recording failed is tried again, another way: (its window, tries so far).
+        let mut retry: (isize, u32) = (0, 0);
         let mut limit_checked = std::time::Instant::now();
         // Keeping times: soon after start, then every 10 minutes.
         let mut tidied = std::time::Instant::now() - Duration::from_secs(9 * 60);
@@ -659,8 +709,18 @@ pub fn spawn(app: AppHandle) {
                     // Turned off during champ select: no half recording.
                     active.recording.discard();
                 }
-                finished_window = Some(active.recording.window());
-                finish(&app, active);
+                let window = active.recording.window();
+                let in_game = active.recording.in_game();
+                let failed = finish(app, active);
+                if retry.0 != window {
+                    retry = (window, 0);
+                }
+                if failed && in_game && prefs.enabled && retry.1 < 2 {
+                    // Left unmarked: the next round starts it again while the game runs.
+                    retry.1 += 1;
+                } else {
+                    finished_window = Some(window);
+                }
             }
             let recording = ACTIVE.lock().is_ok_and(|active| active.is_some());
             // A long game can pass the disk limit: check once a minute, never the file being written.
@@ -682,7 +742,7 @@ pub fn spawn(app: AppHandle) {
                 continue;
             }
             if prefs.champ_select {
-                watch_champ_select(&app, &prefs);
+                watch_champ_select(app, &prefs);
             }
             watch_end_of_game();
             let recording = ACTIVE.lock().is_ok_and(|active| active.is_some());
@@ -694,13 +754,14 @@ pub fn spawn(app: AppHandle) {
                 if let (Some(window), false) = (window, recording) {
                     // A game window with the client in game (not a replay).
                     if in_game_phase().unwrap_or(false) {
-                        start_recording(&app, window, &prefs, false);
+                        let attempt = if retry.0 == window.0 as isize { retry.1 } else { 0 };
+                        start_recording_attempt(app, window, &prefs, attempt);
                     }
                 }
             }
             thread::sleep(Duration::from_secs(2));
         }
-    });
+    }
 }
 
 /// Stop recording when the app quits, so the file is finished properly.
@@ -1199,6 +1260,16 @@ pub async fn recording_sound_tracks(path: String) -> CommandResult<Vec<SoundTrac
         .await
         .map_err(|_| fail("operation_failed"))?
         .map(|tracks| tracks.into_iter().map(|(label, path)| SoundTrack { label, path }).collect())
+        .map_err(fail)
+}
+
+/// The end-of-game details of a game in an account's list (scoreboard, stats,
+/// graphs, runes), read from the League client once and then kept.
+#[tauri::command]
+pub async fn match_details(game_id: i64, champion_id: i64, kills: i64, deaths: i64, assists: i64) -> CommandResult<Value> {
+    tauri::async_runtime::spawn_blocking(move || leagueaccounts::recorder::gameinfo::by_id(game_id, champion_id, (kills, deaths, assists)))
+        .await
+        .map_err(|_| fail("operation_failed"))?
         .map_err(fail)
 }
 

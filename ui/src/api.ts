@@ -628,6 +628,8 @@ export const api = {
     call<Recording>("save_clip", { path, parts, mode, name, sounds: sounds ?? null, gains: gains ?? null }),
   /** Each sound source of a recording as its own file (split the first time). */
   /** End-of-game details saved with a game recording; read from the League client first when `fetch`. */
+  matchDetails: (gameId: number, championId: number, kills: number, deaths: number, assists: number) =>
+    call<import("./gameinfo").GameDetails>("match_details", { gameId, championId, kills, deaths, assists }),
   recordingGame: (path: string, fetch: boolean) => call<import("./gameinfo").GameDetails | null>("recording_game", { path, fetch }),
   recordingLive: (path: string) => call<import("./broadcast").LiveLog | null>("recording_live", { path }),
   recordingWaves: (path: string) => call<Waves>("recording_waves", { path }),

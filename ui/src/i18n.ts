@@ -1370,6 +1370,8 @@ const en = {
   "remote.p.reroll": "Reroll",
   "remote.p.rerollsLeft": "left",
   "remote.p.back": "Connection lost. Reconnecting…",
+  "profile.gameOpen": "Click for the full game stats",
+  "profile.gameNoDetails": "Full stats exist only for games read from the League client. Sign in to this account once to get them.",
 };
 
 type MessageKey = keyof typeof en;
@@ -2744,6 +2746,8 @@ const tr: Dict = {
   "remote.p.reroll": "Yeniden çevir",
   "remote.p.rerollsLeft": "kaldı",
   "remote.p.back": "Bağlantı koptu. Yeniden bağlanılıyor…",
+  "profile.gameOpen": "Maçın tüm istatistikleri için tıkla",
+  "profile.gameNoDetails": "Tam istatistikler yalnızca League istemcisinden okunan maçlar için vardır. Almak için bu hesaba bir kez giriş yap.",
 };
 
 const de: Dict = {
@@ -4115,6 +4119,8 @@ const de: Dict = {
   "remote.p.reroll": "Neu würfeln",
   "remote.p.rerollsLeft": "übrig",
   "remote.p.back": "Verbindung verloren. Verbinde neu…",
+  "profile.gameOpen": "Klicken für die vollständigen Spielstatistiken",
+  "profile.gameNoDetails": "Vollständige Statistiken gibt es nur für Spiele, die aus dem League-Client gelesen wurden. Melde dich einmal mit diesem Konto an, um sie zu erhalten.",
 };
 
 const es: Dict = {
@@ -5486,6 +5492,8 @@ const es: Dict = {
   "remote.p.reroll": "Volver a tirar",
   "remote.p.rerollsLeft": "restantes",
   "remote.p.back": "Conexión perdida. Reconectando…",
+  "profile.gameOpen": "Haz clic para ver todas las estadísticas de la partida",
+  "profile.gameNoDetails": "Las estadísticas completas solo existen para partidas leídas del cliente de League. Inicia sesión una vez en esta cuenta para obtenerlas.",
 };
 
 const fr: Dict = {
@@ -6857,6 +6865,8 @@ const fr: Dict = {
   "remote.p.reroll": "Relancer",
   "remote.p.rerollsLeft": "restants",
   "remote.p.back": "Connexion perdue. Reconnexion…",
+  "profile.gameOpen": "Cliquez pour voir toutes les statistiques de la partie",
+  "profile.gameNoDetails": "Les statistiques complètes n'existent que pour les parties lues depuis le client League. Connectez-vous une fois à ce compte pour les obtenir.",
 };
 
 const pt: Dict = {
@@ -8228,6 +8238,8 @@ const pt: Dict = {
   "remote.p.reroll": "Voltar a lançar",
   "remote.p.rerollsLeft": "restantes",
   "remote.p.back": "Ligação perdida. A religar…",
+  "profile.gameOpen": "Clica para ver todas as estatísticas da partida",
+  "profile.gameNoDetails": "As estatísticas completas só existem para partidas lidas do cliente League. Inicia sessão uma vez nesta conta para as obter.",
 };
 
 const zh: Dict = {
@@ -9582,6 +9594,8 @@ const zh: Dict = {
   "remote.p.reroll": "重随",
   "remote.p.rerollsLeft": "次剩余",
   "remote.p.back": "连接已断开，正在重新连接…",
+  "profile.gameOpen": "点击查看完整对局数据",
+  "profile.gameNoDetails": "只有从 League 客户端读取的对局才有完整数据。登录一次此账号即可获取。",
 };
 
 const zhTw: Dict = {
@@ -10936,6 +10950,8 @@ const zhTw: Dict = {
   "remote.p.reroll": "重骰",
   "remote.p.rerollsLeft": "次剩餘",
   "remote.p.back": "連線已中斷，正在重新連線…",
+  "profile.gameOpen": "點擊查看完整對戰數據",
+  "profile.gameNoDetails": "只有從 League 用戶端讀取的對戰才有完整數據。登入一次此帳號即可取得。",
 };
 
 export const LANGUAGES = [

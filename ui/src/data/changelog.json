@@ -1,5 +1,59 @@
 [
  {
+  "version": "5.11.1",
+  "date": "2026-11-22",
+  "items": {
+   "en": [
+    "Recordings open right away again. Games recorded since version 5.7.0 could stay black for a long time; they are repaired by themselves shortly after the app starts.",
+    "Account page: games no longer show twice.",
+    "Account page: click a game to see its full stats (scoreboard, graphs, runes). The League client must be open the first time.",
+    "Recorder: if a game fails to record, the app now tries again in another way, and the log says why it failed."
+   ],
+   "tr": [
+    "Kayıtlar yeniden hemen açılıyor. 5.7.0 sürümünden beri kaydedilen maçlar uzun süre siyah kalabiliyordu; uygulama açıldıktan kısa süre sonra kendiliğinden onarılır.",
+    "Hesap sayfası: maçlar artık iki kez görünmüyor.",
+    "Hesap sayfası: tüm istatistiklerini (skor tablosu, grafikler, rünler) görmek için bir maça tıkla. İlk seferde League istemcisi açık olmalı.",
+    "Kaydedici: bir maç kaydedilemezse uygulama artık başka bir yolla yeniden dener ve günlükte nedenini yazar."
+   ],
+   "de": [
+    "Aufnahmen öffnen sich wieder sofort. Seit Version 5.7.0 aufgenommene Spiele konnten lange schwarz bleiben; sie werden kurz nach dem Start der App von selbst repariert.",
+    "Kontoseite: Spiele werden nicht mehr doppelt angezeigt.",
+    "Kontoseite: Klicke auf ein Spiel, um alle Statistiken zu sehen (Punktetafel, Grafiken, Runen). Beim ersten Mal muss der League-Client offen sein.",
+    "Rekorder: Wenn ein Spiel nicht aufgenommen werden kann, versucht es die App jetzt auf andere Weise erneut, und das Protokoll nennt den Grund."
+   ],
+   "es": [
+    "Las grabaciones vuelven a abrirse al instante. Las partidas grabadas desde la versión 5.7.0 podían quedarse en negro mucho tiempo; se reparan solas poco después de iniciar la app.",
+    "Página de la cuenta: las partidas ya no aparecen dos veces.",
+    "Página de la cuenta: haz clic en una partida para ver todas sus estadísticas (marcador, gráficos, runas). La primera vez el cliente de League debe estar abierto.",
+    "Grabadora: si una partida no se puede grabar, la app ahora lo intenta de otra forma y el registro indica el motivo."
+   ],
+   "fr": [
+    "Les enregistrements s'ouvrent de nouveau tout de suite. Les parties enregistrées depuis la version 5.7.0 pouvaient rester noires longtemps ; elles sont réparées toutes seules peu après le démarrage de l'application.",
+    "Page du compte : les parties n'apparaissent plus en double.",
+    "Page du compte : cliquez sur une partie pour voir toutes ses statistiques (tableau des scores, graphiques, runes). Le client League doit être ouvert la première fois.",
+    "Enregistreur : si une partie ne peut pas être enregistrée, l'application réessaie désormais autrement et le journal en indique la raison."
+   ],
+   "pt": [
+    "As gravações voltam a abrir de imediato. As partidas gravadas desde a versão 5.7.0 podiam ficar a preto durante muito tempo; são reparadas sozinhas pouco depois de a app iniciar.",
+    "Página da conta: as partidas já não aparecem duas vezes.",
+    "Página da conta: clica numa partida para ver todas as estatísticas (placar, gráficos, runas). Da primeira vez o cliente League tem de estar aberto.",
+    "Gravador: se uma partida não for gravada, a app tenta agora de outra forma e o registo indica o motivo."
+   ],
+   "zh": [
+    "录像又能立即打开了。自 5.7.0 版本起录制的对局可能长时间黑屏；程序启动后不久会自动修复它们。",
+    "账号页面：对局不再重复显示。",
+    "账号页面：点击对局即可查看完整数据（计分板、图表、符文）。首次查看时需要打开 League 客户端。",
+    "录像：如果对局录制失败，程序现在会换一种方式重试，并在日志中写明原因。"
+   ],
+   "zhTw": [
+    "錄影又能立即開啟了。自 5.7.0 版本起錄製的對戰可能長時間黑畫面；程式啟動後不久會自動修復它們。",
+    "帳號頁面：對戰不再重複顯示。",
+    "帳號頁面：點擊對戰即可查看完整數據（計分板、圖表、符文）。首次查看時需要開啟 League 用戶端。",
+    "錄影：如果對戰錄製失敗，程式現在會換一種方式重試，並在記錄中寫明原因。"
+   ]
+  }
+ },
+ {
   "version": "5.11.0",
   "date": "2026-11-22",
   "items": {

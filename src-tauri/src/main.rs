@@ -1586,6 +1586,7 @@ fn main() {
             recorder::open_recordings_folder,
             recorder::save_clip,
             recorder::recording_game,
+            recorder::match_details,
             recorder::recording_live,
             recorder::recording_waves,
             recorder::discord_webhooks,

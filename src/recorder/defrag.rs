@@ -559,6 +559,70 @@ fn rename_box(file: &mut File, top: &TopBox, kind: &[u8; 4]) -> io::Result<()> {
     file.write_all(kind)
 }
 
+/// Make everything from `start` to `end` one single `mdat` box (16 bytes at
+/// `start`, which must be a box of at least that size that is no longer
+/// needed). A player then reads the file's first boxes and jumps straight to
+/// the index at `end`. Without it the player steps over every old fragment
+/// one by one before it shows anything: thousands of reads, a minute or more
+/// on a hard disk (a 33-minute game: 13 000 boxes, 3 000 requests, over 40 s).
+/// The samples keep their places; the index points at them by file position.
+fn span(file: &mut File, start: u64, end: u64) -> io::Result<()> {
+    let mut header = [0u8; 16];
+    header[3] = 1;
+    header[4..8].copy_from_slice(b"mdat");
+    header[8..16].copy_from_slice(&(end - start).to_be_bytes());
+    file.seek(SeekFrom::Start(start))?;
+    file.write_all(&header)?;
+    file.sync_data()
+}
+
+/// A recording finished by an older version: a normal MP4, but with its old
+/// fragments still as thousands of boxes in a row before the index.
+pub fn is_chained(path: &Path) -> bool {
+    let Ok(mut file) = File::open(path) else { return false };
+    let Ok(length) = file.metadata().map(|metadata| metadata.len()) else { return false };
+    let mut position = 0u64;
+    let mut header = [0u8; 8];
+    let mut read = |position: u64, header: &mut [u8; 8]| position + 8 <= length && file.seek(SeekFrom::Start(position)).is_ok() && file.read_exact(header).is_ok();
+    for _ in 0..8 {
+        if !read(position, &mut header) {
+            return false;
+        }
+        let size = u64::from(be32(&header, 0));
+        match &header[4..8] {
+            // One box for all the data already (64-bit size), or a file made in one piece.
+            b"mdat" if size == 1 => return false,
+            b"mdat" => {
+                // A small data box followed by more of them, not by the index.
+                let next = position + size;
+                return size >= 8 && read(next, &mut header) && matches!(&header[4..8], b"free" | b"mdat" | b"moof");
+            }
+            b"moov" | b"moof" => return false,
+            _ if size < 8 => return false,
+            _ => position += size,
+        }
+    }
+    false
+}
+
+/// Give a recording finished by an older version one data box (see [`span`]).
+/// True when the file was changed. Reads every box header once.
+pub fn unchain(path: &Path) -> io::Result<bool> {
+    let mut file = File::options().read(true).write(true).open(path)?;
+    let length = file.metadata()?.len();
+    let (boxes, _) = scan(&mut file, length)?;
+    // The index at the end, and nothing left that announces fragments.
+    let Some(index) = boxes.last().filter(|top| &top.kind == b"moov") else { return Ok(false) };
+    if index.data.as_deref().is_none_or(|moov| find(payload(moov), b"mvex").is_some()) || boxes.iter().any(|top| &top.kind == b"moof") {
+        return Ok(false);
+    }
+    let Some(first_data) = boxes.iter().position(|top| &top.kind == b"mdat") else { return Ok(false) };
+    // The old front index (now free space) right before the data: the single box starts there.
+    let Some(start) = boxes[..first_data].iter().rev().take_while(|top| &top.kind == b"free").filter(|top| top.size >= 16).last() else { return Ok(false) };
+    span(&mut file, start.offset, index.offset)?;
+    Ok(true)
+}
+
 /// Turn a fragmented recording into a normal MP4 in place (see the module
 /// notes). Safe to run again on a file it was interrupted on.
 pub fn defragment(path: &Path) -> io::Result<Fixed> {
@@ -622,15 +686,18 @@ pub fn defragment(path: &Path) -> io::Result<Fixed> {
     file.seek(SeekFrom::Start(valid_end))?;
     file.write_all(&new_moov)?;
     file.sync_data()?;
-    // From here the file is a normal MP4; the old headers become free space.
-    rename_box(&mut file, front, b"free")?;
-    file.sync_data()?;
-    // Not forced to the disk one by one (thousands of small writes): Windows
-    // writes them in its own time. Should the PC stop before that, the file
-    // still counts as "in fragments" (`is_fragmented`) and this is finished
-    // at the next start.
-    for top in &used {
-        rename_box(&mut file, top, b"free")?;
+    // From here the file is a normal MP4: one write turns the old front index
+    // and every fragment after it into a single data box that ends at the new
+    // index. (Until that write lands the file still counts as "in fragments",
+    // `is_fragmented`, and this runs again at the next start.)
+    if front.size >= 16 {
+        span(&mut file, front.offset, valid_end)?;
+    } else {
+        rename_box(&mut file, front, b"free")?;
+        for top in &used {
+            rename_box(&mut file, top, b"free")?;
+        }
+        file.sync_data()?;
     }
     Ok(Fixed { fragments: used.len(), seconds, dropped })
 }

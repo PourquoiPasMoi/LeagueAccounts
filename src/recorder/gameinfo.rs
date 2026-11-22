@@ -130,6 +130,41 @@ pub fn load_live(video: &Path) -> Option<Value> {
     serde_json::from_slice(&std::fs::read(live_path(video)).ok()?).ok()
 }
 
+/// The details of any game by its id (the account page's game list), kept in
+/// the app's cache once read. The player is found by champion and score, so
+/// no account has to be named. Same error codes as [`fetch`].
+pub fn by_id(id: i64, champion: i64, score: (i64, i64, i64)) -> Result<Value, &'static str> {
+    if id <= 0 {
+        return Err("game_not_found");
+    }
+    let folder = crate::utils::app_data_dir().map_err(|_| "file_write")?.join("cache").join("games");
+    let file = folder.join(format!("{id}.json"));
+    if let Some(details) = std::fs::read(&file).ok().and_then(|bytes| serde_json::from_slice::<Value>(&bytes).ok()) {
+        return Ok(details);
+    }
+    let client = league_client().ok_or("game_client_needed")?;
+    let game = client.get_json(&format!("/lol-match-history/v1/games/{id}")).ok_or("game_not_found")?;
+    let empty = Vec::new();
+    let participants = game["participants"].as_array().unwrap_or(&empty);
+    if participants.is_empty() {
+        return Err("game_not_found");
+    }
+    let stats = |participant: &Value| (participant["stats"]["kills"].as_i64().unwrap_or(-1), participant["stats"]["deaths"].as_i64().unwrap_or(-1), participant["stats"]["assists"].as_i64().unwrap_or(-1));
+    let played = |participant: &&Value| participant["championId"].as_i64() == Some(champion);
+    let me = participants.iter().find(|participant| played(participant) && stats(participant) == score).or_else(|| participants.iter().find(played));
+    let puuid = me
+        .and_then(|me| game["participantIdentities"].as_array()?.iter().find(|identity| identity["participantId"] == me["participantId"]))
+        .and_then(|identity| identity["player"]["puuid"].as_str())
+        .unwrap_or_default()
+        .to_owned();
+    let timeline = client.get_json(&format!("/lol-match-history/v1/game-timelines/{id}")).map(|timeline| compact_timeline(&timeline)).unwrap_or(Value::Null);
+    let details = json!({ "puuid": puuid, "game": game, "timeline": timeline });
+    if std::fs::create_dir_all(&folder).is_ok() {
+        let _ = std::fs::write(&file, details.to_string());
+    }
+    Ok(details)
+}
+
 /// Read the game from the client and save it. Error codes: `game_client_needed`
 /// (no client), `game_other_account` (another account is signed in),
 /// `game_not_found` (not in the account's recent games, or not there yet).

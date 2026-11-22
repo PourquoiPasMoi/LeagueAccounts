@@ -25,6 +25,7 @@ import { APEX, emblem, normalizeTier, palette, rankOf, type Mode } from "./ranks
 import { accountValue, pricesUpdated, skinPrice } from "./prices";
 import { championIdOf, championNameOf, queueKey, type StatsFilters } from "./stats";
 import { renderOverview, renderStats, type OverviewChange, type StatsChange } from "./statsfx";
+import { openMatchDetails } from "./matchdetails";
 import { hideChartHover, pointsAttribute, wireChartHover, type HoverPoint } from "./charthover";
 
 export interface ProfileContext {
@@ -241,6 +242,11 @@ export function openProfile(context: ProfileContext): void {
     if (action === "sync") return void sync();
     if (action === "login") return context.login(account());
     if (action === "edit") return context.edit(account());
+    const match = target.closest<HTMLElement>("[data-match]");
+    if (match) {
+      const [kills, deaths, assists] = (match.dataset.matchScore ?? "").split(",").map(Number);
+      return openMatchDetails(Number(match.dataset.match), Number(match.dataset.matchChampion), kills || 0, deaths || 0, assists || 0);
+    }
     const nextTab = target.closest<HTMLElement>("[data-tab]")?.dataset.tab as Tab | undefined;
     if (nextTab && nextTab !== tab) {
       tab = nextTab;
@@ -699,7 +705,7 @@ function recentGames(archive: MatchRecord[], profile: Profile | null, mode: Mode
           const detailed = game.source === "client" && game.durationSeconds > 0;
           const kp = game.teamKills ? Math.round(((game.kills + game.assists) / game.teamKills) * 100) : null;
           return `
-          <li class="match ${game.win ? "is-win" : "is-loss"}" style="--k:${index}">
+          <li class="match ${game.win ? "is-win" : "is-loss"}${game.gameId > 0 ? " is-openable" : ""}" style="--k:${index}" ${game.gameId > 0 ? `data-match="${game.gameId}" data-match-champion="${championIdOf(game, profile)}" data-match-score="${game.kills},${game.deaths},${game.assists}" tabindex="0" role="button"` : ""} data-tooltip="${esc(t(game.gameId > 0 ? "profile.gameOpen" : "profile.gameNoDetails"))}">
             <span class="match-champion">${portrait(championIdOf(game, profile))}</span>
             <div class="match-result">
               <b>${esc(t(game.win ? "profile.win" : "profile.loss"))}</b>
