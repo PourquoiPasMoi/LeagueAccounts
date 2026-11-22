@@ -21,6 +21,8 @@ pub mod profiles;
 pub mod protect;
 #[cfg(windows)]
 pub mod recorder;
+#[cfg(windows)]
+pub mod remote;
 pub mod locales;
 pub mod logging;
 pub mod music;

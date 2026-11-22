@@ -148,6 +148,20 @@ On by default, each with its own switch in Settings › Notifications: LP decay 
 
 Settings › Backup writes an encrypted copy of your accounts and their passwords to a folder you choose, every day, week or month. You choose a passphrase (it is not stored); the backup opens with it on any PC. To restore, use Import and pick the backup file.
 
+### Auto accept
+
+Off by default (Settings › Login). When League finds a match it is accepted for you through the League client, also while the app sits in the tray. An optional wait of up to 6 seconds leaves time to decline by hand.
+
+### Phone remote for champ select
+
+Off by default (Settings › Phone remote). Away from the PC when the match pops? Open `http://leaguecompanion.local` (or the PC's address shown in Settings) on a phone on the same Wi-Fi.
+
+- Accept or decline the match, ban and pick with search, lock in.
+- Runes: your selected page is kept as it is (also one another app made); change it with an editor laid out like the client's, with the game's icons. Summoner spells with icons.
+- Works in custom games too. ARAM is detected, but swapping from the bench and rerolling are not there yet.
+- The page only exists while a match is found or champ select runs; the rest of the time nothing listens on the network. It closes with the app.
+- A phone is paired once with a PIN shown in Settings. Everything goes through the League client; the game is never touched.
+
 ### Music player
 
 Off by default. Turn it on in Settings › Music and a Music page appears in the sidebar.

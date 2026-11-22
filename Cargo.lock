@@ -2228,7 +2228,7 @@ dependencies = [
 
 [[package]]
 name = "leagueaccounts"
-version = "5.9.0"
+version = "5.10.0"
 dependencies = [
  "arboard",
  "html-escape",
@@ -2240,6 +2240,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
+ "socket2",
  "tempfile",
  "time",
  "tungstenite",
@@ -2251,7 +2252,7 @@ dependencies = [
 
 [[package]]
 name = "leagueaccounts-app"
-version = "5.9.0"
+version = "5.10.0"
 dependencies = [
  "arboard",
  "leagueaccounts",

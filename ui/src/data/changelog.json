@@ -1,5 +1,43 @@
 [
  {
+  "version": "5.10.0",
+  "date": "2026-11-22",
+  "items": {
+   "en": [
+    "Auto accept: when League finds a match it is accepted for you, with an optional wait to decline (Settings, Login). Off until you turn it on.",
+    "Phone remote: accept a match and do champ select (ban, pick, runes, spells) from your phone on the same Wi-Fi (Settings, Phone remote). Off until you turn it on."
+   ],
+   "tr": [
+    "Otomatik kabul: League bir maç bulduğunda senin yerine kabul edilir; istersen reddetmek için bekleme süresi (Ayarlar, Giriş). Sen açana kadar kapalıdır.",
+    "Telefon kumandası: aynı Wi-Fi'deki telefonundan maçı kabul et ve şampiyon seçimini (yasaklama, seçim, rünler, büyüler) yap (Ayarlar, Telefon kumandası). Sen açana kadar kapalıdır."
+   ],
+   "de": [
+    "Automatisch annehmen: Findet League ein Spiel, wird es für dich angenommen, auf Wunsch mit Wartezeit zum Ablehnen (Einstellungen, Anmeldung). Aus, bis du es einschaltest.",
+    "Handy-Fernbedienung: Spiel annehmen und Championauswahl (Bann, Wahl, Runen, Zauber) vom Handy im selben WLAN (Einstellungen, Handy-Fernbedienung). Aus, bis du es einschaltest."
+   ],
+   "es": [
+    "Aceptar automáticamente: cuando League encuentra una partida se acepta por ti, con una espera opcional para rechazar (Ajustes, Inicio de sesión). Apagado hasta que lo actives.",
+    "Mando desde el móvil: acepta la partida y haz la selección de campeón (baneo, elección, runas, hechizos) desde el móvil en la misma Wi-Fi (Ajustes, Mando desde el móvil). Apagado hasta que lo actives."
+   ],
+   "fr": [
+    "Acceptation automatique : quand League trouve une partie, elle est acceptée pour vous, avec une attente facultative pour refuser (Paramètres, Connexion). Désactivé tant que vous ne l'activez pas.",
+    "Télécommande mobile : acceptez une partie et faites la sélection des champions (ban, choix, runes, sorts) depuis votre téléphone sur le même Wi-Fi (Paramètres, Télécommande mobile). Désactivée tant que vous ne l'activez pas."
+   ],
+   "pt": [
+    "Aceitar automaticamente: quando o League encontra uma partida, ela é aceite por ti, com uma espera opcional para recusar (Definições, Início de sessão). Desligado até o ligares.",
+    "Comando no telemóvel: aceita a partida e faz a seleção de campeões (banir, escolher, runas, feitiços) no telemóvel na mesma rede Wi-Fi (Definições, Comando no telemóvel). Desligado até o ligares."
+   ],
+   "zh": [
+    "自动接受：League 找到对局时自动为你接受，可设置等待时间以便拒绝（设置，登录）。默认关闭。",
+    "手机遥控：在同一 Wi-Fi 下用手机接受对局并完成英雄选择（禁用、选择、符文、技能）（设置，手机遥控）。默认关闭。"
+   ],
+   "zhTw": [
+    "自動接受：League 找到對戰時自動為你接受，可設定等待時間以便拒絕（設定，登入）。預設關閉。",
+    "手機遙控：在同一 Wi-Fi 下用手機接受對戰並完成英雄選擇（禁用、選擇、符文、技能）（設定，手機遙控）。預設關閉。"
+   ]
+  }
+ },
+ {
   "version": "5.9.0",
   "date": "2026-11-22",
   "items": {

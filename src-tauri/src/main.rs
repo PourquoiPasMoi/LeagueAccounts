@@ -5,6 +5,7 @@
 //! Passwords never cross into the web view. The UI only receives account
 //! metadata; copy/login commands read the password on the Rust side.
 
+mod autoaccept;
 mod champselect;
 mod companion;
 mod login_control;
@@ -13,6 +14,7 @@ mod music;
 mod notify;
 mod recorder;
 mod refresh;
+mod remote;
 mod scale;
 mod updater;
 mod views;
@@ -1413,6 +1415,7 @@ pub(crate) fn refresh_tray(app: &AppHandle) {
 /// Quit from the tray: a game being recorded is finished properly first.
 pub(crate) fn quit(app: &AppHandle) {
     recorder::stop_now();
+    leagueaccounts::remote::shutdown();
     app.exit(0)
 }
 
@@ -1626,6 +1629,14 @@ fn main() {
             notify::set_notify_texts,
             notify::test_notification,
             recorder::set_recording_notes,
+            autoaccept::auto_accept_prefs,
+            autoaccept::set_auto_accept_prefs,
+            remote::remote_info,
+            remote::set_remote_enabled,
+            remote::remote_reset,
+            remote::remote_open,
+            remote::remote_test,
+            remote::set_remote_texts,
         ])
         // Champion and skin pictures: http://lacache.localhost/<game-data path>,
         // downloaded once from CommunityDragon and then served from disk.
@@ -1733,6 +1744,8 @@ fn main() {
             live::spawn(app.handle().clone());
             recorder::spawn(app.handle().clone());
             notify::spawn(app.handle().clone(), Arc::clone(&shared));
+            autoaccept::spawn(app.handle().clone());
+            remote::spawn(app.handle().clone());
             let handle = app.handle().clone();
             thread::spawn(move || migrate_autostart(&handle));
             Ok(())
@@ -1747,6 +1760,8 @@ fn main() {
     // the last event is the only place to mark the end of the session.
     app.run(|_app, event| {
         if let tauri::RunEvent::Exit = event {
+            // However the app ends, nothing keeps listening on the network.
+            leagueaccounts::remote::shutdown();
             logging::record(Event::SessionEnded, Reason::None);
         }
     });

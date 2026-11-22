@@ -207,6 +207,11 @@ mod crypto {
     }
 }
 
+/// Random bytes from Windows (keys, PINs).
+pub fn random_bytes(buffer: &mut [u8]) -> io::Result<()> {
+    crypto::random(buffer)
+}
+
 /// Encrypt `plain` with a key already made from the passphrase and `salt`.
 fn seal_with(key: &[u8; 32], salt: &[u8], plain: &[u8]) -> io::Result<Vec<u8>> {
     let mut nonce = [0u8; 12];

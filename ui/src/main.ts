@@ -21,7 +21,7 @@ import "./companion.css";
 // Final layer of the design: must stay the last stylesheet.
 import "./polish.css";
 import { openRecordings } from "./recordings";
-import { askBackupPassphrase, companionNav, companionPages, guideDue, openGuide, openOverview, sendNotifyTexts, wireCompanionSettings } from "./companion";
+import { askBackupPassphrase, autoAcceptSection, remotePage, sendRemoteTexts, watchRemoteNote, companionNav, companionPages, guideDue, openGuide, openOverview, sendNotifyTexts, wireCompanionSettings } from "./companion";
 import { initMusic, musicOn, musicSpeed, openMusic, setMusicEnabled } from "./music";
 import type { DecayInfo, DiscordWebhook, ModeRule, RecorderPrefs, RecorderStatus } from "./api";
 import { experimentalOn, initBuilds, openCurrentBuild, resumeChampSelect, setExperimental, trackGames } from "./builds";
@@ -1030,6 +1030,7 @@ async function openSettings(): Promise<void> {
           <button type="button" role="tab" data-settings-tab="recorder" aria-selected="${settingsTab === "recorder"}">${esc(t("settings.recorder"))}</button>
           <button type="button" role="tab" data-settings-tab="recmodes" aria-selected="${settingsTab === "recmodes"}">${esc(t("settings.recModes"))}</button>
           <button type="button" role="tab" data-settings-tab="discord" aria-selected="${settingsTab === "discord"}">${esc(t("settings.discord"))}</button>
+          <button type="button" role="tab" data-settings-tab="remote" aria-selected="${settingsTab === "remote"}">${esc(t("settings.remote"))}</button>
           <button type="button" role="tab" data-settings-tab="music" aria-selected="${settingsTab === "music"}">${esc(t("settings.music"))}</button>
           <button type="button" role="tab" data-settings-tab="experimental" aria-selected="${settingsTab === "experimental"}">${esc(t("settings.experimental"))}</button>
         </nav>
@@ -1063,6 +1064,7 @@ async function openSettings(): Promise<void> {
         <label class="radio-row"><input type="radio" name="loginMethod" value="previous" ${current.loginMethod === "previous" ? "checked" : ""}/>
           <span class="toggle-text"><strong>${esc(t("settings.methodPrevious"))}</strong><span>${esc(t("settings.methodPreviousHint"))}</span></span></label>
         ${toggle("launchGame", current.launchGame, t("settings.launchGame"), t("settings.launchGameHint"))}
+        ${autoAcceptSection()}
         </section>
         <section class="settings-page" data-settings-page="refresh" ${settingsTab === "refresh" ? "" : "hidden"}>
           <h3 class="settings-page-title">${esc(t("settings.refresh"))}</h3>
@@ -1089,6 +1091,7 @@ async function openSettings(): Promise<void> {
         </div>
         </section>
         ${companionPages(settingsTab)}
+        ${remotePage(settingsTab)}
         <section class="settings-page" data-settings-page="recorder" ${settingsTab === "recorder" ? "" : "hidden"}>
           <h3 class="settings-page-title">${esc(t("settings.recorder"))}</h3>
         <div class="rec-settings-grid">
@@ -1920,6 +1923,7 @@ async function changeLanguage(next: Lang): Promise<boolean> {
   setLang(next);
   applyLanguage();
   sendNotifyTexts();
+  sendRemoteTexts();
   render();
   return true;
 }
@@ -1987,6 +1991,7 @@ function wire(): void {
       if (action === "game-settings") void openGameSettings();
       if (action === "recordings") void openRecordings();
       if (action === "overview") showOverview();
+      if (action === "remote") openSettingsAt("remote");
       if (action === "music") void openMusic();
       if (action === "builds") openCurrentBuild();
     });
@@ -2230,6 +2235,8 @@ async function wireEvents(): Promise<void> {
   void initMusic();
   void api.recorderStatus().then(showRecorderStatus).catch(() => undefined);
   void events.onRecorderStatus(showRecorderStatus);
+  watchRemoteNote();
+  void events.onMatchAccepted(() => toast("success", t("accept.done")));
   void events.onRecordingsRecovered((count) => toast("success", t("notify.recoveredTitle"), t("notify.recoveredBody", { count }), 9000));
   await trackGames();
   await events.onRefreshDone(({ error, exclusive }) => {
@@ -2293,6 +2300,7 @@ async function start(): Promise<void> {
     void guard(() => api.setUiLanguage(lang()), "toast.settingsFailed");
   }
   sendNotifyTexts();
+  sendRemoteTexts();
   $("#version").textContent = `v${boot.version}`;
   render();
   if (boot.loadError) toast("error", t("toast.loadFailed"), errorText(boot.loadError.code, boot.loadError.detail), 8000);

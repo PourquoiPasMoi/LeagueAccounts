@@ -1,0 +1,315 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#0a0a0c">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>League Companion</title>
+<style>
+:root { --bg:#0a0a0c; --s1:#161618; --s2:#1e1e21; --fill:rgb(255 255 255 / .07); --fill2:rgb(255 255 255 / .12); --line:rgb(255 255 255 / .1); --text:#f5f5f7; --t2:#a1a1aa; --t3:#6e6e78; --accent:#0a84ff; --win:#3b9dff; --loss:#ff5a52; --ok:#30d158; --r:12px; --ease:cubic-bezier(.22,1,.36,1); }
+* { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+html, body { margin:0; height:100%; background:var(--bg); color:var(--text); font:15px/1.35 "Segoe UI Variable Text","Segoe UI",system-ui,-apple-system,sans-serif; overscroll-behavior:none; }
+body { display:flex; flex-direction:column; padding:env(safe-area-inset-top) 0 0; }
+button, input, select { font:inherit; color:inherit; }
+button { border:0; border-radius:var(--r); background:var(--fill); padding:12px 14px; font-weight:600; touch-action:manipulation; transition:transform .15s var(--ease), background-color .15s; }
+button:active { transform:scale(.96); }
+button:disabled { opacity:.4; }
+.primary { background:var(--accent); color:#fff; }
+.danger { background:rgb(255 90 82 / .18); color:#ff7a73; }
+header { display:flex; align-items:center; gap:12px; padding:12px 16px; }
+header .what { flex:1; min-width:0; }
+header .what b { display:block; font-size:19px; font-weight:700; letter-spacing:-.02em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+header .what span { font-size:13px; color:var(--t2); }
+.clock { min-width:64px; padding:8px 10px; border-radius:var(--r); background:var(--fill); text-align:center; font:700 24px/1 "Segoe UI Variable Display","Segoe UI",system-ui,sans-serif; font-variant-numeric:tabular-nums; }
+.clock.low { background:rgb(255 90 82 / .2); color:#ff7a73; }
+.turn header { background:linear-gradient(180deg, rgb(10 132 255 / .28), transparent); }
+main { flex:1; min-height:0; overflow-y:auto; padding:0 12px 12px; -webkit-overflow-scrolling:touch; }
+.center { height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px; padding:24px; text-align:center; }
+.center h1 { margin:0; font-size:24px; letter-spacing:-.02em; }
+.center p { margin:0; color:var(--t2); }
+.center .row { display:flex; gap:12px; width:100%; max-width:420px; }
+.center .row button { flex:1; padding:22px 12px; font-size:19px; }
+.pin { width:100%; max-width:260px; padding:16px; border-radius:var(--r); border:1px solid var(--line); background:var(--s1); text-align:center; font-size:30px; letter-spacing:.3em; font-variant-numeric:tabular-nums; outline:0; }
+.pin:focus { border-color:var(--accent); }
+.teams { display:flex; align-items:center; gap:8px; padding:4px 4px 10px; }
+.teams .side { display:flex; gap:4px; flex:1; }
+.teams .side.them { justify-content:flex-end; }
+.teams img, .teams i { width:34px; height:34px; border-radius:8px; background:var(--fill); display:block; }
+.teams .me { box-shadow:0 0 0 2px var(--accent); }
+.teams .soft { opacity:.45; }
+.bans { display:flex; gap:4px; padding:0 4px 10px; }
+.bans img { width:24px; height:24px; border-radius:6px; filter:grayscale(1); opacity:.6; }
+.tabs { display:flex; gap:4px; padding:3px; margin-bottom:10px; border-radius:999px; background:var(--fill); }
+.tabs button { flex:1; padding:9px; border-radius:999px; background:none; color:var(--t2); }
+.tabs button[aria-pressed=true] { background:var(--fill2); color:var(--text); }
+.search { width:100%; padding:13px 14px; margin-bottom:10px; border-radius:var(--r); border:1px solid var(--line); background:var(--s1); outline:0; }
+.search:focus { border-color:var(--accent); }
+.grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(68px, 1fr)); gap:8px; }
+.champ { padding:0; background:none; display:flex; flex-direction:column; align-items:center; gap:4px; border-radius:10px; }
+.champ img { width:100%; aspect-ratio:1; border-radius:10px; background:var(--fill); display:block; }
+.champ span { width:100%; font-size:11px; font-weight:500; color:var(--t2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; text-align:center; }
+.champ.on img { box-shadow:0 0 0 3px var(--accent); }
+.champ.on span { color:var(--text); }
+.list { display:flex; flex-direction:column; gap:8px; }
+.list h3 { margin:10px 4px 2px; font-size:13px; font-weight:600; color:var(--t2); }
+.list button { text-align:left; }
+.list button.on { background:rgb(10 132 255 / .22); box-shadow:inset 0 0 0 1px var(--accent); }
+.pages { display:flex; gap:8px; overflow-x:auto; padding:2px 2px 6px; scrollbar-width:none; }
+.pages button { flex:none; padding:9px 14px; border-radius:999px; font-size:13px; white-space:nowrap; }
+.pages button.on { background:rgb(10 132 255 / .22); box-shadow:inset 0 0 0 1px var(--accent); }
+.card { padding:12px; border-radius:16px; background:var(--s1); border:1px solid var(--line); }
+.card h3 { margin:0 0 10px; }
+.rrow { display:flex; justify-content:space-around; align-items:center; gap:6px; padding:6px 0; }
+.rrow + .rrow { border-top:1px solid var(--line); }
+.rune { padding:3px; background:none; border-radius:50%; line-height:0; }
+.rune img { width:42px; height:42px; border-radius:50%; filter:grayscale(1) brightness(.5); transition:filter .2s, box-shadow .2s, transform .25s var(--ease); }
+.rune.on img { filter:none; box-shadow:0 0 0 2px var(--accent), 0 0 14px rgb(10 132 255 / .5); transform:scale(1.08); }
+.rrow.key .rune img { width:54px; height:54px; }
+.rrow.style .rune img { width:34px; height:34px; }
+.rrow.shard .rune img { width:30px; height:30px; background:var(--fill); }
+.rname { margin:2px 0 4px; text-align:center; font-size:12px; color:var(--t2); min-height:16px; }
+.slots { display:flex; gap:10px; }
+.slot { flex:1; display:flex; align-items:center; gap:10px; padding:8px 10px; text-align:left; }
+.slot img { width:40px; height:40px; border-radius:8px; }
+.slot span { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:13px; }
+.slot em { font-style:normal; font-size:11px; color:var(--t3); display:block; }
+.slot.on { background:rgb(10 132 255 / .22); box-shadow:inset 0 0 0 1px var(--accent); }
+.sgrid { display:grid; grid-template-columns:repeat(auto-fill, minmax(52px, 1fr)); gap:10px; margin-top:10px; }
+.sgrid button { padding:0; background:none; line-height:0; border-radius:10px; }
+.sgrid img { width:100%; aspect-ratio:1; border-radius:10px; }
+.sgrid .on img { box-shadow:0 0 0 2px var(--accent); }
+.sgrid .used img { filter:grayscale(1) brightness(.5); }
+.ghost { background:none; box-shadow:inset 0 0 0 1px var(--line); color:var(--t2); font-weight:500; }
+footer { display:flex; align-items:center; gap:12px; padding:10px 12px calc(10px + env(safe-area-inset-bottom)); border-top:1px solid var(--line); background:var(--s1); }
+footer img { width:46px; height:46px; border-radius:10px; background:var(--fill); }
+footer .name { flex:1; min-width:0; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+footer button { padding:15px 22px; font-size:17px; }
+.note { margin:10px 4px; font-size:13px; color:var(--t3); }
+.toast { position:fixed; left:50%; bottom:96px; transform:translateX(-50%); padding:10px 16px; border-radius:999px; background:var(--s2); border:1px solid var(--line); font-size:13px; opacity:0; transition:opacity .2s; pointer-events:none; }
+.toast.show { opacity:1; }
+[hidden] { display:none !important; }
+</style>
+</head>
+<body>
+<header hidden><div class="what"><b id="title"></b><span id="sub"></span></div><div class="clock" id="clock"></div></header>
+<main id="main"></main>
+<footer hidden><img id="pickImg" alt=""><div class="name" id="pickName"></div><button class="primary" id="lock"></button></footer>
+<div class="toast" id="toast"></div>
+<script>
+"use strict";
+// Texts in English; the PC sends them in the app's language (/texts).
+const T = { waiting:"Waiting for a match", waitingText:"Keep this page open. It connects by itself when League finds a match.", found:"Match found", accept:"Accept", decline:"Decline", accepted:"Accepted. Waiting for the others.", declined:"Declined", ban:"Ban a champion", pick:"Pick your champion", soon:"Your turn is coming", wait:"Waiting for the others", done:"You are locked in", planning:"Show what you want to play", champions:"Champions", runes:"Runes and spells", search:"Search", lockBan:"Ban", lockPick:"Lock in", pages:"Rune pages", spells:"Summoner spells", auto:"Replace with the most played runes and spells", autoOn:"Auto accept is on. League Companion is accepting for you.", acceptedAuto:"Accepted automatically. Waiting for the others.", acceptNow:"Accept now", primary:"Primary", secondary:"Secondary", shards:"Shards", keep:"Your selected page stays as it is unless you change it here.", autoDone:"Runes and spells set", failed:"League refused that", pin:"Type the PIN shown in League Companion", pinWrong:"Wrong PIN", pinLocked:"Too many tries. Wait a minute.", pair:"Pair this phone", none:"No champion chosen", noPages:"No rune page to choose from" };
+const $ = (id) => document.getElementById(id);
+const main = $("main");
+let key = localStorage.getItem("lcKey") || "";
+let version = 0, state = { phase:"idle" }, offset = 0, online = false;
+let names = new Map(), spells = [], styles = [], perks = {}, slot = 0, tab = "champions", query = "", chosen = 0, shownAction = -1;
+const gfx = (path) => `/g/${String(path || "").replace(/^\/+/, "")}`;
+const img = (id) => id > 0 ? `<img src="/c/${id}.png" alt="" loading="lazy" decoding="async">` : "<i></i>";
+const esc = (text) => String(text).replace(/[&<>"]/g, (c) => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" }[c]));
+const toast = (text) => { const box = $("toast"); box.textContent = text; box.classList.add("show"); clearTimeout(toast.timer); toast.timer = setTimeout(() => box.classList.remove("show"), 1800); };
+
+async function call(path, body) {
+  const response = await fetch(path, { method: body ? "POST" : "GET", headers: { "X-Key": key, ...(body ? { "Content-Type": "application/json" } : {}) }, body: body ? JSON.stringify(body) : undefined, cache: "no-store" });
+  if (response.status === 401) { key = ""; localStorage.removeItem("lcKey"); throw new Error("key"); }
+  return { ok: response.ok, data: await response.json().catch(() => ({})) };
+}
+async function act(body) {
+  try { const result = await call("/act", body); if (!result.ok) toast(T.failed); return result.ok; } catch { toast(T.failed); return false; }
+}
+
+// ---- drawing
+function center(html) { $("main").innerHTML = `<div class="center">${html}</div>`; document.querySelector("header").hidden = true; document.querySelector("footer").hidden = true; document.body.classList.remove("turn"); }
+function drawPin(error) {
+  center(`<h1>League Companion</h1><p>${esc(error || T.pin)}</p><input class="pin" id="pin" inputmode="numeric" maxlength="6" autocomplete="one-time-code"><div class="row"><button class="primary" id="pairGo">${esc(T.pair)}</button></div>`);
+  const input = $("pin");
+  const go = async () => {
+    try {
+      const response = await fetch("/pair", { method:"POST", headers:{ "Content-Type":"application/json" }, body: JSON.stringify({ pin: input.value.trim() }) });
+      const data = await response.json();
+      if (data.key) { key = data.key; localStorage.setItem("lcKey", key); version = 0; loop(); } else drawPin(data.error === "locked" ? T.pinLocked : T.pinWrong);
+    } catch { drawPin(T.pinWrong); }
+  };
+  $("pairGo").onclick = go;
+  input.oninput = () => { if (input.value.trim().length === 6) go(); };
+  input.focus();
+}
+function drawIdle() { center(`<h1>${esc(T.waiting)}</h1><p>${esc(T.waitingText)}</p>`); }
+function drawReady() {
+  const answer = state.answer;
+  if (answer !== "None") center(`<h1>${esc(T.found)}</h1><p>${esc(answer === "Accepted" ? (state.auto ? T.acceptedAuto : T.accepted) : T.declined)}</p>`);
+  // Auto accept is on: say so; declining stays possible while it waits.
+  else if (state.auto) center(`<h1>${esc(T.found)}</h1><div class="clock" id="clock2"></div><p>${esc(T.autoOn)}</p><div class="row"><button class="danger" id="no">${esc(T.decline)}</button><button class="primary" id="yes">${esc(T.acceptNow)}</button></div>`);
+  else center(`<h1>${esc(T.found)}</h1><div class="clock" id="clock2"></div><div class="row"><button class="danger" id="no">${esc(T.decline)}</button><button class="primary" id="yes">${esc(T.accept)}</button></div>`);
+  if ($("yes")) { $("yes").onclick = () => act({ t:"accept" }); $("no").onclick = () => act({ t:"decline" }); }
+}
+// ---- runes: the selected page, edited as in the client
+const styleOf = (id) => styles.find((style) => style.id === id);
+function runesHtml() {
+  const page = state.rune, pages = state.pages || [];
+  let html = pages.length ? `<div class="pages">${pages.map((p) => `<button class="${p.cur ? "on" : ""}" data-page="${p.id}">${esc(p.name)}</button>`).join("")}</div>` : "";
+  const primary = page && styleOf(page.primary), sub = page && styleOf(page.sub);
+  if (!page || !primary || !sub || !Array.isArray(page.perks) || page.perks.length < 9) return html + `<p class="note">${esc(T.noPages)}</p>`;
+  const rune = (id, on, data) => `<button class="rune${on ? " on" : ""}" ${data}><img src="${gfx((perks[id] || {}).icon)}" alt="" loading="lazy"></button>`;
+  const name = (id) => `<div class="rname">${esc((perks[id] || {}).name || "")}</div>`;
+  const tree = (list, on, data) => `<div class="rrow style">${list.map((style) => `<button class="rune${style.id === on ? " on" : ""}" ${data}="${style.id}"><img src="${gfx(style.icon)}" alt=""></button>`).join("")}</div>`;
+  html += `<p class="note">${esc(T.keep)}</p><div class="card"><h3>${esc(T.primary)} · ${esc(primary.name)}</h3>${tree(styles, primary.id, "data-ps")}`;
+  for (let row = 0; row < 4; row++) html += `<div class="rrow${row ? "" : " key"}">${(primary.slots[row] || []).map((id) => rune(id, page.perks[row] === id, `data-pp="${row}:${id}"`)).join("")}</div>${name(page.perks[row])}`;
+  html += `</div><div class="card"><h3>${esc(T.secondary)} · ${esc(sub.name)}</h3>${tree(styles.filter((style) => style.id !== primary.id), sub.id, "data-ss")}`;
+  for (let row = 1; row < 4; row++) html += `<div class="rrow">${(sub.slots[row] || []).map((id) => rune(id, page.perks[4] === id || page.perks[5] === id, `data-sp="${row}:${id}"`)).join("")}</div>`;
+  html += `${name(page.perks[4])}${name(page.perks[5])}</div><div class="card"><h3>${esc(T.shards)}</h3>`;
+  for (let row = 0; row < 3; row++) html += `<div class="rrow shard">${(primary.slots[4 + row] || []).map((id) => rune(id, page.perks[6 + row] === id, `data-sh="${row}:${id}"`)).join("")}</div>`;
+  return html + "</div>";
+}
+function saveRune(page) {
+  state.rune = page;
+  draw();
+  act({ t:"rune", primary: page.primary, sub: page.sub, perks: page.perks });
+}
+function editRune(target) {
+  const page = { ...state.rune, perks: [...state.rune.perks] };
+  const first = (style, row) => (style.slots[row] || [])[0];
+  if (target.dataset.ps) {
+    const style = styleOf(Number(target.dataset.ps)); if (!style || style.id === page.primary) return;
+    page.primary = style.id;
+    for (let row = 0; row < 4; row++) page.perks[row] = first(style, row);
+    if (page.sub === style.id) { const other = styles.find((entry) => entry.id !== style.id); page.sub = other.id; page.perks[4] = first(other, 1); page.perks[5] = first(other, 2); }
+    return saveRune(page);
+  }
+  if (target.dataset.ss) {
+    const style = styleOf(Number(target.dataset.ss)); if (!style || style.id === page.sub) return;
+    page.sub = style.id; page.perks[4] = first(style, 1); page.perks[5] = first(style, 2);
+    return saveRune(page);
+  }
+  if (target.dataset.pp) { const [row, id] = target.dataset.pp.split(":").map(Number); page.perks[row] = id; return saveRune(page); }
+  if (target.dataset.sh) { const [row, id] = target.dataset.sh.split(":").map(Number); page.perks[6 + row] = id; return saveRune(page); }
+  if (target.dataset.sp) {
+    // Two runes from two different rows: the same row is replaced, else the older choice goes.
+    const [row, id] = target.dataset.sp.split(":").map(Number);
+    const sub = styleOf(page.sub), rowOf = (perk) => [1, 2, 3].find((r) => (sub.slots[r] || []).includes(perk));
+    if (page.perks[4] === id || page.perks[5] === id) return;
+    if (rowOf(page.perks[4]) === row) page.perks[4] = id;
+    else if (rowOf(page.perks[5]) === row) page.perks[5] = id;
+    else { page.perks[4] = page.perks[5]; page.perks[5] = id; }
+    return saveRune(page);
+  }
+}
+function spellsHtml() {
+  const spell = (id) => spells.find((entry) => entry.id === id) || { name:"", icon:"" };
+  const mine = state.spells || [0, 0];
+  return `<div class="card"><h3>${esc(T.spells)}</h3><div class="slots">${[0, 1].map((index) => `<button class="slot${slot === index ? " on" : ""}" data-slot="${index}"><img src="${gfx(spell(mine[index]).icon)}" alt=""><span><em>${index ? "F" : "D"}</em>${esc(spell(mine[index]).name)}</span></button>`).join("")}</div><div class="sgrid">${spells.map((entry) => `<button class="${entry.id === mine[slot] ? "on" : mine.includes(entry.id) ? "used" : ""}" data-spell="${entry.id}" aria-label="${esc(entry.name)}"><img src="${gfx(entry.icon)}" alt="" loading="lazy"></button>`).join("")}</div></div>`;
+}
+function myAction() { return state.action || null; }
+function available() {
+  const action = myAction();
+  const ids = action && action.type === "ban" ? state.bannable : state.pickable;
+  const taken = new Set([...(state.bans || []), ...state.team.map((p) => p.champ), ...state.enemy.map((p) => p.champ)]);
+  return (ids || []).filter((id) => !taken.has(id));
+}
+function drawSelect() {
+  const action = myAction();
+  const turn = !!(action && action.active);
+  document.body.classList.toggle("turn", turn);
+  document.querySelector("header").hidden = false;
+  $("title").textContent = !action ? T.done : turn ? (action.type === "ban" ? T.ban : T.pick) : state.step === "PLANNING" ? T.planning : T.soon;
+  $("sub").textContent = turn ? "" : action ? T.wait : "";
+  if (action && action.id !== shownAction) {
+    // A new turn: start from what the client already shows, vibrate when it is mine.
+    shownAction = action.id; chosen = action.champ > 0 ? action.champ : 0;
+    if (turn && navigator.vibrate) navigator.vibrate([120, 80, 120]);
+  }
+  const team = (list, cls) => `<div class="side ${cls}">${list.map((p) => { const id = p.champ || p.intent; return id > 0 ? `<img class="${p.me ? "me" : ""} ${p.champ ? "" : "soft"}" src="/c/${id}.png" alt="">` : `<i class="${p.me ? "me" : ""}"></i>`; }).join("")}</div>`;
+  let body = `<div class="teams">${team(state.team, "us")}${team(state.enemy, "them")}</div>`;
+  if ((state.bans || []).length) body += `<div class="bans">${state.bans.map((id) => `<img src="/c/${id}.png" alt="">`).join("")}</div>`;
+  body += `<div class="tabs"><button data-tab="champions" aria-pressed="${tab === "champions"}">${esc(T.champions)}</button><button data-tab="runes" aria-pressed="${tab === "runes"}">${esc(T.runes)}</button></div>`;
+  if (tab === "champions") {
+    if (action) {
+      const words = query.toLowerCase();
+      const list = available().map((id) => ({ id, name: names.get(id) || `#${id}` })).filter((c) => !words || c.name.toLowerCase().includes(words)).sort((a, b) => a.name.localeCompare(b.name));
+      body += `<input class="search" id="search" placeholder="${esc(T.search)}" value="${esc(query)}" autocomplete="off" autocapitalize="off" spellcheck="false"><div class="grid" id="grid">${list.map((c) => `<button class="champ${c.id === chosen ? " on" : ""}" data-champ="${c.id}">${img(c.id)}<span>${esc(c.name)}</span></button>`).join("")}</div>`;
+    } else body += `<p class="note">${esc(T.done)}</p>`;
+  } else {
+    body += `<div class="list">${runesHtml()}${spellsHtml()}<button class="ghost" data-auto>${esc(T.auto)}</button></div>`;
+  }
+  // Keep the search field and the scroll position while the state refreshes.
+  const scroll = main.scrollTop, hadFocus = document.activeElement && document.activeElement.id === "search", caret = hadFocus ? document.activeElement.selectionStart : 0;
+  main.innerHTML = body; main.scrollTop = scroll;
+  if (hadFocus && $("search")) { $("search").focus(); $("search").setSelectionRange(caret, caret); }
+  const footer = document.querySelector("footer");
+  footer.hidden = !action || tab !== "champions";
+  if (action) {
+    $("pickImg").src = chosen > 0 ? `/c/${chosen}.png` : "data:,"; $("pickImg").style.visibility = chosen > 0 ? "visible" : "hidden";
+    $("pickName").textContent = chosen > 0 ? (names.get(chosen) || "") : T.none;
+    $("lock").textContent = action.type === "ban" ? T.lockBan : T.lockPick;
+    $("lock").className = action.type === "ban" ? "danger" : "primary";
+    $("lock").disabled = !turn || chosen <= 0;
+  }
+}
+function draw() {
+  if (!key) return drawPin();
+  if (!online || state.phase === "idle") return drawIdle();
+  if (state.phase === "ready") return drawReady();
+  if (state.phase === "select") return drawSelect();
+  drawIdle();
+}
+function tick() {
+  const left = state.end ? Math.max(0, Math.ceil((state.end - (Date.now() + offset)) / 1000)) : null;
+  for (const id of ["clock", "clock2"]) { const box = $(id); if (!box) continue; box.textContent = left === null ? "" : String(left); box.classList.toggle("low", left !== null && left <= 8); }
+}
+setInterval(tick, 200);
+
+// ---- taps
+main.addEventListener("click", (event) => {
+  const target = event.target.closest("button"); if (!target) return;
+  if (target.dataset.tab) { tab = target.dataset.tab; return draw(); }
+  if (target.dataset.champ) {
+    chosen = Number(target.dataset.champ);
+    const action = myAction();
+    // Shown to the team at once, as a click in the client does.
+    if (action) act({ t:"hover", action: action.id, id: chosen });
+    return draw();
+  }
+  if (target.dataset.page) return void act({ t:"page", id: Number(target.dataset.page) });
+  if (target.classList.contains("rune") && state.rune) return editRune(target);
+  if (target.dataset.slot) { slot = Number(target.dataset.slot); return draw(); }
+  if (target.dataset.spell) {
+    // The other key's spell picked here: the two swap, as in the client.
+    const picks = [...(state.spells || [0, 0])], id = Number(target.dataset.spell), other = slot ? 0 : 1;
+    if (picks[other] === id) picks[other] = picks[slot];
+    picks[slot] = id; state.spells = picks; draw();
+    return void act({ t:"spells", a: picks[0], b: picks[1] });
+  }
+  if ("auto" in target.dataset) { target.disabled = true; return void act({ t:"auto" }).then((ok) => { target.disabled = false; if (ok) toast(T.autoDone); }); }
+});
+main.addEventListener("input", (event) => { if (event.target.id === "search") { query = event.target.value; draw(); } });
+$("lock").onclick = () => { const action = myAction(); if (action && chosen > 0) { $("lock").disabled = true; act({ t:"lock", action: action.id, id: chosen }).then((ok) => { if (!ok) $("lock").disabled = false; }); } };
+
+// ---- following the PC: one request that is answered when something changes
+let looping = false;
+async function loop() {
+  if (looping) return; looping = true;
+  while (key) {
+    try {
+      if (!names.size) { const result = await call("/names"); (result.data.champions || []).forEach((c) => names.set(c.id, c.name)); spells = (result.data.spells || []).sort((a, b) => a.name.localeCompare(b.name)); styles = result.data.styles || []; perks = result.data.perks || {}; }
+      const result = await call(`/state?v=${version}`);
+      const fresh = result.data.v !== version || !online;
+      online = true; version = result.data.v; offset = result.data.now - Date.now(); state = result.data.s || { phase:"idle" };
+      if (state.phase !== "select") { shownAction = -1; chosen = 0; query = ""; }
+      if (state.phase === "idle") names.clear();
+      if (fresh) draw();
+    } catch (error) {
+      if (!key) break;
+      // The PC is not serving (no match right now): show it and try again shortly.
+      if (online) { online = false; version = 0; draw(); }
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+    }
+  }
+  looping = false; draw();
+}
+fetch("/texts").then((response) => response.json()).then((texts) => { Object.assign(T, texts); draw(); }).catch(() => {});
+document.addEventListener("visibilitychange", () => { if (!document.hidden) loop(); });
+draw(); loop();
+</script>
+</body>
+</html>

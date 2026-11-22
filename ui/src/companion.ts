@@ -1,6 +1,6 @@
 // Things around the accounts: the Overview (every account at a glance), the
 // Notifications and Backup pages of Settings, and the feature guide shown once.
-import { ApiError, api, championIcon, type AccountOverview, type BackupView, type ChampionOverview, type Key, type NotifyView, type Overview } from "./api";
+import { ApiError, api, championIcon, events, type AccountOverview, type BackupView, type ChampionOverview, type Key, type NotifyView, type Overview, type RemoteView } from "./api";
 import { errorText, localeTag, t, tierName, type MessageKey } from "./i18n";
 import { $, esc, modal, toast } from "./dom";
 import { icon } from "./icons";
@@ -33,6 +33,66 @@ export function sendNotifyTexts(): void {
   const keys = ["decayTitle", "decayBody", "decayNowBody", "banTitle", "banBody", "recordingTitle", "recoveredTitle", "recoveredBody", "backupFailedTitle", "backupFailedBody", "testTitle", "testBody"];
   const texts = Object.fromEntries(keys.map((key) => [key, t(`notify.${key}` as MessageKey)]));
   void api.setNotifyTexts(texts).catch(() => undefined);
+}
+
+/** Give the phone page its texts in the interface language. */
+export function sendRemoteTexts(): void {
+  const keys = ["waiting", "waitingText", "found", "accept", "decline", "accepted", "declined", "ban", "pick", "soon", "wait", "done", "planning", "champions", "runes", "search", "lockBan", "lockPick", "pages", "spells", "auto", "autoDone", "failed", "pin", "pinWrong", "pinLocked", "pair", "none", "noPages", "autoOn", "acceptedAuto", "acceptNow", "primary", "secondary", "shards", "keep"];
+  const texts = Object.fromEntries(keys.map((key) => [key, t(`remote.p.${key}` as MessageKey)]));
+  void api.setRemoteTexts(texts).catch(() => undefined);
+}
+
+/** The note in the sidebar while the phone remote is on: where to find the page. */
+export function showRemoteNote(view: RemoteView): void {
+  const note = document.querySelector<HTMLElement>("#remote-note");
+  if (!note) return;
+  note.hidden = !view.enabled;
+  const set = (selector: string, text: string) => {
+    const element = note.querySelector<HTMLElement>(selector);
+    if (element) element.textContent = text;
+  };
+  set("strong", t(view.running ? "remote.noteLive" : "remote.noteOn"));
+  set("[data-remote-note-name]", view.name.replace(/^http:\/\//, ""));
+  set("[data-remote-note-ip]", view.address.replace(/^http:\/\//, ""));
+  note.classList.toggle("is-live", view.running);
+  note.dataset.tooltip = t("remote.noteHint");
+}
+
+/** Read the phone remote's state and show the sidebar note; keeps it current. */
+export function watchRemoteNote(): void {
+  const refresh = () => void api.remoteInfo().then(showRemoteNote).catch(() => undefined);
+  refresh();
+  void events.onRemoteStatus(refresh);
+}
+
+/** Settings › Phone remote. Saves at once. */
+export function remotePage(current: string): string {
+  return `
+    <section class="settings-page" data-settings-page="remote" ${current === "remote" ? "" : "hidden"} data-settings-ignore>
+      <h3 class="settings-page-title">${esc(t("settings.remote"))}</h3>
+      <p class="settings-note">${esc(t("remote.hint"))}</p>
+      ${switchRow("remoteEnabled", t("remote.enabled"), t("remote.enabledHint"))}
+      <div data-remote-details hidden>
+        <div class="companion-row">
+          <span class="toggle-text"><strong>${esc(t("remote.address"))}</strong><span class="remote-address" data-remote-name></span><span class="remote-address" data-remote-ip></span></span>
+          <span class="remote-buttons">
+            <button type="button" class="btn btn-ghost" data-remote-test>${esc(t("remote.test"))}</button>
+            <button type="button" class="btn btn-ghost" data-remote-open>${esc(t("remote.openNow"))}</button>
+          </span>
+        </div>
+        <p class="settings-note" data-remote-result hidden></p>
+        <div class="companion-row">
+          <span class="toggle-text"><strong>${esc(t("remote.pin"))}</strong><span>${esc(t("remote.pinHint"))}</span></span>
+          <span class="remote-pin" data-remote-pin></span>
+        </div>
+        <div class="companion-row">
+          <span class="toggle-text"><strong>${esc(t("remote.phones"))}</strong><span data-remote-paired></span></span>
+          <button type="button" class="btn btn-ghost" data-remote-forget>${esc(t("remote.forget"))}</button>
+        </div>
+        <p class="settings-note" data-remote-status></p>
+        <p class="settings-note">${esc(t("remote.firewall"))}</p>
+      </div>
+    </section>`;
 }
 
 // ---------------------------------------------------------------- settings pages
@@ -96,6 +156,16 @@ export function companionPages(current: string): string {
     </section>`;
 }
 
+/** Auto accept, shown on the Login page of Settings. Saves at once. */
+export function autoAcceptSection(): string {
+  return `
+    <div data-settings-ignore data-auto-accept>
+      ${switchRow("autoAccept", t("accept.enabled"), t("accept.hint"))}
+      <label class="field inline"><span>${esc(t("accept.delay"))}</span>
+        <div class="select-wrap"><select name="autoAcceptDelay">${[0, 1, 2, 3, 4, 5, 6].map((seconds) => `<option value="${seconds}">${esc(seconds ? t("accept.seconds", { n: seconds }) : t("accept.noDelay"))}</option>`).join("")}</select></div></label>
+    </div>`;
+}
+
 /** Ask for a new passphrase (typed twice). Null when cancelled. */
 async function askNewPassphrase(): Promise<string | null> {
   let value = "";
@@ -149,6 +219,72 @@ export async function askBackupPassphrase(): Promise<string | null> {
 export function wireCompanionSettings(root: HTMLElement): void {
   const field = <T extends HTMLElement>(selector: string) => root.querySelector<T>(selector);
   const failed = (error: unknown) => toast("error", t("toast.settingsFailed"), describe(error));
+
+  // Phone remote: saved at once.
+  const remote = field<HTMLInputElement>('[name="remoteEnabled"]');
+  const showRemote = (view: RemoteView) => {
+    showRemoteNote(view);
+    if (remote) remote.checked = view.enabled;
+    const details = field("[data-remote-details]");
+    if (details) details.hidden = !view.enabled;
+    const set = (selector: string, text: string) => {
+      const element = field(selector);
+      if (element) element.textContent = text;
+    };
+    set("[data-remote-name]", view.name);
+    set("[data-remote-ip]", view.address);
+    set("[data-remote-pin]", view.pin.replace(/(\d{3})(\d{3})/, "$1 $2"));
+    set("[data-remote-paired]", t("remote.paired", { count: view.paired }));
+    set("[data-remote-status]", t(view.running ? "remote.running" : "remote.sleeping"));
+  };
+  const loadRemote = () => void api.remoteInfo().then(showRemote).catch(() => undefined);
+  loadRemote();
+  remote?.addEventListener("change", () => void api.setRemoteEnabled(remote.checked).then(showRemote).catch(failed));
+  field("[data-remote-open]")?.addEventListener("click", () => void api.remoteOpen(5).then(showRemote).catch(failed));
+  field<HTMLButtonElement>("[data-remote-test]")?.addEventListener("click", (event) => {
+    const button = event.currentTarget as HTMLButtonElement;
+    const result = field("[data-remote-result]");
+    button.disabled = true;
+    if (result) {
+      result.hidden = false;
+      result.textContent = t("remote.testing");
+    }
+    void api
+      .remoteTest()
+      .then((test) => {
+        showRemote(test.view);
+        const address = test.view.address.replace(/^http:\/\//, "");
+        if (result) result.textContent = !test.page ? t("remote.testFail") : test.name ? t("remote.testOk", { address }) : t("remote.testNoName", { address });
+      })
+      .catch(failed)
+      .finally(() => (button.disabled = false));
+  });
+  field("[data-remote-forget]")?.addEventListener("click", () => void api.remoteReset(true).then(showRemote).catch(failed));
+  // The server starting or stopping while the window is open.
+  void events.onRemoteStatus(() => root.isConnected && loadRemote());
+
+  // Auto accept: saved at once.
+  const accept = field<HTMLInputElement>('[name="autoAccept"]');
+  const acceptDelay = field<HTMLSelectElement>('[name="autoAcceptDelay"]');
+  let fillingAccept = false;
+  void api
+    .autoAcceptPrefs()
+    .then((prefs) => {
+      fillingAccept = true;
+      if (accept) accept.checked = prefs.enabled;
+      if (acceptDelay) {
+        acceptDelay.value = String(prefs.delaySeconds);
+        acceptDelay.dispatchEvent(new Event("change"));
+      }
+      fillingAccept = false;
+    })
+    .catch(() => undefined);
+  const saveAccept = () => {
+    if (fillingAccept || !accept || !acceptDelay) return;
+    void api.setAutoAcceptPrefs(accept.checked, Number(acceptDelay.value)).catch(failed);
+  };
+  accept?.addEventListener("change", saveAccept);
+  acceptDelay?.addEventListener("change", saveAccept);
 
   // Notifications: each switch saves at once.
   const notifyInputs: [keyof NotifyView, string][] = [

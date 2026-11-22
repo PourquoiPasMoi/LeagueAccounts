@@ -591,6 +591,17 @@ export const api = {
   /** Writes a backup now; the file's path. */
   backupNow: () => call<string>("backup_now"),
   restoreBackup: (path: string, passphrase: string) => call<BatchResult>("restore_backup", { path, passphrase }),
+  remoteInfo: () => call<RemoteView>("remote_info"),
+  setRemoteEnabled: (enabled: boolean) => call<RemoteView>("set_remote_enabled", { enabled }),
+  /** A new PIN; `forget` also unpairs every phone. */
+  remoteReset: (forget: boolean) => call<RemoteView>("remote_reset", { forget }),
+  /** Keep the phone page reachable for some minutes outside champ select. */
+  remoteOpen: (minutes: number) => call<RemoteView>("remote_open", { minutes }),
+  /** Opens the page and checks from this PC that it answers and that the name is found. */
+  remoteTest: () => call<{ page: boolean; name: boolean; view: RemoteView }>("remote_test"),
+  setRemoteTexts: (texts: Record<string, string>) => call<void>("set_remote_texts", { texts }),
+  autoAcceptPrefs: () => call<AutoAcceptPrefs>("auto_accept_prefs"),
+  setAutoAcceptPrefs: (enabled: boolean, delaySeconds: number) => call<AutoAcceptPrefs>("set_auto_accept_prefs", { enabled, delaySeconds }),
   notifyPrefs: () => call<NotifyView>("notify_prefs"),
   setNotifyPrefs: (view: NotifyView) => call<NotifyView>("set_notify_prefs", { view }),
   /** The notification texts in the interface language. */
@@ -1052,6 +1063,25 @@ export interface BackupView {
   files: number;
 }
 
+/** The phone remote for champ select. */
+export interface RemoteView {
+  enabled: boolean;
+  pin: string;
+  paired: number;
+  running: boolean;
+  port: number;
+  /** "http://leaguecompanion.local" and the PC's own address. */
+  name: string;
+  address: string;
+}
+
+/** Accepting a found match automatically. */
+export interface AutoAcceptPrefs {
+  enabled: boolean;
+  /** Seconds before accepting (time to decline by hand). */
+  delaySeconds: number;
+}
+
 /** Which Windows notifications are on. */
 export interface NotifyView {
   decay: boolean;
@@ -1136,6 +1166,10 @@ export const events = {
     listen<ConvertStatus>("convert-status", (event) => handler(event.payload)),
   /** A recording or clip was saved or deleted. */
   onRecordingsChanged: (handler: () => void): Promise<UnlistenFn> => listen("recordings-changed", () => handler()),
+  /** The phone remote's server started or stopped. */
+  onRemoteStatus: (handler: (running: boolean) => void): Promise<UnlistenFn> => listen<boolean>("remote-status", (event) => handler(event.payload)),
+  /** A found match was accepted automatically. */
+  onMatchAccepted: (handler: () => void): Promise<UnlistenFn> => listen("match-accepted", () => handler()),
   /** Recordings cut short by a crash were repaired at start (how many). */
   onRecordingsRecovered: (handler: (count: number) => void): Promise<UnlistenFn> => listen<number>("recordings-recovered", (event) => handler(event.payload)),
   /** A game recording's end-of-game details were saved (its path). */
