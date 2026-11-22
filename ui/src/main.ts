@@ -34,7 +34,8 @@ import { watchTierNames } from "./fit";
 import { wireControlMotion } from "./motion";
 import { wireTooltips } from "./tooltips";
 import { failStartup, revealApp } from "./startup";
-import { checkUpdateNow, launchUpdate, wireUpdates } from "./update";
+import { availableRelease, checkUpdateNow, installUpdate, launchUpdate, wireUpdates } from "./update";
+import { openChangelog, showChangelogAfterUpdate } from "./changelog";
 import {
   APEX,
   TIER_ORDER,
@@ -1050,6 +1051,10 @@ async function openSettings(): Promise<void> {
           <span class="update-result"></span>
           <button type="button" class="btn btn-ghost" data-check-update>${icon("refresh-cw", 14)}${esc(t("settings.checkNow"))}</button>
         </div>
+        <div class="update-row">
+          <span>${esc(t("changelog.intro"))}</span>
+          <button type="button" class="btn btn-ghost" data-whats-new>${icon("list", 14)}${esc(t("changelog.button"))}</button>
+        </div>
         </section>
         <section class="settings-page" data-settings-page="login" ${settingsTab === "login" ? "" : "hidden"}>
           <h3 class="settings-page-title">${esc(t("settings.login"))}</h3>
@@ -1415,6 +1420,9 @@ async function openSettings(): Promise<void> {
         }
         const check = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-check-update]");
         if (check) void checkUpdateNow(check, $(".update-result", root));
+        if ((event.target as HTMLElement).closest("[data-whats-new]")) {
+          void openChangelog({ current: ($("#version").textContent ?? "").replace(/^v/, ""), upcoming: availableRelease(), install: installUpdate });
+        }
         const tool = (event.target as HTMLElement).closest<HTMLElement>("[data-tool]")?.dataset.tool;
         if (tool === "import") void importData();
         if (tool === "export") void exportData();
@@ -2304,7 +2312,10 @@ async function start(): Promise<void> {
   // First run: ask the user before anything else, in a language they chose.
   if (needsLanguageChoice()) await welcomeLanguage();
   // Once: what the app can do besides signing in (most of it is off until asked for).
-  if (guideDue()) void showGuide();
+  const firstRun = guideDue();
+  if (firstRun) void showGuide();
+  // After an update: what changed, once.
+  showChangelogAfterUpdate(boot.version, firstRun);
   // Opened during champ select: show the build right away.
   resumeChampSelect();
 }

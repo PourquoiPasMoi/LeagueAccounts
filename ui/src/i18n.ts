@@ -1287,6 +1287,15 @@ const en = {
   "rec.search": "Search champion, mode, result, note",
   "rec.searchNone": "No recording matches the search.",
   "stats.roleFilter": "Click to see only these games. Click again for every role.",
+  "changelog.title": "What's new",
+  "changelog.updated": "League Companion was updated to version {version}.",
+  "changelog.intro": "What changed in each version, newest first.",
+  "changelog.new": "New",
+  "changelog.installed": "Installed",
+  "changelog.available": "Version {version} is available",
+  "changelog.availableNote": "Not installed yet. These notes come from the release page, in English.",
+  "changelog.update": "Update now",
+  "changelog.button": "What's new",
 };
 
 type MessageKey = keyof typeof en;
@@ -2578,6 +2587,15 @@ const tr: Dict = {
   "rec.search": "Şampiyon, mod, sonuç, not ara",
   "rec.searchNone": "Aramayla eşleşen kayıt yok.",
   "stats.roleFilter": "Yalnızca bu oyunları görmek için tıkla. Tüm roller için tekrar tıkla.",
+  "changelog.title": "Yenilikler",
+  "changelog.updated": "League Companion {version} sürümüne güncellendi.",
+  "changelog.intro": "Her sürümde neler değişti, en yenisi en üstte.",
+  "changelog.new": "Yeni",
+  "changelog.installed": "Yüklü",
+  "changelog.available": "{version} sürümü mevcut",
+  "changelog.availableNote": "Henüz yüklenmedi. Bu notlar sürüm sayfasından gelir ve İngilizcedir.",
+  "changelog.update": "Şimdi güncelle",
+  "changelog.button": "Yenilikler",
 };
 
 const de: Dict = {
@@ -3866,6 +3884,15 @@ const de: Dict = {
   "rec.search": "Champion, Modus, Ergebnis, Notiz suchen",
   "rec.searchNone": "Keine Aufnahme passt zur Suche.",
   "stats.roleFilter": "Klicken, um nur diese Spiele zu sehen. Erneut klicken für alle Rollen.",
+  "changelog.title": "Neuigkeiten",
+  "changelog.updated": "League Companion wurde auf Version {version} aktualisiert.",
+  "changelog.intro": "Was sich in jeder Version geändert hat, die neueste zuerst.",
+  "changelog.new": "Neu",
+  "changelog.installed": "Installiert",
+  "changelog.available": "Version {version} ist verfügbar",
+  "changelog.availableNote": "Noch nicht installiert. Diese Hinweise stammen von der Release-Seite und sind auf Englisch.",
+  "changelog.update": "Jetzt aktualisieren",
+  "changelog.button": "Neuigkeiten",
 };
 
 const es: Dict = {
@@ -5154,6 +5181,15 @@ const es: Dict = {
   "rec.search": "Buscar campeón, modo, resultado, nota",
   "rec.searchNone": "Ninguna grabación coincide con la búsqueda.",
   "stats.roleFilter": "Haz clic para ver solo estas partidas. Otro clic para todos los roles.",
+  "changelog.title": "Novedades",
+  "changelog.updated": "League Companion se actualizó a la versión {version}.",
+  "changelog.intro": "Lo que cambió en cada versión, la más reciente primero.",
+  "changelog.new": "Nuevo",
+  "changelog.installed": "Instalada",
+  "changelog.available": "La versión {version} está disponible",
+  "changelog.availableNote": "Aún no instalada. Estas notas vienen de la página de la versión, en inglés.",
+  "changelog.update": "Actualizar ahora",
+  "changelog.button": "Novedades",
 };
 
 const fr: Dict = {
@@ -6442,6 +6478,15 @@ const fr: Dict = {
   "rec.search": "Rechercher champion, mode, résultat, note",
   "rec.searchNone": "Aucun enregistrement ne correspond à la recherche.",
   "stats.roleFilter": "Cliquez pour ne voir que ces parties. Cliquez de nouveau pour tous les rôles.",
+  "changelog.title": "Nouveautés",
+  "changelog.updated": "League Companion a été mis à jour vers la version {version}.",
+  "changelog.intro": "Ce qui a changé dans chaque version, la plus récente en premier.",
+  "changelog.new": "Nouveau",
+  "changelog.installed": "Installée",
+  "changelog.available": "La version {version} est disponible",
+  "changelog.availableNote": "Pas encore installée. Ces notes viennent de la page de la version, en anglais.",
+  "changelog.update": "Mettre à jour",
+  "changelog.button": "Nouveautés",
 };
 
 const pt: Dict = {
@@ -7730,6 +7775,15 @@ const pt: Dict = {
   "rec.search": "Procurar campeão, modo, resultado, nota",
   "rec.searchNone": "Nenhuma gravação corresponde à pesquisa.",
   "stats.roleFilter": "Clica para ver só estas partidas. Clica de novo para todas as funções.",
+  "changelog.title": "Novidades",
+  "changelog.updated": "O League Companion foi atualizado para a versão {version}.",
+  "changelog.intro": "O que mudou em cada versão, a mais recente primeiro.",
+  "changelog.new": "Novo",
+  "changelog.installed": "Instalada",
+  "changelog.available": "A versão {version} está disponível",
+  "changelog.availableNote": "Ainda não instalada. Estas notas vêm da página da versão, em inglês.",
+  "changelog.update": "Atualizar agora",
+  "changelog.button": "Novidades",
 };
 
 const zh: Dict = {
@@ -9001,6 +9055,15 @@ const zh: Dict = {
   "rec.search": "搜索英雄、模式、结果、笔记",
   "rec.searchNone": "没有符合搜索的录像。",
   "stats.roleFilter": "点击只看这些对局，再次点击显示所有位置。",
+  "changelog.title": "更新内容",
+  "changelog.updated": "League Companion 已更新到 {version} 版本。",
+  "changelog.intro": "各版本的更新内容，最新的在最前面。",
+  "changelog.new": "新",
+  "changelog.installed": "当前版本",
+  "changelog.available": "有新版本 {version}",
+  "changelog.availableNote": "尚未安装。以下说明来自发布页面，为英文。",
+  "changelog.update": "立即更新",
+  "changelog.button": "更新内容",
 };
 
 const zhTw: Dict = {
@@ -10272,6 +10335,15 @@ const zhTw: Dict = {
   "rec.search": "搜尋英雄、模式、結果、筆記",
   "rec.searchNone": "沒有符合搜尋的錄影。",
   "stats.roleFilter": "點擊只看這些對戰，再次點擊顯示所有位置。",
+  "changelog.title": "更新內容",
+  "changelog.updated": "League Companion 已更新到 {version} 版本。",
+  "changelog.intro": "各版本的更新內容，最新的在最前面。",
+  "changelog.new": "新",
+  "changelog.installed": "目前版本",
+  "changelog.available": "有新版本 {version}",
+  "changelog.availableNote": "尚未安裝。以下說明來自發佈頁面，為英文。",
+  "changelog.update": "立即更新",
+  "changelog.button": "更新內容",
 };
 
 export const LANGUAGES = [

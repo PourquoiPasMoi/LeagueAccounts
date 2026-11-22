@@ -1,0 +1,496 @@
+[
+ {
+  "version": "5.9.0",
+  "date": "2026-11-22",
+  "items": {
+   "en": [
+    "A What's new window: it opens once after each update and stays in Settings, under Updates."
+   ],
+   "tr": [
+    "Yenilikler penceresi: her güncellemeden sonra bir kez açılır ve Ayarlar'da, Güncellemeler altında durur."
+   ],
+   "de": [
+    "Ein Fenster „Neuigkeiten“: Es öffnet sich einmal nach jedem Update und bleibt in den Einstellungen unter Updates."
+   ],
+   "es": [
+    "Una ventana de novedades: se abre una vez tras cada actualización y sigue en Ajustes, en Actualizaciones."
+   ],
+   "fr": [
+    "Une fenêtre Nouveautés : elle s'ouvre une fois après chaque mise à jour et reste dans Paramètres, sous Mises à jour."
+   ],
+   "pt": [
+    "Uma janela de novidades: abre uma vez depois de cada atualização e fica em Definições, em Atualizações."
+   ],
+   "zh": [
+    "新增“更新内容”窗口：每次更新后打开一次，之后可在 设置 的 更新 中查看。"
+   ],
+   "zhTw": [
+    "新增「更新內容」視窗：每次更新後開啟一次，之後可在 設定 的 更新 中查看。"
+   ]
+  }
+ },
+ {
+  "version": "5.8.1",
+  "date": "2026-11-22",
+  "items": {
+   "en": [
+    "Launch when Windows starts works again, and Start minimized with it."
+   ],
+   "tr": [
+    "Windows açılışında başlatma yeniden çalışıyor, onunla birlikte Küçültülmüş başlat da."
+   ],
+   "de": [
+    "Der Start mit Windows funktioniert wieder, und damit auch „Minimiert starten“."
+   ],
+   "es": [
+    "Iniciar con Windows vuelve a funcionar, y con ello Iniciar minimizado."
+   ],
+   "fr": [
+    "Le lancement au démarrage de Windows fonctionne de nouveau, ainsi que le démarrage réduit."
+   ],
+   "pt": [
+    "Iniciar com o Windows volta a funcionar, e com isso Iniciar minimizado."
+   ],
+   "zh": [
+    "修复了随 Windows 启动的问题，“启动时最小化”也随之恢复。"
+   ],
+   "zhTw": [
+    "修復了隨 Windows 啟動的問題，「啟動時最小化」也隨之恢復。"
+   ]
+  }
+ },
+ {
+  "version": "5.8.0",
+  "date": "2026-11-22",
+  "items": {
+   "en": [
+    "A new look for the account page: Overview and Stats, with smooth motion.",
+    "In Stats, click a role to see only the games you played there.",
+    "A 24-hour chart shows at what time of day you play and win."
+   ],
+   "tr": [
+    "Hesap sayfası için yeni görünüm: Genel bakış ve İstatistikler, akıcı hareketlerle.",
+    "İstatistikler'de bir role tıkla, yalnızca o rolde oynadığın oyunları gör.",
+    "24 saatlik grafik, günün hangi saatinde oynadığını ve kazandığını gösterir."
+   ],
+   "de": [
+    "Neues Aussehen der Kontoseite: Übersicht und Statistiken, mit sanften Animationen.",
+    "Klicke in den Statistiken auf eine Rolle, um nur die Spiele auf dieser Rolle zu sehen.",
+    "Ein 24-Stunden-Diagramm zeigt, zu welcher Tageszeit du spielst und gewinnst."
+   ],
+   "es": [
+    "Nuevo aspecto de la página de cuenta: Resumen y Estadísticas, con movimiento suave.",
+    "En Estadísticas, haz clic en un rol para ver solo las partidas jugadas en él.",
+    "Un gráfico de 24 horas muestra a qué hora del día juegas y ganas."
+   ],
+   "fr": [
+    "Nouvelle apparence de la page de compte : Vue d'ensemble et Statistiques, avec des animations fluides.",
+    "Dans Statistiques, cliquez sur un rôle pour ne voir que les parties jouées à ce poste.",
+    "Un graphique sur 24 heures montre à quelle heure vous jouez et gagnez."
+   ],
+   "pt": [
+    "Novo aspeto da página da conta: Visão geral e Estatísticas, com movimento suave.",
+    "Em Estatísticas, clica numa função para ver só as partidas jogadas nela.",
+    "Um gráfico de 24 horas mostra a que horas do dia jogas e ganhas."
+   ],
+   "zh": [
+    "账号页面全新外观：概览和统计，并加入流畅的动画。",
+    "在统计中点击某个位置，只查看该位置的对局。",
+    "24 小时图表显示你在一天中哪些时段游戏和获胜。"
+   ],
+   "zhTw": [
+    "帳號頁面全新外觀：概覽和統計，並加入流暢的動畫。",
+    "在統計中點擊某個位置，只查看該位置的對戰。",
+    "24 小時圖表顯示你在一天中哪些時段遊玩和獲勝。"
+   ]
+  }
+ },
+ {
+  "version": "5.7.0",
+  "date": "2026-11-22",
+  "items": {
+   "en": [
+    "Recordings survive a crash or a power cut: the game is repaired at the next start.",
+    "Encrypted backup of your accounts to a folder you choose (Settings, Backup).",
+    "Windows notifications: LP decay coming up, a suspension that ended, a recording saved.",
+    "Overview of all accounts: LP won today and this week, games, and your champions.",
+    "Write notes on a recording while watching, and search your recordings."
+   ],
+   "tr": [
+    "Kayıtlar çökmeye ya da elektrik kesintisine dayanır: oyun bir sonraki açılışta onarılır.",
+    "Hesaplarının seçtiğin bir klasöre şifreli yedeği (Ayarlar, Yedekleme).",
+    "Windows bildirimleri: yaklaşan LP düşüşü, biten uzaklaştırma, kaydedilen kayıt.",
+    "Tüm hesaplara genel bakış: bugün ve bu hafta kazanılan LP, oyunlar ve şampiyonların.",
+    "İzlerken bir kayda not yaz ve kayıtlarında arama yap."
+   ],
+   "de": [
+    "Aufnahmen überstehen einen Absturz oder Stromausfall: Das Spiel wird beim nächsten Start repariert.",
+    "Verschlüsselte Sicherung deiner Konten in einem Ordner deiner Wahl (Einstellungen, Sicherung).",
+    "Windows-Benachrichtigungen: bevorstehender LP-Verfall, beendete Sperre, gespeicherte Aufnahme.",
+    "Übersicht aller Konten: heute und diese Woche gewonnene LP, Spiele und deine Champions.",
+    "Schreibe beim Ansehen Notizen zu einer Aufnahme und durchsuche deine Aufnahmen."
+   ],
+   "es": [
+    "Las grabaciones sobreviven a un fallo o a un corte de luz: la partida se repara en el siguiente inicio.",
+    "Copia cifrada de tus cuentas en la carpeta que elijas (Ajustes, Copia de seguridad).",
+    "Notificaciones de Windows: decaimiento de PL cercano, suspensión terminada, grabación guardada.",
+    "Resumen de todas las cuentas: PL ganados hoy y esta semana, partidas y tus campeones.",
+    "Escribe notas en una grabación mientras la ves y busca entre tus grabaciones."
+   ],
+   "fr": [
+    "Les enregistrements survivent à un plantage ou à une coupure de courant : la partie est réparée au prochain démarrage.",
+    "Sauvegarde chiffrée de vos comptes dans le dossier de votre choix (Paramètres, Sauvegarde).",
+    "Notifications Windows : déclin de LP imminent, suspension terminée, enregistrement sauvegardé.",
+    "Vue d'ensemble de tous les comptes : LP gagnés aujourd'hui et cette semaine, parties et vos champions.",
+    "Écrivez des notes sur un enregistrement pendant le visionnage, et recherchez dans vos enregistrements."
+   ],
+   "pt": [
+    "As gravações sobrevivem a uma falha ou a um corte de energia: a partida é reparada no arranque seguinte.",
+    "Cópia cifrada das tuas contas numa pasta à tua escolha (Definições, Cópia de segurança).",
+    "Notificações do Windows: decaimento de PL em breve, suspensão terminada, gravação guardada.",
+    "Visão geral de todas as contas: PL ganhos hoje e esta semana, partidas e os teus campeões.",
+    "Escreve notas numa gravação enquanto a vês e procura nas tuas gravações."
+   ],
+   "zh": [
+    "录像不再怕崩溃或断电：下次启动时会自动修复。",
+    "把账号加密备份到你选择的文件夹（设置，备份）。",
+    "Windows 通知：LP 即将衰减、封禁结束、录像已保存。",
+    "所有账号总览：今天和本周的 LP 变化、对局和常用英雄。",
+    "观看录像时可以写笔记，并可搜索录像。"
+   ],
+   "zhTw": [
+    "錄影不再怕當機或斷電：下次啟動時會自動修復。",
+    "把帳號加密備份到你選擇的資料夾（設定，備份）。",
+    "Windows 通知：LP 即將衰退、停權結束、錄影已儲存。",
+    "所有帳號總覽：今天和本週的 LP 變化、對戰和常用英雄。",
+    "觀看錄影時可以寫筆記，並可搜尋錄影。"
+   ]
+  }
+ },
+ {
+  "version": "5.6.0",
+  "date": "2026-11-19",
+  "items": {
+   "en": [
+    "A music player with your YouTube playlists, with a small player in the sidebar and in the tray.",
+    "Press a key during a game to bookmark the moment in the recording (F8).",
+    "Music loads gently, so a slow connection does not lag in game when a song starts."
+   ],
+   "tr": [
+    "YouTube çalma listelerinle müzik çalar; kenar çubuğunda ve tepside küçük bir oynatıcı.",
+    "Oyun sırasında bir tuşa basarak o anı kayıtta işaretle (F8).",
+    "Müzik yavaşça yüklenir; yavaş bağlantıda şarkı başlarken oyun takılmaz."
+   ],
+   "de": [
+    "Ein Musikplayer mit deinen YouTube-Playlists, mit kleinem Player in der Seitenleiste und im Infobereich.",
+    "Drücke im Spiel eine Taste, um den Moment in der Aufnahme zu markieren (F8).",
+    "Musik lädt schonend, damit eine langsame Verbindung beim Songstart im Spiel nicht hängt."
+   ],
+   "es": [
+    "Un reproductor de música con tus listas de YouTube, con un pequeño reproductor en la barra lateral y en la bandeja.",
+    "Pulsa una tecla durante la partida para marcar el momento en la grabación (F8).",
+    "La música se carga con suavidad para que una conexión lenta no dé tirones en partida al empezar una canción."
+   ],
+   "fr": [
+    "Un lecteur de musique avec vos playlists YouTube, avec un petit lecteur dans la barre latérale et la zone de notification.",
+    "Appuyez sur une touche en partie pour marquer le moment dans l'enregistrement (F8).",
+    "La musique se charge en douceur : une connexion lente ne saccade plus en jeu au début d'un morceau."
+   ],
+   "pt": [
+    "Um leitor de música com as tuas listas do YouTube, com um pequeno leitor na barra lateral e na bandeja.",
+    "Carrega numa tecla durante a partida para marcar o momento na gravação (F8).",
+    "A música carrega com suavidade, para uma ligação lenta não engasgar no jogo quando começa uma canção."
+   ],
+   "zh": [
+    "音乐播放器：播放你的 YouTube 播放列表，侧边栏和托盘都有迷你播放器。",
+    "对局中按下快捷键即可在录像中标记这一刻（F8）。",
+    "音乐平稳加载，网速较慢时切歌也不会影响游戏。"
+   ],
+   "zhTw": [
+    "音樂播放器：播放你的 YouTube 播放清單，側邊欄和系統匣都有迷你播放器。",
+    "對戰中按下快速鍵即可在錄影中標記這一刻（F8）。",
+    "音樂平穩載入，網速較慢時切歌也不會影響遊戲。"
+   ]
+  }
+ },
+ {
+  "version": "5.5.0",
+  "date": "2026-11-18",
+  "items": {
+   "en": [
+    "Game settings: every option has its own control, laid out like the in-game Options and in your language."
+   ],
+   "tr": [
+    "Oyun ayarları: her seçeneğin kendi denetimi var; oyun içi Seçenekler gibi düzenli ve kendi dilinde."
+   ],
+   "de": [
+    "Spieleinstellungen: Jede Option hat ihr eigenes Bedienelement, angeordnet wie die Optionen im Spiel und in deiner Sprache."
+   ],
+   "es": [
+    "Ajustes del juego: cada opción tiene su propio control, ordenado como las Opciones del juego y en tu idioma."
+   ],
+   "fr": [
+    "Paramètres du jeu : chaque option a son propre contrôle, organisé comme les Options du jeu et dans votre langue."
+   ],
+   "pt": [
+    "Configurações do jogo: cada opção tem o seu controlo, organizado como as Opções do jogo e na tua língua."
+   ],
+   "zh": [
+    "游戏设置：每个选项都有对应的控件，布局与游戏内选项一致，并使用你的语言。"
+   ],
+   "zhTw": [
+    "遊戲設定：每個選項都有對應的控制項，版面與遊戲內選項一致，並使用你的語言。"
+   ]
+  }
+ },
+ {
+  "version": "5.4.0",
+  "date": "2026-11-17",
+  "items": {
+   "en": [
+    "Recording player: slow motion and speed up to 2×, keyboard shortcuts, and a mute button for each sound."
+   ],
+   "tr": [
+    "Kayıt oynatıcı: ağır çekim ve 2×'e kadar hız, klavye kısayolları ve her ses için sessize alma."
+   ],
+   "de": [
+    "Aufnahme-Player: Zeitlupe und bis zu 2× Tempo, Tastenkürzel und eine Stummtaste pro Tonspur."
+   ],
+   "es": [
+    "Reproductor de grabaciones: cámara lenta y hasta 2×, atajos de teclado y un botón de silencio para cada sonido."
+   ],
+   "fr": [
+    "Lecteur d'enregistrements : ralenti et vitesse jusqu'à 2×, raccourcis clavier et un bouton muet par piste."
+   ],
+   "pt": [
+    "Leitor de gravações: câmara lenta e até 2×, atalhos de teclado e um botão de silêncio para cada som."
+   ],
+   "zh": [
+    "录像播放器：慢放和最高 2 倍速、键盘快捷键，每路声音可单独静音。"
+   ],
+   "zhTw": [
+    "錄影播放器：慢動作和最高 2 倍速、鍵盤快速鍵，每路聲音可單獨靜音。"
+   ]
+  }
+ },
+ {
+  "version": "5.3.0",
+  "date": "2026-11-17",
+  "items": {
+   "en": [
+    "Video settings (resolution, quality) in Game settings.",
+    "Highlight reels: one clip with your best moments of a game.",
+    "A countdown on account cards before LP decay."
+   ],
+   "tr": [
+    "Oyun ayarlarında video ayarları (çözünürlük, kalite).",
+    "Öne çıkanlar: bir oyundaki en iyi anlarınla tek bir klip.",
+    "Hesap kartlarında LP düşüşüne kadar geri sayım."
+   ],
+   "de": [
+    "Videoeinstellungen (Auflösung, Qualität) in den Spieleinstellungen.",
+    "Highlight-Clips: ein Clip mit deinen besten Momenten eines Spiels.",
+    "Ein Countdown auf den Kontokarten bis zum LP-Verfall."
+   ],
+   "es": [
+    "Ajustes de vídeo (resolución, calidad) en Ajustes del juego.",
+    "Resúmenes: un clip con tus mejores momentos de una partida.",
+    "Una cuenta atrás en las tarjetas de cuenta antes del decaimiento de PL."
+   ],
+   "fr": [
+    "Réglages vidéo (résolution, qualité) dans les Paramètres du jeu.",
+    "Temps forts : un clip avec vos meilleurs moments d'une partie.",
+    "Un compte à rebours sur les cartes de compte avant le déclin de LP."
+   ],
+   "pt": [
+    "Definições de vídeo (resolução, qualidade) nas Configurações do jogo.",
+    "Melhores momentos: um clip com os teus melhores momentos de uma partida.",
+    "Uma contagem decrescente nos cartões de conta antes do decaimento de PL."
+   ],
+   "zh": [
+    "游戏设置中新增视频设置（分辨率、画质）。",
+    "精彩集锦：把一场对局的高光时刻合成一个片段。",
+    "账号卡片上显示 LP 衰减倒计时。"
+   ],
+   "zhTw": [
+    "遊戲設定中新增影像設定（解析度、畫質）。",
+    "精彩集錦：把一場對戰的精彩時刻合成一個片段。",
+    "帳號卡片上顯示 LP 衰退倒數。"
+   ]
+  }
+ },
+ {
+  "version": "5.2.0",
+  "date": "2026-11-16",
+  "items": {
+   "en": [
+    "Smaller recordings with AV1, and Save space to shrink the ones you already have.",
+    "Rules per game mode: what to record and how long to keep it.",
+    "The end-of-game screen is recorded too."
+   ],
+   "tr": [
+    "AV1 ile daha küçük kayıtlar ve eldekileri küçültmek için Yer aç.",
+    "Oyun moduna göre kurallar: ne kaydedilecek ve ne kadar saklanacak.",
+    "Oyun sonu ekranı da kaydedilir."
+   ],
+   "de": [
+    "Kleinere Aufnahmen mit AV1 und „Platz sparen“, um vorhandene zu verkleinern.",
+    "Regeln pro Spielmodus: was aufgenommen und wie lange es behalten wird.",
+    "Auch der Bildschirm nach Spielende wird aufgenommen."
+   ],
+   "es": [
+    "Grabaciones más pequeñas con AV1 y Ahorrar espacio para reducir las que ya tienes.",
+    "Reglas por modo de juego: qué grabar y cuánto tiempo conservarlo.",
+    "También se graba la pantalla de fin de partida."
+   ],
+   "fr": [
+    "Des enregistrements plus légers avec AV1, et Gagner de la place pour réduire ceux que vous avez déjà.",
+    "Des règles par mode de jeu : quoi enregistrer et combien de temps le garder.",
+    "L'écran de fin de partie est enregistré lui aussi."
+   ],
+   "pt": [
+    "Gravações mais pequenas com AV1 e Poupar espaço para reduzir as que já tens.",
+    "Regras por modo de jogo: o que gravar e durante quanto tempo guardar.",
+    "O ecrã de fim de partida também é gravado."
+   ],
+   "zh": [
+    "使用 AV1 让录像更小，并可用“节省空间”压缩已有录像。",
+    "按游戏模式设置规则：录制哪些模式、保留多久。",
+    "结算画面也会被录制。"
+   ],
+   "zhTw": [
+    "使用 AV1 讓錄影更小，並可用「節省空間」壓縮已有錄影。",
+    "依遊戲模式設定規則：錄製哪些模式、保留多久。",
+    "結算畫面也會被錄製。"
+   ]
+  }
+ },
+ {
+  "version": "5.1.0",
+  "date": "2026-11-15",
+  "items": {
+   "en": [
+    "Recordings start at champ select and continue into the game, in one video."
+   ],
+   "tr": [
+    "Kayıtlar şampiyon seçiminde başlar ve oyuna tek videoda devam eder."
+   ],
+   "de": [
+    "Aufnahmen beginnen in der Championauswahl und laufen im Spiel weiter, in einem Video."
+   ],
+   "es": [
+    "Las grabaciones empiezan en la selección de campeón y siguen en la partida, en un solo vídeo."
+   ],
+   "fr": [
+    "Les enregistrements commencent à la sélection des champions et continuent en jeu, dans une seule vidéo."
+   ],
+   "pt": [
+    "As gravações começam na seleção de campeões e continuam na partida, num só vídeo."
+   ],
+   "zh": [
+    "录像从英雄选择开始，并延续到对局，合成一个视频。"
+   ],
+   "zhTw": [
+    "錄影從英雄選擇開始，並延續到對戰，合成一個影片。"
+   ]
+  }
+ },
+ {
+  "version": "5.0.0",
+  "date": "2026-11-15",
+  "items": {
+   "en": [
+    "A new design for the whole app: dark, simple and rounded."
+   ],
+   "tr": [
+    "Tüm uygulama için yeni tasarım: koyu, sade ve yuvarlak hatlı."
+   ],
+   "de": [
+    "Ein neues Design für die ganze App: dunkel, schlicht und abgerundet."
+   ],
+   "es": [
+    "Un nuevo diseño para toda la app: oscuro, sencillo y redondeado."
+   ],
+   "fr": [
+    "Un nouveau design pour toute l'application : sombre, simple et arrondi."
+   ],
+   "pt": [
+    "Um novo design para toda a app: escuro, simples e arredondado."
+   ],
+   "zh": [
+    "整个应用采用全新设计：深色、简洁、圆润。"
+   ],
+   "zhTw": [
+    "整個應用程式採用全新設計：深色、簡潔、圓潤。"
+   ]
+  }
+ },
+ {
+  "version": "4.4.0",
+  "date": "2026-11-13",
+  "items": {
+   "en": [
+    "Game recorder: every game recorded with your key moments, clips, and posting to Discord."
+   ],
+   "tr": [
+    "Oyun kaydedici: her oyun önemli anlarınla kaydedilir; klipler ve Discord'a gönderme."
+   ],
+   "de": [
+    "Spielaufnahme: Jedes Spiel wird mit deinen Schlüsselmomenten aufgenommen, dazu Clips und Posten auf Discord."
+   ],
+   "es": [
+    "Grabador de partidas: cada partida grabada con tus momentos clave, clips y publicación en Discord."
+   ],
+   "fr": [
+    "Enregistreur de parties : chaque partie enregistrée avec vos moments clés, des clips et l'envoi sur Discord."
+   ],
+   "pt": [
+    "Gravador de partidas: cada partida gravada com os teus momentos-chave, clips e publicação no Discord."
+   ],
+   "zh": [
+    "对局录制：自动录制每场对局并标记关键时刻，可剪辑片段并发布到 Discord。"
+   ],
+   "zhTw": [
+    "對戰錄製：自動錄製每場對戰並標記關鍵時刻，可剪輯片段並發佈到 Discord。"
+   ]
+  }
+ },
+ {
+  "version": "4.0.0",
+  "date": "2026-11-10",
+  "items": {
+   "en": [
+    "A page for every account: ranks, rank history, stats, champions and skins, and what the account is worth.",
+    "One set of game settings shared by all your accounts."
+   ],
+   "tr": [
+    "Her hesap için bir sayfa: ranklar, rank geçmişi, istatistikler, şampiyonlar ve kostümler, hesabın değeri.",
+    "Tüm hesapların için ortak tek bir oyun ayarı."
+   ],
+   "de": [
+    "Eine Seite für jedes Konto: Ränge, Rangverlauf, Statistiken, Champions und Skins und der Wert des Kontos.",
+    "Ein Satz Spieleinstellungen für alle deine Konten."
+   ],
+   "es": [
+    "Una página para cada cuenta: rangos, historial, estadísticas, campeones y aspectos, y lo que vale la cuenta.",
+    "Un solo conjunto de ajustes del juego para todas tus cuentas."
+   ],
+   "fr": [
+    "Une page par compte : rangs, historique, statistiques, champions et skins, et la valeur du compte.",
+    "Un seul jeu de paramètres pour tous vos comptes."
+   ],
+   "pt": [
+    "Uma página para cada conta: ranks, histórico, estatísticas, campeões e skins, e quanto vale a conta.",
+    "Um só conjunto de configurações do jogo para todas as tuas contas."
+   ],
+   "zh": [
+    "每个账号都有专属页面：段位、段位历史、统计、英雄与皮肤，以及账号价值。",
+    "所有账号共用一套游戏设置。"
+   ],
+   "zhTw": [
+    "每個帳號都有專屬頁面：牌位、牌位歷史、統計、英雄與造型，以及帳號價值。",
+    "所有帳號共用一套遊戲設定。"
+   ]
+  }
+ }
+]

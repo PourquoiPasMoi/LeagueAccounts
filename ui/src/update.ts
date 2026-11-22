@@ -5,6 +5,7 @@ import { ApiError, api, events, type Release, type UpdateStatus } from "./api";
 import { $, esc, fragment, leave, toast } from "./dom";
 import { errorText, lang, t } from "./i18n";
 import { icon } from "./icons";
+import { openChangelog } from "./changelog";
 
 const DISMISSED_UPDATE = "leagueaccounts.dismissedUpdate";
 /** Hold the loading screen up to this long from the start of the launch check. */
@@ -259,6 +260,24 @@ function askToRestart(): void {
 // ---------------------------------------------------------------- download banner
 
 /** A newer release that wasn't installed yet: Update now downloads and installs it here. */
+/** A release newer than the running version that is not installed yet. */
+export function availableRelease(): Release | null {
+  return current && (current.phase === "available" || current.phase === "failed") ? current.release : null;
+}
+
+/** Download and install the waiting release (the same as the banner's button). */
+export function installUpdate(): void {
+  silent = false;
+  document.querySelector(".update-banner:not([data-update-progress])")?.remove();
+  api.checkUpdate().then(apply, (error) => toast("error", t("toast.updateFailed"), describe(error), 5000));
+}
+
+/** The What's new window with the waiting release on top. */
+function showWhatsNew(): void {
+  if (!current) return;
+  void openChangelog({ current: current.current, upcoming: availableRelease(), install: installUpdate });
+}
+
 export function showUpdateBanner(release: Release, failed = false): void {
   if (!failed) {
     try {
@@ -274,6 +293,7 @@ export function showUpdateBanner(release: Release, failed = false): void {
         <strong>${esc(t(failed ? "update.failedTitle" : "update.available"))}</strong>
         <span>${esc(t(failed ? "update.failedText" : "update.text", { version: release.version }))}</span>
       </div>
+      ${failed ? "" : `<button class="btn btn-ghost" data-update="notes">${esc(t("changelog.button"))}</button>`}
       <button class="btn btn-primary" data-update="install">${icon("download", 15)}${esc(t(failed ? "update.retry" : "update.installNow"))}</button>
       <button class="icon-btn" data-update="later" aria-label="${esc(t("update.later"))}" data-tooltip="${esc(t("update.later"))}">${icon("x")}</button>
     </div>`);
@@ -285,6 +305,7 @@ export function showUpdateBanner(release: Release, failed = false): void {
       void leave(banner, "toast-out");
       api.checkUpdate().then(apply, (error) => toast("error", t("toast.updateFailed"), describe(error), 5000));
     }
+    if (action === "notes") showWhatsNew();
     if (action === "later") {
       try {
         localStorage.setItem(DISMISSED_UPDATE, release.version);

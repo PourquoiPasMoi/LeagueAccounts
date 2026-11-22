@@ -64,3 +64,25 @@
 .guide-text span { font-size: 12.5px; line-height: 17px; color: var(--text-2); }
 .guide-row .btn { height: 30px; padding: 0 12px; font-size: 12px; white-space: nowrap; }
 .guide-row .guide-switch { padding: 0; gap: 0; background: none; }
+
+/* What's new */
+.changelog-modal { width: min(680px, 100%); }
+.cl-list { display: flex; flex-direction: column; gap: 10px; }
+.cl-entry { padding: 16px 18px; border-radius: var(--r-lg); border: 1px solid var(--line); background: rgb(var(--tint-rgb) / .032); animation: cl-rise .55s var(--ease) both; animation-delay: calc(var(--k, 0) * 55ms); }
+@keyframes cl-rise { from { opacity: 0; transform: translateY(12px); } }
+.cl-entry header { display: flex; align-items: baseline; gap: 10px; margin-bottom: 10px; }
+.cl-entry header b { font: 700 17px/1.2 var(--font-display); letter-spacing: -.02em; color: var(--text); font-variant-numeric: tabular-nums; }
+.cl-entry header span { margin-left: auto; font-size: 12px; color: var(--text-3); }
+.cl-tag { font-style: normal; padding: 3px 9px; border-radius: 999px; font-size: 11px; font-weight: 600; color: var(--text-2); background: var(--fill-2); }
+.cl-tag.is-new { color: var(--on-accent); background: var(--accent); }
+.cl-entry.is-new { border-color: rgb(var(--accent-rgb) / .45); background: linear-gradient(135deg, rgb(var(--accent-rgb) / .1), rgb(var(--tint-rgb) / .03) 55%); }
+.cl-items { display: flex; flex-direction: column; gap: 8px; }
+.cl-items p { margin: 0; }
+.cl-item { padding-left: 14px; border-left: 2px solid var(--line-2); font-size: 13.5px; line-height: 20px; color: var(--text-soft); }
+.cl-entry.is-new .cl-item, .cl-upcoming .cl-item { border-left-color: rgb(var(--accent-rgb) / .6); }
+.cl-items h4 { margin: 4px 0 0; font: 600 13px/1.3 var(--font-display); color: var(--text); }
+.cl-text { font-size: 13px; line-height: 19px; color: var(--text-2); }
+.cl-upcoming { border-color: rgb(var(--accent-rgb) / .45); }
+.cl-upcoming .btn { margin-top: 14px; }
+.cl-note { margin: 0 0 10px; font-size: 12px; color: var(--text-3); }
+@media (prefers-reduced-motion: reduce) { .cl-entry { animation: none; } }

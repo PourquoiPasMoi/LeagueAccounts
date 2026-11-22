@@ -176,6 +176,7 @@ Off by default. Turn it on in Settings › Experimental. It is still under devel
 
 - Closing the window keeps the app in the system tray; quit from the tray icon's menu.
 - A short feature guide is shown once and stays in Settings › Accounts and tools.
+- What's new: after each update a window lists what changed, in plain words and in your language. It stays in Settings › Updates, and shows a waiting update's notes with a button to install it.
 - Since v5.8.0 the account page's Overview and Stats tabs have a new layout with motion: panels come in as you scroll, bars grow, numbers count up, the rank line draws itself. In Stats, click a role to see only those games. Nothing moves when Windows is set to reduce motion.
 - Settings opens on side tabs like the League client, and the sidebar lists Recordings, Game settings and Settings above the total value.
 - The account that is signed in right now gets a teal frame and a Connected or Playing badge, and its Log in button is disabled.
