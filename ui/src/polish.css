@@ -110,3 +110,114 @@ body { background: transparent; }
 .modal.match-modal { width: min(1180px, 100%); max-width: none; }
 .match-details { min-height: 320px; }
 .match-details-note { margin: 0; padding: 48px 0; text-align: center; color: var(--text-2); font-size: 13px; }
+
+/* ---------------------------------------------------------------- account page
+   The same ground as the main page (colour, Summoner's Rift), a header that says who this is
+   at a glance, and two columns: rank and champions on the left, the games on the right. */
+.profile-overlay:not(.finder-overlay) { background: linear-gradient(180deg, var(--bg-2), var(--bg)); }
+.profile-overlay:not(.finder-overlay)::before { content: ""; position: absolute; inset: 0; pointer-events: none; background: url("/rift.webp") center 38% / cover no-repeat; opacity: .16; -webkit-mask-image: linear-gradient(180deg, #000 0%, #000 60%, transparent 100%); mask-image: linear-gradient(180deg, #000 0%, #000 60%, transparent 100%); }
+.profile-overlay:not(.finder-overlay) .profile-page { position: relative; border: 0; border-radius: 0; background: none; box-shadow: none; }
+.profile-overlay:not(.finder-overlay) .profile-head { position: relative; isolation: isolate; overflow: hidden; align-items: start; background: radial-gradient(720px 260px at 0% 0%, color-mix(in srgb, var(--tier, var(--accent)) 13%, transparent), transparent 70%); }
+.profile-overlay:not(.finder-overlay) .profile-head::before { content: ""; position: absolute; inset: 0 0 0 42%; z-index: -1; background-image: var(--hero-art, none); background-position: center 18%; background-size: cover; background-repeat: no-repeat; opacity: .3; -webkit-mask-image: linear-gradient(90deg, transparent, #000 45%, #000 70%, transparent); mask-image: linear-gradient(90deg, transparent, #000 45%, #000 70%, transparent); }
+.profile-overlay:not(.finder-overlay) .profile-tabs { border-bottom: 1px solid var(--line); }
+.profile-figures { display: flex; flex-wrap: wrap; gap: 8px 28px; margin: 16px 0 2px; }
+.profile-figures div { display: grid; gap: 3px; }
+.profile-figures dt { font-size: 11.5px; color: var(--text-3); }
+.profile-figures dd { margin: 0; font: 600 18px/1.1 var(--font-display); color: var(--text); font-variant-numeric: tabular-nums; }
+.profile-overlay:not(.finder-overlay) .profile-panel { border: 1px solid var(--line); border-radius: var(--r-lg); background: rgb(var(--tint-rgb) / .035); }
+.profile-overlay:not(.finder-overlay) .ranked-card { background-color: rgb(var(--tint-rgb) / .035); }
+
+.overview-grid { display: grid; grid-template-columns: minmax(320px, 392px) minmax(0, 1fr); gap: 16px; align-items: start; }
+.overview-side, .overview-main { display: grid; gap: 12px; min-width: 0; }
+.overview-side .ranked-cards { grid-template-columns: minmax(0, 1fr); gap: 10px; }
+.overview-side .panel-head { flex-wrap: wrap; }
+.overview-side .chart-zoom button { padding-left: 9px; padding-right: 9px; }
+.profile-overlay:not(.finder-overlay) .overview-view .overview-side .rank-chart { max-height: 220px; }
+.overview-side .season-boxes { grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); }
+@media (max-width: 1080px) { .overview-grid { grid-template-columns: minmax(0, 1fr); } }
+
+.champ-rows { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.champ-rows li { display: grid; grid-template-columns: 38px minmax(0, 1fr) auto; align-items: center; gap: 11px; padding: 7px 8px; margin: 0 -8px; border-radius: var(--r); transition: background-color .2s var(--ease); }
+.champ-rows li:hover { background: var(--fill-1); }
+.champ-rows img, .champ-rows .portrait-blank { width: 38px; height: 38px; border-radius: var(--r); }
+.champ-rows b { display: block; font: 600 13px/1.25 var(--font-text); color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.champ-rows span { display: block; font-size: 11.5px; color: var(--text-3); }
+.champ-rate { text-align: right; }
+.champ-rate b { font-variant-numeric: tabular-nums; }
+.champ-rate.is-good b { color: var(--win); }
+.champ-rate.is-bad b { color: var(--text-2); }
+
+.recent-panel .recent-summary { display: flex; flex-wrap: wrap; align-items: center; gap: 18px 34px; margin: 4px 0 2px; }
+.recent-ring { display: flex; align-items: center; gap: 14px; }
+.recent-ring > div:last-child b { display: block; font: 600 16px/1.2 var(--font-display); color: var(--text); }
+.recent-ring > div:last-child span { font-size: 11.5px; color: var(--text-3); }
+.recent-panel .top-champions { flex: 1 1 320px; display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 8px; }
+.recent-panel .top-champion img, .recent-panel .top-champion .portrait-blank { width: 30px; height: 30px; border-radius: var(--r-sm); }
+.recent-figure { display: grid; gap: 4px; justify-items: center; text-align: center; min-width: 96px; }
+.recent-figure span { font-size: 11.5px; color: var(--text-3); }
+.recent-figure b { font: 700 30px/1 var(--font-display); letter-spacing: -.02em; color: var(--text); font-variant-numeric: tabular-nums; }
+.recent-figure em { font-style: normal; font-size: 12px; color: var(--text-2); font-variant-numeric: tabular-nums; }
+.recent-figure i { font-style: normal; color: var(--loss); }
+
+.day-group { display: grid; gap: 6px; }
+.day-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 6px 4px 0; }
+.day-head h4 { margin: 0; font: 600 15px/1.2 var(--font-display); color: var(--text); }
+.day-head span { font-size: 12px; color: var(--text-3); font-variant-numeric: tabular-nums; }
+.overview-view .match { grid-template-columns: 42px 20px minmax(96px, 1fr) minmax(112px, 1fr) minmax(104px, .9fr) auto 78px; gap: 12px; border-radius: var(--r); }
+.match-spells { display: grid; gap: 2px; }
+.match-spells img, .match-spells .gi-blank { border-radius: 5px; }
+.match-items { display: flex; gap: 3px; }
+.match-items img, .match-items .gi-blank { border-radius: 6px; }
+@media (max-width: 1320px) { .overview-view .match { grid-template-columns: 42px 20px minmax(96px, 1fr) minmax(112px, 1fr) minmax(96px, .9fr) 78px; } .overview-view .match-items { display: none; } }
+
+/* Stats filters: a bar of their own under the tabs. It stays in place while the page scrolls and
+   spans the whole width, so nothing shows through or sits under the buttons. */
+.profile-overlay:not(.finder-overlay) .profile-body { overflow-x: hidden; }
+.stats-view:not(.overview-view) .stats-toolbar { position: sticky; top: -22px; z-index: 6; margin: -22px 0 2px; padding: 12px 0; pointer-events: auto; }
+.stats-view:not(.overview-view) .stats-toolbar::before { content: ""; position: absolute; inset: 0 -100vw; z-index: -1; background: rgb(var(--bg-rgb) / .95); -webkit-backdrop-filter: blur(24px); backdrop-filter: blur(24px); border-bottom: 1px solid var(--line); }
+.stats-view:not(.overview-view) .stats-toolbar .segmented { background: var(--fill-1); -webkit-backdrop-filter: none; backdrop-filter: none; box-shadow: none; }
+
+/* ---------------------------------------------------------------- champions tab
+   Tall portrait cards (the skin's loading screen picture, like the client's collection),
+   the name and mastery on the picture, totals above. */
+.champion-totals { display: flex; flex-wrap: wrap; gap: 10px 34px; margin: 4px 2px 2px; }
+.champion-totals div { display: grid; gap: 3px; }
+.champion-totals dt { font-size: 11.5px; color: var(--text-3); }
+.champion-totals dd { margin: 0; font: 600 20px/1.1 var(--font-display); color: var(--text); font-variant-numeric: tabular-nums; }
+.profile-overlay:not(.finder-overlay) .champion-grid { grid-template-columns: repeat(auto-fill, minmax(148px, 1fr)); gap: 14px; }
+.champion-tile { position: relative; display: block; padding: 0; aspect-ratio: 3 / 4.6; border: 1px solid var(--line); border-radius: var(--r-lg); overflow: hidden; background: var(--s1); isolation: isolate; content-visibility: auto; contain-intrinsic-size: 148px 227px; transition: transform .35s var(--ease), border-color .25s, box-shadow .35s var(--ease); }
+.champion-tile:hover, .champion-tile:focus-visible { transform: translateY(-3px); border-color: var(--line-3); background: var(--s1); box-shadow: var(--shadow-2); }
+.champion-art { position: absolute; inset: 0; z-index: -2; background-position: center; background-size: cover; }
+.champion-art img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: center top; transition: transform .6s var(--ease); }
+.champion-tile:hover .champion-art img { transform: scale(1.05); }
+.champion-tile::after { content: ""; position: absolute; inset: 40% 0 0; z-index: -1; pointer-events: none; background: linear-gradient(180deg, transparent, rgb(var(--bg-rgb) / .92) 78%); }
+.champion-info { position: absolute; inset: auto 0 0; display: grid; gap: 5px; padding: 10px 12px 11px; text-align: left; }
+.champion-tile .champion-name { max-width: 100%; text-align: left; font: 600 13.5px/1.2 var(--font-display); color: var(--text); }
+.champion-meta { display: flex; align-items: center; gap: 7px; min-height: 18px; }
+.champion-meta b { min-width: 22px; padding: 2px 6px; border-radius: 999px; background: rgb(var(--tint-rgb) / .16); font: 600 11px/1.25 var(--font-text); color: var(--text); text-align: center; font-variant-numeric: tabular-nums; }
+.champion-meta em { font-style: normal; font-size: 11.5px; color: var(--text-2); font-variant-numeric: tabular-nums; }
+.champion-tile .champion-skins, .champion-grade { position: absolute; top: 8px; display: inline-flex; align-items: center; gap: 4px; min-height: 0; padding: 3px 7px; border-radius: 999px; background: rgb(var(--bg-rgb) / .72); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); font: 600 11px/1.2 var(--font-text); color: var(--text); }
+.champion-tile .champion-skins { left: 8px; }
+.champion-grade { right: 8px; color: var(--accent); }
+.champion-detail-head .champion-3d { margin-left: auto; order: 5; }
+.skin-3d { justify-self: start; font-size: 11.5px; }
+
+/* 3D model view: our panel around a stage that a second webview covers exactly. */
+.model-overlay { display: grid; place-items: center; padding: 28px; }
+.model-panel { display: grid; grid-template-rows: auto minmax(0, 1fr); width: min(1240px, 100%); height: min(860px, 100%); border: 1px solid var(--line-2); border-radius: var(--r-xl); overflow: hidden; background: var(--bg); box-shadow: var(--shadow-2); animation: modal-in .25s var(--ease) both; }
+.model-head { display: flex; align-items: baseline; gap: 14px; padding: 14px 14px 14px 22px; border-bottom: 1px solid var(--line); }
+.model-head h3 { margin: 0; font: 600 16px/1.2 var(--font-display); color: var(--text); }
+.model-head .muted { flex: 1; font-size: 12px; color: var(--text-3); }
+.model-head .icon-btn { align-self: center; width: 32px; height: 32px; }
+.model-stage { display: grid; place-items: center; min-height: 0; background: var(--bg); }
+.model-stage p { margin: 0; font-size: 13px; color: var(--text-3); }
+
+/* Skins the account does not own: shown on request, quieter, with a tag. */
+.champion-detail-head .skins-all { margin-left: auto; order: 4; }
+.champion-detail-head .champion-3d { margin-left: 0; }
+.skin-card .skin-art { position: relative; }
+.skin-card.is-unowned .skin-art img { filter: saturate(.35) brightness(.7); transition: filter .3s var(--ease); }
+.skin-card.is-unowned:hover .skin-art img { filter: none; }
+.skin-card.is-unowned figcaption b { color: var(--text-2); }
+.skin-tag { position: absolute; left: 8px; top: 8px; padding: 3px 8px; border-radius: 999px; background: rgb(var(--bg-rgb) / .78); font: 600 11px/1.2 var(--font-text); color: var(--text-2); }
+.model-stage p { display: none; }

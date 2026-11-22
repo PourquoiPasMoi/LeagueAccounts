@@ -304,3 +304,77 @@
   .overview-view .rank-chart .chart-area { opacity: 1; }
   .overview-view .rank-chart .chart-line { stroke-dashoffset: 0; }
 }
+
+/* ---------------------------------------------------------------- Stats tab, refined
+   Fewer boxes inside boxes (cells are divided by hairlines, not filled), one accent hue for
+   shares, a quieter red, lighter numbers, no glows. Scoped away from the Overview tab. */
+.stats-view:not(.overview-view) .profile-panel { padding: 22px 24px; }
+.stats-view:not(.overview-view) .profile-panel h3 { font-weight: 600; font-size: 14px; letter-spacing: -.01em; }
+.stats-view:not(.overview-view) .hero-title h3 { font-size: 20px; }
+.stats-view:not(.overview-view) .stat-hero { background: rgb(var(--tint-rgb) / .035); }
+.stats-view .ring-value { filter: none; }
+.stats-view:not(.overview-view) .hero-ring circle { stroke-width: 6; }
+.stats-view:not(.overview-view) .hero-ring-text b { font-weight: 600; font-size: 32px; }
+.stats-view:not(.overview-view) .hero-record b { font-weight: 600; font-size: 18px; }
+.stats-view:not(.overview-view) .hero-split { height: 4px; background: rgb(var(--loss-rgb) / .45); }
+.stats-view:not(.overview-view) .hero-pills { gap: 4px; }
+.stats-view:not(.overview-view) .hero-pills i { max-width: 7px; height: 20px; border-radius: 3px; }
+.stats-view:not(.overview-view) .hero-pills i.is-loss { height: 20px; align-self: auto; background: rgb(var(--loss-rgb) / .42); }
+
+/* Cells: a label, a number, a hairline between neighbours. */
+.stats-view:not(.overview-view) .hero-tiles, .stats-view:not(.overview-view) .perf-grid { gap: 22px 0; }
+.stats-view:not(.overview-view) .hero-tile, .stats-view:not(.overview-view) .style-tile, .stats-view:not(.overview-view) .perf-item, .stats-view:not(.overview-view) .streak-row > div, .stats-view:not(.overview-view) .multi-list li { padding: 2px 20px; border: 0; border-left: 1px solid var(--line); border-radius: 0; background: none; }
+.stats-view:not(.overview-view) .hero-tile:hover, .stats-view:not(.overview-view) .style-tile:hover, .stats-view:not(.overview-view) .perf-item:hover, .stats-view:not(.overview-view) .streak-row > div:hover, .stats-view:not(.overview-view) .multi-list li:hover { background: none; border-color: var(--line); transform: none; }
+.stats-view:not(.overview-view) .hero-tile b, .stats-view:not(.overview-view) .style-tile b { font-weight: 600; font-size: 22px; }
+.stats-view:not(.overview-view) .perf-value b { font-weight: 600; font-size: 24px; }
+.stats-view:not(.overview-view) .streak-row b, .stats-view:not(.overview-view) .multi-list b { font-weight: 600; }
+.stats-view:not(.overview-view) .records li { background: none; border-radius: var(--r); }
+.stats-view:not(.overview-view) .records li:hover { background: var(--fill-1); transform: none; }
+.stats-view:not(.overview-view) .records b { font-weight: 600; }
+
+/* Bars: thin, one hue. */
+.stats-view:not(.overview-view) .share-bar, .stats-view:not(.overview-view) .perf-bar { height: 4px; }
+.stats-view:not(.overview-view) .share-bar > span { background: var(--accent); }
+.stats-view:not(.overview-view) .share-bar.is-red > span, .stats-view:not(.overview-view) .perf-bar.is-bad > span { background: rgb(var(--loss-rgb) / .75); }
+.stats-view:not(.overview-view) .perf-bar > i { top: -5px; bottom: -5px; }
+.stats-view:not(.overview-view) .side-head b { font-weight: 600; font-size: 28px; }
+.stats-view:not(.overview-view) .side-bar { height: 6px; }
+.stats-view:not(.overview-view) .side-bar .is-red { background: rgb(var(--loss-rgb) / .75); }
+.stats-view:not(.overview-view) .share-list li, .stats-view:not(.overview-view) .class-list li, .stats-view:not(.overview-view) .metric-list li, .stats-view:not(.overview-view) .coverage-list li { padding: 6px 0; font-size: 13px; }
+
+/* Roles: shades of the accent instead of five colours. */
+.stats-view:not(.overview-view) .role-bar { height: 6px; }
+.stats-view:not(.overview-view) .role-bar span { background: var(--accent) !important; }
+.stats-view:not(.overview-view) .role-bar span:nth-child(2) { opacity: .74; }
+.stats-view:not(.overview-view) .role-bar span:nth-child(3) { opacity: .54; }
+.stats-view:not(.overview-view) .role-bar span:nth-child(4) { opacity: .38; }
+.stats-view:not(.overview-view) .role-bar span:nth-child(5) { opacity: .26; }
+.stats-view:not(.overview-view) .role-bar span.is-dim { opacity: .12; }
+.stats-view:not(.overview-view) .role-box, .stats-view:not(.overview-view) .role-box.is-main { background: none; border-color: transparent; }
+.stats-view:not(.overview-view) .role-box:not(:disabled):hover { background: var(--fill-1); border-color: transparent; transform: none; }
+.stats-view:not(.overview-view) .role-box .role-glyph, .stats-view:not(.overview-view) .role-box:not(:disabled):hover .role-glyph { color: var(--text-3); transform: none; }
+.stats-view:not(.overview-view) .role-box.is-main .role-glyph { color: var(--text); }
+.stats-view:not(.overview-view) .role-box b { font-weight: 600; }
+.stats-view:not(.overview-view) .role-box[aria-pressed="true"] { border-color: rgb(var(--accent-rgb) / .55); background: rgb(var(--accent-rgb) / .1); box-shadow: none; }
+.stats-view:not(.overview-view) .role-box[aria-pressed="true"] .role-glyph { color: var(--accent); }
+
+/* Charts: flat colour, no glow, no filled tracks. */
+.stats-view:not(.overview-view) .weekday-bar, .stats-view:not(.overview-view) .hour-col { background: none; border-radius: 4px; box-shadow: inset 0 -1px 0 var(--line); }
+.stats-view:not(.overview-view) .weekday-bar span, .stats-view:not(.overview-view) .hour-col span { border-radius: 4px 4px 0 0; }
+.stats-view:not(.overview-view) .weekday-bar span.is-good, .stats-view:not(.overview-view) .hour-col span.is-good { background: rgb(var(--win-rgb) / .8); }
+.stats-view:not(.overview-view) .weekday-bar span.is-bad, .stats-view:not(.overview-view) .hour-col span.is-bad { background: rgb(var(--loss-rgb) / .5); }
+.stats-view:not(.overview-view) .hour:hover .hour-col { box-shadow: inset 0 -1px 0 var(--line-3); }
+.stats-view:not(.overview-view) .radar-shape { fill: rgb(var(--accent-rgb) / .14); stroke-width: 1.5; filter: none; }
+.stats-view:not(.overview-view) .radar-ring { stroke: var(--line); }
+.stats-view:not(.overview-view) .radar-dot { stroke-width: 1; }
+.stats-view:not(.overview-view) .trend-chart .trend-line { stroke-width: 1.75; filter: none; }
+
+/* Table: room to breathe, quiet lines. */
+.stats-view:not(.overview-view) .champion-stats { font-size: 13px; }
+.stats-view:not(.overview-view) .champion-stats th { padding: 10px; font-weight: 500; }
+.stats-view:not(.overview-view) .table-scroll .champion-stats thead th { background: var(--bg-2); }
+.stats-view:not(.overview-view) .champion-stats td { padding: 10px; border-bottom-color: rgb(var(--tint-rgb) / .05); }
+.stats-view:not(.overview-view) .champion-stats tbody tr:hover .champion-cell img { transform: none; }
+.stats-view:not(.overview-view) .champion-cell img { border-radius: 7px; }
+.stats-view:not(.overview-view) .rate-bar { height: 4px; }
+.stats-view:not(.overview-view) .form-game:hover { transform: translateY(-2px); box-shadow: none; }

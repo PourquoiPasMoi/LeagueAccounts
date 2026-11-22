@@ -1219,6 +1219,65 @@ async fn restart_to_update(app: AppHandle, state: AppState<'_>) -> CommandResult
     blocking(move || updater::restart(&app, &state)).await
 }
 
+/// Every skin of a champion (for the skins the account does not own).
+#[tauri::command]
+async fn champion_skins(champion_id: i64) -> CommandResult<Vec<leagueaccounts::builds::SkinInfo>> {
+    blocking(move || Ok(leagueaccounts::builds::champion_skins(champion_id, riot_client::league_client().as_ref()))).await
+}
+
+const MODEL_VIEWER: &str = "model-viewer";
+
+/// Show a champion or skin in 3D INSIDE the main window: a second webview laid over the place
+/// the page keeps free for it (`x`, `y`, `width`, `height` in physical pixels of the window).
+/// The models are not ours: that webview loads Khada's fan-made viewer (modelviewer.lol) for
+/// the skin, only when asked, and `model_viewer.js` leaves only the model visible. Only the
+/// skin id comes from the page: the address is built here. A remote page has no access to the
+/// app's commands (the capabilities are for local pages).
+#[tauri::command]
+async fn show_model_viewer(app: AppHandle, skin_id: i64, x: f64, y: f64, width: f64, height: f64) -> CommandResult<()> {
+    if !(1000..10_000_000).contains(&skin_id) || width < 80.0 || height < 80.0 {
+        return Err(fail("browser"));
+    }
+    let url: tauri::Url = format!("https://modelviewer.lol/model-viewer?id={skin_id}").parse().map_err(|_| fail("browser"))?;
+    let position = tauri::PhysicalPosition::new(x.round() as i32, y.round() as i32);
+    let size = tauri::PhysicalSize::new(width.round() as u32, height.round() as u32);
+    if let Some(webview) = app.get_webview(MODEL_VIEWER) {
+        let _ = webview.set_position(position);
+        let _ = webview.set_size(size);
+        if webview.url().map_or(true, |current| current != url) {
+            webview.navigate(url).map_err(|_| fail("browser"))?;
+        }
+        return Ok(());
+    }
+    let window = app.get_window("main").ok_or_else(|| fail("browser"))?;
+    blocking(move || {
+        let builder = tauri::webview::WebviewBuilder::new(MODEL_VIEWER, tauri::WebviewUrl::External(url))
+            .background_color(tauri::window::Color(10, 10, 12, 255))
+            .initialization_script(include_str!("model_viewer.js"));
+        window.add_child(builder, position, size).map(|_| ()).map_err(|_| fail("browser"))
+    })
+    .await
+}
+
+/// The page's free place moved or changed size (the window was resized).
+#[tauri::command]
+async fn place_model_viewer(app: AppHandle, x: f64, y: f64, width: f64, height: f64) -> CommandResult<()> {
+    if let Some(webview) = app.get_webview(MODEL_VIEWER) {
+        let _ = webview.set_position(tauri::PhysicalPosition::new(x.round() as i32, y.round() as i32));
+        let _ = webview.set_size(tauri::PhysicalSize::new(width.max(1.0).round() as u32, height.max(1.0).round() as u32));
+    }
+    Ok(())
+}
+
+/// The 3D view was closed: the second webview goes away (and with it everything it loaded).
+#[tauri::command]
+async fn close_model_viewer(app: AppHandle) -> CommandResult<()> {
+    if let Some(webview) = app.get_webview(MODEL_VIEWER) {
+        let _ = webview.close();
+    }
+    Ok(())
+}
+
 /// Open a release page of this app's repository in the default browser.
 #[tauri::command]
 async fn open_release(url: String) -> CommandResult<()> {
@@ -1549,6 +1608,10 @@ fn main() {
             update_idle,
             restart_to_update,
             open_release,
+            champion_skins,
+            show_model_viewer,
+            place_model_viewer,
+            close_model_viewer,
             open_logs_folder,
             open_home_fix_author,
             open_pengu_loader,

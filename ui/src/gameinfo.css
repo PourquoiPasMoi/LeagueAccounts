@@ -206,3 +206,34 @@ td.gi-items > * { display: inline-block; margin-right: 2px; vertical-align: midd
 .gi-col-gold { width: 90px; }
 .gi-board th:first-child { overflow: hidden; text-overflow: ellipsis; }
 .gi-board .gi-name { max-width: none; }
+
+/* The player's game at a glance, above the tabs (recordings and the account page's games). */
+.gi-banner { position: relative; overflow: hidden; display: grid; gap: 14px; margin: 10px 0 4px; padding: 20px 22px 18px; border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--s1); isolation: isolate; }
+.gi-banner-art { position: absolute; inset: 0 0 0 38%; z-index: -1; background-image: var(--gi-art); background-position: center 22%; background-size: cover; background-repeat: no-repeat; opacity: .5; -webkit-mask-image: linear-gradient(90deg, transparent, #000 55%); mask-image: linear-gradient(90deg, transparent, #000 55%); }
+.gi-banner::after { content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none; background: radial-gradient(520px 260px at 0% 0%, rgb(var(--accent-rgb) / .12), transparent 70%); }
+.gi-banner.is-loss::after { background: radial-gradient(520px 260px at 0% 0%, color-mix(in srgb, var(--loss) 14%, transparent), transparent 70%); }
+.gi-banner-top { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; font-size: 12.5px; color: var(--text-2); }
+.gi-banner-top b { font-weight: 600; color: var(--text); }
+.gi-banner-top strong { font-weight: 600; color: var(--win); }
+.gi-banner.is-loss .gi-banner-top strong { color: var(--loss); }
+.gi-banner-top span { font-variant-numeric: tabular-nums; }
+.gi-banner-who { display: flex; align-items: center; gap: 12px; }
+.gi-banner-who .gi-portrait { border-radius: var(--r); }
+.gi-banner-who div { display: grid; gap: 2px; min-width: 0; }
+.gi-banner-who strong { font: 600 20px/1.15 var(--font-display); color: var(--text); }
+.gi-banner-who span { font-size: 12.5px; color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gi-banner-hero { display: flex; align-items: center; gap: 14px; margin-top: 2px; }
+.gi-banner-hero b { font: 700 44px/1 var(--font-display); letter-spacing: -.02em; color: var(--text); font-variant-numeric: tabular-nums; }
+.gi-banner-hero div { display: grid; gap: 5px; }
+.gi-banner-hero span { font-size: 13px; color: var(--text-2); }
+.gi-banner-hero em { justify-self: start; padding: 3px 9px; border-radius: 999px; background: var(--fill-2); font: 600 11.5px/1.2 var(--font-text); font-style: normal; color: var(--text); }
+.gi-banner.is-win .gi-banner-hero em { background: rgb(var(--accent-rgb) / .18); color: var(--accent); }
+.gi-banner-stats { display: flex; flex-wrap: wrap; gap: 10px 28px; }
+.gi-banner-stats div { display: grid; gap: 3px; }
+.gi-banner-stats b { font: 600 17px/1.1 var(--font-display); color: var(--text); font-variant-numeric: tabular-nums; }
+.gi-banner-stats span { font-size: 11.5px; color: var(--text-3); }
+.gi-banner-build { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 22px; }
+.gi-banner-runes, .gi-banner-items { display: flex; align-items: center; gap: 5px; }
+.gi-banner-runes img { border-radius: 50%; background: var(--fill-1); }
+.gi-banner-items img, .gi-banner-items .gi-blank { border-radius: var(--r-sm); }
+.gi-head.has-banner { justify-content: flex-end; }

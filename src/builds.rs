@@ -714,6 +714,66 @@ fn game_data_file(name: &str, client: Option<&LeagueApi>) -> Value {
     }
 }
 
+/// One skin of a champion as the game data lists it (owned or not).
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SkinInfo {
+    pub id: i64,
+    pub name: String,
+    /// Game-data image path of the square picture.
+    pub tile: String,
+    pub rarity: String,
+    pub chromas: u32,
+}
+
+/// Every skin of a champion except the base one: from the running client
+/// (free), else the disk cache, else CommunityDragon (once, then cached).
+pub fn champion_skins(champion: i64, client: Option<&LeagueApi>) -> Vec<SkinInfo> {
+    if !(1..100_000).contains(&champion) {
+        return Vec::new();
+    }
+    let directory = app_data_dir().ok().map(|directory| directory.join("cache").join("gamedata"));
+    let cached = directory.as_ref().map(|directory| directory.join(format!("champion-{champion}.json")));
+    let fresh = cached
+        .as_ref()
+        .and_then(|path| std::fs::metadata(path).ok()?.modified().ok())
+        .and_then(|modified| SystemTime::now().duration_since(modified).ok())
+        .is_some_and(|age| age < GAME_DATA_TTL);
+    let read_cache = || cached.as_ref().and_then(|path| serde_json::from_slice::<Value>(&std::fs::read(path).ok()?).ok());
+    let data = fresh.then(read_cache).flatten().or_else(|| {
+        let downloaded = client
+            .and_then(|client| client.get_json(&format!("/lol-game-data/assets/v1/champions/{champion}.json")))
+            .or_else(|| get_json(&format!("{GAME_DATA}champions/{champion}.json")).ok());
+        match downloaded {
+            Some(value) => {
+                if let (Some(directory), Some(path)) = (&directory, &cached) {
+                    let _ = std::fs::create_dir_all(directory);
+                    let _ = std::fs::write(path, value.to_string());
+                }
+                Some(value)
+            }
+            None => read_cache(),
+        }
+    });
+    let Some(data) = data else { return Vec::new() };
+    let path = |value: &Value| value.as_str().unwrap_or_default().trim().strip_prefix("/lol-game-data/assets/").unwrap_or_default().to_lowercase();
+    data["skins"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter(|skin| !skin["isBase"].as_bool().unwrap_or(false))
+        .filter_map(|skin| {
+            Some(SkinInfo {
+                id: skin["id"].as_i64()?,
+                name: skin["name"].as_str().unwrap_or_default().to_owned(),
+                tile: path(&skin["tilePath"]),
+                rarity: std::path::Path::new(&path(&skin["rarityGemPath"])).file_stem().map(|stem| stem.to_string_lossy().to_lowercase()).unwrap_or_default(),
+                chromas: skin["chromas"].as_array().map_or(0, |chromas| chromas.len() as u32),
+            })
+        })
+        .collect()
+}
+
 /// Names and icons of runes, rune trees, items and summoner spells.
 pub fn game_assets(client: Option<&LeagueApi>) -> GameAssets {
     if let Ok(cache) = ASSETS.lock() {

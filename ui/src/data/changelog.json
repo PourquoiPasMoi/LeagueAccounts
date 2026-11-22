@@ -1,5 +1,67 @@
 [
  {
+  "version": "5.12.0",
+  "date": "2026-11-22",
+  "items": {
+   "en": [
+    "Account page redesigned: it now matches the main page, with a header showing your most played champion, and an Overview in two columns (rank and champions on the left, your games by day on the right, with items and spells).",
+    "Game banner above the game stats: champion art, result, the stat where you stood out most among all ten players, your key numbers, runes and items.",
+    "Stats tab: cleaner panels, thinner bars, one colour family, and a filter bar that stays in place while you scroll.",
+    "Champions tab: big portrait cards, totals, and new sort orders (mastery, seasonal mastery, last played, skins, name). Seasonal mastery and last played fill in after the next sync of a signed-in account.",
+    "View any champion or skin in 3D inside the app, and show the skins you don't own on a champion's page. The 3D models come from modelviewer.lol (a fan site) and load only when you ask."
+   ],
+   "tr": [
+    "Hesap sayfası yeniden tasarlandı: artık ana sayfayla uyumlu, başlıkta en çok oynadığın şampiyon var ve Genel Bakış iki sütunlu (solda rütbe ve şampiyonlar, sağda eşyalar ve büyülerle gün gün maçların).",
+    "Maç istatistiklerinin üstünde maç afişi: şampiyon görseli, sonuç, on oyuncu arasında en çok öne çıktığın istatistik, temel sayıların, rünler ve eşyalar.",
+    "İstatistikler sekmesi: daha sade paneller, daha ince çubuklar, tek renk ailesi ve kaydırırken yerinde kalan bir filtre çubuğu.",
+    "Şampiyonlar sekmesi: büyük portre kartları, toplamlar ve yeni sıralamalar (ustalık, sezon ustalığı, son oynanan, kostümler, isim). Sezon ustalığı ve son oynanan, giriş yapılmış hesabın bir sonraki eşitlemesinden sonra dolar.",
+    "Herhangi bir şampiyonu veya kostümü uygulamanın içinde 3D olarak gör ve şampiyon sayfasında sahip olmadığın kostümleri göster. 3D modeller modelviewer.lol'dan (hayran sitesi) gelir ve yalnızca istediğinde yüklenir."
+   ],
+   "de": [
+    "Kontoseite neu gestaltet: Sie passt jetzt zur Hauptseite, zeigt im Kopf deinen meistgespielten Champion und hat eine zweispaltige Übersicht (links Rang und Champions, rechts deine Spiele nach Tag mit Gegenständen und Zaubern).",
+    "Spielbanner über den Spielstatistiken: Champion-Bild, Ergebnis, der Wert, mit dem du unter allen zehn Spielern am meisten herausgestochen bist, deine wichtigsten Zahlen, Runen und Gegenstände.",
+    "Statistik-Tab: aufgeräumtere Felder, dünnere Balken, eine Farbfamilie und eine Filterleiste, die beim Scrollen an ihrem Platz bleibt.",
+    "Champions-Tab: große Porträtkarten, Summen und neue Sortierungen (Meisterschaft, Saison-Meisterschaft, zuletzt gespielt, Skins, Name). Saison-Meisterschaft und zuletzt gespielt füllen sich nach der nächsten Synchronisierung eines angemeldeten Kontos.",
+    "Jeden Champion oder Skin in 3D direkt in der App ansehen und auf der Seite eines Champions die Skins zeigen, die du nicht besitzt. Die 3D-Modelle stammen von modelviewer.lol (eine Fanseite) und werden nur auf Wunsch geladen."
+   ],
+   "es": [
+    "Página de la cuenta rediseñada: ahora combina con la página principal, con una cabecera que muestra tu campeón más jugado y un Resumen en dos columnas (rango y campeones a la izquierda, tus partidas por día a la derecha, con objetos y hechizos).",
+    "Banner de partida sobre las estadísticas: arte del campeón, resultado, la estadística en la que más destacaste entre los diez jugadores, tus cifras clave, runas y objetos.",
+    "Pestaña Estadísticas: paneles más limpios, barras más finas, una sola familia de colores y una barra de filtros que se queda en su sitio al desplazarte.",
+    "Pestaña Campeones: tarjetas de retrato grandes, totales y nuevos órdenes (maestría, maestría de temporada, última partida, aspectos, nombre). La maestría de temporada y la última partida se rellenan tras la próxima sincronización de una cuenta con sesión iniciada.",
+    "Mira cualquier campeón o aspecto en 3D dentro de la app y muestra en la página de un campeón los aspectos que no tienes. Los modelos 3D vienen de modelviewer.lol (un sitio de fans) y solo se cargan cuando lo pides."
+   ],
+   "fr": [
+    "Page du compte repensée : elle s'accorde maintenant avec la page principale, avec un en-tête montrant votre champion le plus joué et un Aperçu en deux colonnes (rang et champions à gauche, vos parties par jour à droite, avec objets et sorts).",
+    "Bannière de partie au-dessus des statistiques : illustration du champion, résultat, la statistique où vous vous êtes le plus distingué parmi les dix joueurs, vos chiffres clés, runes et objets.",
+    "Onglet Statistiques : panneaux plus épurés, barres plus fines, une seule famille de couleurs et une barre de filtres qui reste en place pendant le défilement.",
+    "Onglet Champions : grandes cartes portrait, totaux et nouveaux tris (maîtrise, maîtrise saisonnière, joué récemment, skins, nom). La maîtrise saisonnière et « joué récemment » se remplissent après la prochaine synchronisation d'un compte connecté.",
+    "Regardez n'importe quel champion ou skin en 3D dans l'application, et affichez sur la page d'un champion les skins que vous n'avez pas. Les modèles 3D viennent de modelviewer.lol (un site de fans) et ne se chargent qu'à la demande."
+   ],
+   "pt": [
+    "Página da conta redesenhada: agora combina com a página principal, com um cabeçalho que mostra o teu campeão mais jogado e uma Visão geral em duas colunas (rank e campeões à esquerda, as tuas partidas por dia à direita, com itens e feitiços).",
+    "Banner da partida por cima das estatísticas: arte do campeão, resultado, a estatística em que mais te destacaste entre os dez jogadores, os teus números principais, runas e itens.",
+    "Separador Estatísticas: painéis mais limpos, barras mais finas, uma só família de cores e uma barra de filtros que fica no lugar enquanto deslizas.",
+    "Separador Campeões: cartões de retrato grandes, totais e novas ordenações (maestria, maestria da temporada, jogado recentemente, skins, nome). A maestria da temporada e o jogado recentemente preenchem-se após a próxima sincronização de uma conta com sessão iniciada.",
+    "Vê qualquer campeão ou skin em 3D dentro da app e mostra na página de um campeão as skins que não tens. Os modelos 3D vêm de modelviewer.lol (um site de fãs) e só são carregados quando pedes."
+   ],
+   "zh": [
+    "账号页面重新设计：现在与主页风格一致，页头显示你最常用的英雄，概览分为两栏（左侧是段位和英雄，右侧按天列出对局，含装备和召唤师技能）。",
+    "对局数据上方新增对局横幅：英雄原画、胜负、你在十名玩家中最突出的数据、关键数值、符文和装备。",
+    "数据页：面板更简洁，条形更细，统一色系，筛选栏在滚动时固定不动。",
+    "英雄页：大幅竖版卡片、总计，以及新的排序方式（成就、赛季成就、最近使用、皮肤、名称）。赛季成就和最近使用会在已登录账号下次同步后显示。",
+    "可在程序内以 3D 查看任意英雄或皮肤，并在英雄页面显示你未拥有的皮肤。3D 模型来自 modelviewer.lol（爱好者网站），仅在你需要时加载。"
+   ],
+   "zhTw": [
+    "帳號頁面重新設計：現在與主頁風格一致，頁首顯示你最常用的英雄，總覽分為兩欄（左側是牌位和英雄，右側按天列出對戰，含裝備和召喚師技能）。",
+    "對戰數據上方新增對戰橫幅：英雄原畫、勝負、你在十名玩家中最突出的數據、關鍵數值、符文和裝備。",
+    "數據頁：面板更簡潔，條形更細，統一色系，篩選列在捲動時固定不動。",
+    "英雄頁：大幅直式卡片、總計，以及新的排序方式（專精、賽季專精、最近使用、造型、名稱）。賽季專精和最近使用會在已登入帳號下次同步後顯示。",
+    "可在程式內以 3D 查看任意英雄或造型，並在英雄頁面顯示你未擁有的造型。3D 模型來自 modelviewer.lol（愛好者網站），僅在你需要時載入。"
+   ]
+  }
+ },
+ {
   "version": "5.11.1",
   "date": "2026-11-22",
   "items": {

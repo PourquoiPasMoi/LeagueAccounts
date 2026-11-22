@@ -78,6 +78,9 @@ pub fn load(path: &str) -> Option<(Vec<u8>, &'static str)> {
         Some(url) => download(&url)?,
         None => match crate::riot_client::league_client().and_then(|client| client.game_asset(&client_path(&client, path), MAX_BYTES)) {
             Some(bytes) => bytes,
+            // Wide splashes only come from the client (CommunityDragon has no such short path,
+            // and they are large): the page shows the champion tile instead.
+            None if path.starts_with("v1/champion-splashes/") || path.starts_with("v1/champion-loadscreens/") => return None,
             None => download(&format!("{ORIGIN}{path}"))?,
         },
     };
@@ -123,6 +126,28 @@ fn client_path(client: &crate::riot_client::LeagueApi, path: &str) -> String {
             let tile = data["skins"].as_array().into_iter().flatten().find(|entry| entry["id"].as_i64().is_some_and(|id| id.to_string() == skin)).and_then(|entry| entry["tilePath"].as_str());
             if let Some(tile) = tile {
                 return tile.trim_start_matches("/lol-game-data/assets/").to_ascii_lowercase();
+            }
+        }
+    }
+    // A skin's loading screen picture (the tall portrait of the client's collection).
+    let mut parts = path.trim_start_matches('/').split('/');
+    if let (Some("v1"), Some("champion-loadscreens"), Some(champion), Some(file)) = (parts.next(), parts.next(), parts.next(), parts.next()) {
+        let skin = file.trim_end_matches(".jpg");
+        if let Some(data) = client.get_json(&format!("/lol-game-data/assets/v1/champions/{champion}.json")) {
+            let picture = data["skins"].as_array().into_iter().flatten().find(|entry| entry["id"].as_i64().is_some_and(|id| id.to_string() == skin)).and_then(|entry| entry["loadScreenPath"].as_str());
+            if let Some(picture) = picture {
+                return picture.trim_start_matches("/lol-game-data/assets/").to_ascii_lowercase();
+            }
+        }
+    }
+    // The centred splash of a skin, asked for by the same short path CommunityDragon serves.
+    let mut parts = path.trim_start_matches('/').split('/');
+    if let (Some("v1"), Some("champion-splashes"), Some(champion), Some(file)) = (parts.next(), parts.next(), parts.next(), parts.next()) {
+        let skin = file.trim_end_matches(".jpg");
+        if let Some(data) = client.get_json(&format!("/lol-game-data/assets/v1/champions/{champion}.json")) {
+            let splash = data["skins"].as_array().into_iter().flatten().find(|entry| entry["id"].as_i64().is_some_and(|id| id.to_string() == skin)).and_then(|entry| entry["splashPath"].as_str());
+            if let Some(splash) = splash {
+                return splash.trim_start_matches("/lol-game-data/assets/").to_ascii_lowercase();
             }
         }
     }

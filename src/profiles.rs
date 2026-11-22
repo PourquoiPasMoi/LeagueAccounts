@@ -81,6 +81,12 @@ pub struct OwnedChampion {
     pub title: String,
     pub mastery_level: u32,
     pub mastery_points: u64,
+    /// This season's mastery milestone (the client's "Seasonal Mastery").
+    pub season_milestone: u32,
+    /// Best grade of the season ("S+", "A-", ...), empty when none.
+    pub highest_grade: String,
+    /// Unix ms of the last game on the champion; 0 when unknown.
+    pub last_played: u64,
     /// Unix ms when the champion was unlocked, when Riot reports it.
     pub purchased: u64,
     /// Owned non-default skins.
@@ -607,7 +613,7 @@ fn owned(value: &Value) -> bool {
 }
 
 pub fn parse_champions(inventory: &Value, mastery: Option<&Value>) -> Vec<OwnedChampion> {
-    let mastery: HashMap<i64, (u32, u64)> = mastery
+    let mastery: HashMap<i64, (u32, u64, u32, String, u64)> = mastery
         .and_then(Value::as_array)
         .map(|entries| {
             entries
@@ -615,7 +621,13 @@ pub fn parse_champions(inventory: &Value, mastery: Option<&Value>) -> Vec<OwnedC
                 .map(|entry| {
                     (
                         int(&entry["championId"]),
-                        (uint(&entry["championLevel"]), int(&entry["championPoints"]).max(0) as u64),
+                        (
+                            uint(&entry["championLevel"]),
+                            int(&entry["championPoints"]).max(0) as u64,
+                            uint(&entry["championSeasonMilestone"]),
+                            text(&entry["highestGrade"]),
+                            int(&entry["lastPlayTime"]).max(0) as u64,
+                        ),
                     )
                 })
                 .collect()
@@ -630,7 +642,7 @@ pub fn parse_champions(inventory: &Value, mastery: Option<&Value>) -> Vec<OwnedC
         .filter(|champion| !champion["ownership"]["rental"]["rented"].as_bool().unwrap_or(false))
         .map(|champion| {
             let id = int(&champion["id"]);
-            let (mastery_level, mastery_points) = mastery.get(&id).copied().unwrap_or_default();
+            let (mastery_level, mastery_points, season_milestone, highest_grade, last_played) = mastery.get(&id).cloned().unwrap_or_default();
             let skins = champion["skins"]
                 .as_array()
                 .into_iter()
@@ -655,6 +667,9 @@ pub fn parse_champions(inventory: &Value, mastery: Option<&Value>) -> Vec<OwnedC
                 title: text(&champion["title"]),
                 mastery_level,
                 mastery_points,
+                season_milestone,
+                highest_grade,
+                last_played,
                 purchased: int(&champion["purchased"]).max(0) as u64,
                 skins,
             }

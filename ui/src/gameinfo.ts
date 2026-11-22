@@ -2,7 +2,8 @@
 // post-game screen: Scoreboard, Overview (gold advantage, kills over time,
 // kill map), Stats, Graphs and Runes. The data is the client's match-history
 // game (saved next to the recording), so field names follow the client.
-import { api, championIcon, gameImage, type GameAssets } from "./api";
+import { api, championIcon, gameImage, type GameAssets, type MatchRecord } from "./api";
+import { queueKey } from "./stats";
 import { esc } from "./dom";
 import { localeTag, t, type MessageKey } from "./i18n";
 import championMeta from "./data/champion-meta.json";
@@ -442,6 +443,73 @@ function runes(all: Player[]): string {
 // ---------------------------------------------------------------- rendering
 
 /** Fill `root` with the game's details (tabs, then the chosen tab). */
+/** What can stand out in a game, best first when the player is equally placed in several. */
+const STANDOUTS: [string, MessageKey][] = [
+  ["totalDamageDealtToChampions", "gi.totalDamageToChampions"],
+  ["totalDamageTaken", "gi.totalDamageTaken"],
+  ["totalHeal", "gi.healingDone"],
+  ["damageSelfMitigated", "gi.selfMitigated"],
+  ["goldEarned", "gi.goldEarned"],
+  ["visionScore", "gi.visionScore"],
+  ["timeCCingOthers", "gi.ccScore"],
+];
+
+/**
+ * The player's game at a glance, above the tabs: champion art, mode, result
+ * and length, the number where the player stood out most among all ten
+ * players, the usual key numbers, runes and items.
+ */
+function banner(details: GameDetails, me: Player, all: Player[]): string {
+  const game = details.game;
+  const s = me.s;
+  const win = Boolean(s.win);
+  const value = (player: Player, key: string) => Number(player.s[key]) || 0;
+  const placed = STANDOUTS.map(([key, label]) => ({ key, label, value: value(me, key), rank: 1 + all.filter((player) => value(player, key) > value(me, key)).length }))
+    .filter((entry) => entry.value > 0)
+    .sort((a, b) => a.rank - b.rank);
+  const top = placed[0];
+  const teamKills = all.filter((player) => player.team === me.team).reduce((total, player) => total + value(player, "kills"), 0);
+  const deaths = value(me, "deaths");
+  const ratio = deaths ? ((value(me, "kills") + value(me, "assists")) / deaths).toFixed(2) : "";
+  const chips: [string, string, string][] = [
+    ["kda", `${value(me, "kills")} / ${deaths} / ${value(me, "assists")}`, ratio ? `${ratio} ${t("gi.kda")}` : t("gi.kda")],
+    ["kp", teamKills ? `${Math.round(((value(me, "kills") + value(me, "assists")) / teamKills) * 100)}%` : "", t("stats.kp")],
+    ["totalDamageDealtToChampions", count(value(me, "totalDamageDealtToChampions")), t("gi.totalDamageToChampions")],
+    ["goldEarned", count(value(me, "goldEarned")), t("gi.goldEarned")],
+    ["cs", count(cs(s)), t("gi.cs")],
+    ["visionScore", count(value(me, "visionScore")), t("gi.visionScore")],
+  ];
+  const shown = chips.filter(([key, text]) => text && key !== top?.key).slice(0, 5);
+  const date = game.gameCreation ? new Date(Number(game.gameCreation)).toLocaleDateString(localeTag(), { dateStyle: "medium" }) : "";
+  const queue = t(queueKey({ queueId: Number(game.queueId) || 0 } as MatchRecord));
+  const runes = [0, 1, 2, 3, 4, 5].map((slot) => Number(s[`perk${slot}`]) || 0).filter(Boolean);
+  // The wide splash when the League client can give it, over the small tile every source has.
+  const art = `url('${gameImage(`v1/champion-splashes/${me.champion}/${me.champion}000.jpg`)}'), url('${gameImage(`v1/champion-tiles/${me.champion}/${me.champion}000.jpg`)}')`;
+  return `
+    <section class="gi-banner ${win ? "is-win" : "is-loss"}" style="--gi-art:${esc(art)}">
+      <div class="gi-banner-art" aria-hidden="true"></div>
+      <div class="gi-banner-top">
+        <b>${esc(queue)}</b><strong>${esc(t(win ? "gi.victory" : "gi.defeat"))}</strong><span>${esc(clock((Number(game.gameDuration) || 0) * 1000))}</span>${date ? `<span>${esc(date)}</span>` : ""}
+      </div>
+      <div class="gi-banner-who">
+        ${champImage(me, 44)}
+        <div><strong>${esc(championName(me.champion))}</strong><span>${esc(me.name)}</span></div>
+      </div>
+      ${top ? `
+      <div class="gi-banner-hero">
+        <b>${esc(count(top.value))}</b>
+        <div><span>${esc(t(top.label))}</span><em>${esc(top.rank === 1 ? t("gi.rankBest") : t("gi.rankOf", { rank: String(top.rank), count: String(all.length) }))}</em></div>
+      </div>` : ""}
+      <div class="gi-banner-stats">
+        ${shown.map(([, text, label]) => `<div><b>${esc(text)}</b><span>${esc(label)}</span></div>`).join("")}
+      </div>
+      <div class="gi-banner-build">
+        <div class="gi-banner-runes">${runes.map((id, index) => perkImage(id, index === 0 ? 34 : 26, index === 0 ? "is-keystone" : "")).join("")}</div>
+        <div class="gi-banner-items">${[0, 1, 2, 3, 4, 5, 6].map((slot) => itemImage(Number(s[`item${slot}`]) || 0, 32)).join("")}</div>
+      </div>
+    </section>`;
+}
+
 export function renderGameInfo(root: HTMLElement, details: GameDetails): void {
   const all = players(details);
   const gameId = Number(details.game.gameId) || 0;
@@ -468,13 +536,15 @@ export function renderGameInfo(root: HTMLElement, details: GameDetails): void {
             ? graphs(all)
             : runes(all);
   root.querySelector(".gi-body")?.remove();
+  root.querySelector(".gi-banner")?.remove();
   const head = root.querySelector(".gi-head");
-  const headHtml = `
-    <div class="gi-head">
-      <div class="gi-title">
+  // The banner says who won, when and how long; without a known player a plain line does.
+  const headHtml = `${mine ? banner(details, mine, all) : ""}
+    <div class="gi-head${mine ? " has-banner" : ""}">
+      ${mine ? "" : `<div class="gi-title">
         ${win === undefined ? "" : `<strong class="${win ? "is-win" : "is-loss"}">${esc(t(win ? "gi.victory" : "gi.defeat"))}</strong>`}
-        <span>${esc([t("gi.rift"), date, length].filter(Boolean).join("  ·  "))}</span>
-      </div>
+        <span>${esc([date, length].filter(Boolean).join("  ·  "))}</span>
+      </div>`}
       <nav class="gi-tabs" role="tablist">${TABS.map(([id, key]) => `<button role="tab" data-gi-tab="${id}" aria-selected="${id === tab}">${esc(t(key))}</button>`).join("")}</nav>
     </div>`;
   if (head) head.outerHTML = headHtml;

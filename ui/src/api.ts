@@ -179,6 +179,10 @@ export interface OwnedChampion {
   title: string;
   masteryLevel: number;
   masteryPoints: number;
+  /** This season's mastery milestone; 0 in profiles saved before it was kept. */
+  seasonMilestone?: number;
+  highestGrade?: string;
+  lastPlayed?: number;
   purchased: number;
   skins: OwnedSkin[];
 }
@@ -191,6 +195,15 @@ export interface OwnedSkin {
   rarity: string;
   chromasOwned: number;
   chromasTotal: number;
+}
+
+/** A skin as the game data lists it, owned or not. */
+export interface SkinInfo {
+  id: number;
+  name: string;
+  tile: string;
+  rarity: string;
+  chromas: number;
 }
 
 export interface MatchSummary {
@@ -525,6 +538,10 @@ export const api = {
   updateIdle: () => call<boolean>("update_idle"),
   restartToUpdate: () => call<void>("restart_to_update"),
   openRelease: (url: string) => call<void>("open_release", { url }),
+  showModelViewer: (skinId: number, x: number, y: number, width: number, height: number) => call<void>("show_model_viewer", { skinId, x, y, width, height }),
+  placeModelViewer: (x: number, y: number, width: number, height: number) => call<void>("place_model_viewer", { x, y, width, height }),
+  closeModelViewer: () => call<void>("close_model_viewer"),
+  championSkins: (championId: number) => call<SkinInfo[]>("champion_skins", { championId }),
   getSettings: () => call<Settings>("get_settings"),
   updateSettings: (input: SettingsInput) => call<Settings>("update_settings", { input }),
   /** Durable copy of the interface language, for when the webview cache is lost. */

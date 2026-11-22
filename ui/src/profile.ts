@@ -10,6 +10,7 @@ import {
   profileIcon,
   type AccountView,
   type MatchRecord,
+  type SkinInfo,
   type OwnedChampion,
   type Profile,
   type ProfileView,
@@ -26,6 +27,8 @@ import { accountValue, pricesUpdated, skinPrice } from "./prices";
 import { championIdOf, championNameOf, queueKey, type StatsFilters } from "./stats";
 import { renderOverview, renderStats, type OverviewChange, type StatsChange } from "./statsfx";
 import { openMatchDetails } from "./matchdetails";
+import { openModelView } from "./modelview";
+import { itemImage, loadGameAssets, spellImage } from "./gameinfo";
 import { hideChartHover, pointsAttribute, wireChartHover, type HoverPoint } from "./charthover";
 
 export interface ProfileContext {
@@ -88,8 +91,19 @@ export function openProfile(context: ProfileContext): void {
   let chartMode: ChartQueue = context.mode;
   let selectedChampion: number | null = null;
   let championQuery = "";
-  let championSort: "name" | "mastery" | "skins" = "mastery";
+  let championSort: ChampionSort = "mastery";
   let withSkins = false;
+  // The skins the account does not own (asked from the game data per champion, when wanted).
+  let allSkins = false;
+  try { allSkins = localStorage.getItem("championAllSkins") === "1"; } catch { /* no storage */ }
+  const skinLists = new Map<number, SkinInfo[]>();
+  const loadSkins = (champion: number) => {
+    if (skinLists.has(champion)) return;
+    void api.championSkins(champion).then((list) => {
+      skinLists.set(champion, list);
+      if (overlay.isConnected && tab === "champions" && selectedChampion === champion) renderBody();
+    }).catch(() => undefined);
+  };
   let syncing = false;
 
   const overlay = fragment(`
@@ -109,6 +123,10 @@ export function openProfile(context: ProfileContext): void {
   document.body.append(overlay);
   const head = $(".profile-head", overlay);
   const body = $(".profile-body", overlay);
+  // Item and spell pictures of the games list arrive a moment later: draw the list again with them.
+  void loadGameAssets().then(() => {
+    if (overlay.isConnected && tab === "overview") renderBody();
+  });
 
   const account = (): AccountView => context.account() ?? initial;
 
@@ -121,6 +139,26 @@ export function openProfile(context: ProfileContext): void {
     overlay.style.setProperty("--tier-light", colors.light);
     const [gameName, tag] = splitRiotId(accountLabel(current));
     const level = profile?.summonerLevel || Number(current.level) || 0;
+    const played = view.games.filter((game) => !game.remake);
+    const wins = played.filter((game) => game.win).length;
+    const sums = played.reduce((sum, game) => ({ k: sum.k + game.kills, d: sum.d + game.deaths, a: sum.a + game.assists }), { k: 0, d: 0, a: 0 });
+    const counts = new Map<number, number>();
+    played.forEach((game) => {
+      const id = championIdOf(game, profile);
+      if (id) counts.set(id, (counts.get(id) ?? 0) + 1);
+    });
+    const favourite = [...counts.entries()].sort((a, b) => b[1] - a[1])[0];
+    const favouriteName = favourite ? (played.find((game) => championIdOf(game, profile) === favourite[0]) ? championNameOf(played.find((game) => championIdOf(game, profile) === favourite[0])!, profile) : "") : "";
+    // The wide splash when the League client can give it, over the tile every source has.
+    head.style.setProperty("--hero-art", favourite ? `url('${gameImage(`v1/champion-splashes/${favourite[0]}/${favourite[0]}000.jpg`)}'), url('${gameImage(`v1/champion-tiles/${favourite[0]}/${favourite[0]}000.jpg`)}')` : "none");
+    const figures: [string, string][] = played.length
+      ? [
+          [`${Math.round((wins / played.length) * 100)}%`, t("stats.winRate")],
+          [new Intl.NumberFormat(localeTag()).format(played.length), t("stats.games")],
+          [kda(sums.k, sums.d, sums.a), t("stats.kda")],
+          ...(favouriteName ? [[favouriteName, t("profile.mostPlayed")] as [string, string]] : []),
+        ]
+      : [];
     head.innerHTML = `
       <div class="profile-avatar">
         ${profile?.profileIconId ? `<img src="${esc(profileIcon(profile.profileIconId))}" alt="" draggable="false" />` : `<div class="avatar-emblem">${emblem(rank.tier, 72, context.mode)}</div>`}
@@ -133,6 +171,7 @@ export function openProfile(context: ProfileContext): void {
           <span class="acc-id">${esc(current.accountId)}</span>
           <span class="profile-synced">${esc(profile ? t("profile.syncedAt", { time: ago(profile.syncedAt) }) : t("profile.never"))}</span>
         </div>
+        ${figures.length ? `<dl class="profile-figures">${figures.map(([value, label]) => `<div><dt>${esc(label)}</dt><dd>${esc(value)}</dd></div>`).join("")}</dl>` : ""}
       </div>
       <div class="profile-actions">
         <button class="btn btn-ghost" data-profile="sync" ${syncing ? "disabled" : ""}>${icon("refresh-cw", 14)}<span>${esc(t(syncing ? "profile.syncing" : "profile.sync"))}</span></button>
@@ -155,7 +194,10 @@ export function openProfile(context: ProfileContext): void {
     overviewChange = "data";
     if (tab === "stats") renderStats(body, view.games, view.profile, statsFilters, statsChange);
     statsChange = "data";
-    if (tab === "champions") body.innerHTML = championsHtml(view.profile, { selectedChampion, championQuery, championSort, withSkins });
+    if (tab === "champions") {
+      if (allSkins && selectedChampion !== null) loadSkins(selectedChampion);
+      body.innerHTML = championsHtml(view.profile, { selectedChampion, championQuery, championSort, withSkins, allSkins, skinList: selectedChampion !== null ? skinLists.get(selectedChampion) ?? null : null });
+    }
     if (tab === "value") body.innerHTML = valueHtml(view.profile, context.rpPerEuro);
     if (tab === "champions") {
       const search = body.querySelector<HTMLInputElement>("[data-champion-search]");
@@ -283,10 +325,12 @@ export function openProfile(context: ProfileContext): void {
       return renderBody();
     }
     const sort = target.closest<HTMLElement>("[data-champion-sort]")?.dataset.championSort;
-    if (sort === "name" || sort === "mastery" || sort === "skins") {
-      championSort = sort;
+    if (sort && (CHAMPION_SORTS as readonly string[]).includes(sort)) {
+      championSort = sort as ChampionSort;
       return renderBody();
     }
+    const model = target.closest<HTMLElement>("[data-model]");
+    if (model) return openModelView(Number(model.dataset.model), model.dataset.modelName ?? "");
     if (target.closest("[data-champion-back]")) {
       selectedChampion = null;
       return renderBody();
@@ -331,6 +375,11 @@ export function openProfile(context: ProfileContext): void {
   });
   overlay.addEventListener("change", (event) => {
     const target = event.target as HTMLInputElement;
+    if (target.matches("[data-all-skins]")) {
+      allSkins = target.checked;
+      try { localStorage.setItem("championAllSkins", allSkins ? "1" : "0"); } catch { /* no storage */ }
+      return renderBody();
+    }
     if (target.matches("[data-with-skins]")) {
       withSkins = target.checked;
       renderBody();
@@ -447,6 +496,8 @@ function overviewHtml(account: AccountView, view: ProfileView, chartMode: ChartQ
   return `
     <div class="stats-view overview-view">
     ${profile ? "" : emptyNotice()}
+    <div class="overview-grid">
+    <aside class="overview-side">
     <div class="ranked-cards">${cards.join("")}</div>
     <section class="profile-panel rank-panel" data-reveal>
       <header class="panel-head">
@@ -461,7 +512,12 @@ function overviewHtml(account: AccountView, view: ProfileView, chartMode: ChartQ
       ${historyNote(points)}
     </section>
     ${seasonHistory(view.seasons ?? [])}
+    ${championPerformance(view.games, profile)}
+    </aside>
+    <div class="overview-main">
     ${recentGames(view.games, profile, mode)}
+    </div>
+    </div>
     </div>`;
 }
 
@@ -664,70 +720,148 @@ function rankChart(points: RankPoint[], mode: Mode): string {
 const kda = (kills: number, deaths: number, assists: number): string =>
   deaths ? ((kills + assists) / deaths).toFixed(2) : t("profile.perfect");
 
+const portraitOf = (id: number) => (id ? `<img src="${esc(championIcon(id))}" alt="" draggable="false" />` : `<span class="portrait-blank"></span>`);
+
+/** The champions played most, with how they went (all archived games). */
+function championPerformance(archive: MatchRecord[], profile: Profile | null): string {
+  const games = archive.filter((game) => !game.remake);
+  if (games.length < 3) return "";
+  const played = new Map<string, { id: number; games: number; wins: number; k: number; d: number; a: number }>();
+  games.forEach((game) => {
+    const name = championNameOf(game, profile);
+    const entry = played.get(name) ?? { id: championIdOf(game, profile), games: 0, wins: 0, k: 0, d: 0, a: 0 };
+    entry.games++;
+    if (game.win) entry.wins++;
+    entry.k += game.kills;
+    entry.d += game.deaths;
+    entry.a += game.assists;
+    played.set(name, entry);
+  });
+  const top = [...played.entries()].sort((a, b) => b[1].games - a[1].games).slice(0, 7);
+  return `
+    <section class="profile-panel champ-panel" data-reveal>
+      <h3>${esc(t("profile.champPerformance"))}</h3>
+      <ul class="champ-rows">
+        ${top.map(([name, entry]) => {
+          const rate = Math.round((entry.wins / entry.games) * 100);
+          return `
+          <li>
+            ${portraitOf(entry.id)}
+            <div><b>${esc(name)}</b><span>${esc(kda(entry.k, entry.d, entry.a))} ${esc(t("stats.kda"))} · ${esc(t("stats.gamesCount", { count: entry.games }))}</span></div>
+            <div class="champ-rate ${rate >= 50 ? "is-good" : "is-bad"}"><b>${rate}%</b><span>${esc(t("profile.winLoss", { wins: entry.wins, losses: entry.games - entry.wins }))}</span></div>
+          </li>`;
+        }).join("")}
+      </ul>
+    </section>`;
+}
+
 function recentGames(archive: MatchRecord[], profile: Profile | null, mode: Mode): string {
-  const games = archive.filter((game) => !game.remake).slice(0, 20);
+  const games = archive.filter((game) => !game.remake).slice(0, 30);
   if (!games.length) {
     return `<section class="profile-panel" data-reveal><h3>${esc(t("profile.recent"))}</h3><p class="muted">${esc(t("profile.recentEmpty"))}</p></section>`;
   }
   const wins = games.filter((game) => game.win).length;
   const totals = games.reduce((sum, game) => ({ k: sum.k + game.kills, d: sum.d + game.deaths, a: sum.a + game.assists }), { k: 0, d: 0, a: 0 });
-  const played = new Map<string, { id: number; games: number; wins: number }>();
+  const played = new Map<string, { id: number; games: number; wins: number; k: number; d: number; a: number }>();
   games.forEach((game) => {
     const name = championNameOf(game, profile);
-    const entry = played.get(name) ?? { id: championIdOf(game, profile), games: 0, wins: 0 };
+    const entry = played.get(name) ?? { id: championIdOf(game, profile), games: 0, wins: 0, k: 0, d: 0, a: 0 };
     entry.games++;
     if (game.win) entry.wins++;
+    entry.k += game.kills;
+    entry.d += game.deaths;
+    entry.a += game.assists;
     played.set(name, entry);
   });
   const top = [...played.entries()].sort((a, b) => b[1].games - a[1].games).slice(0, 3);
   const rate = Math.round((wins / games.length) * 100);
-  const portrait = (id: number) => id ? `<img src="${esc(championIcon(id))}" alt="" draggable="false" />` : `<span class="portrait-blank"></span>`;
+  const withTeam = games.filter((game) => game.teamKills > 0);
+  const participation = withTeam.length ? Math.round((withTeam.reduce((sum, game) => sum + (game.kills + game.assists) / game.teamKills, 0) / withTeam.length) * 100) : null;
+  const average = (value: number) => (value / games.length).toFixed(1);
+  const number = (value: number) => new Intl.NumberFormat(localeTag()).format(value);
+  // One block per day, newest first, with that day's score.
+  const days: { label: string; games: MatchRecord[] }[] = [];
+  games.forEach((game) => {
+    const label = new Date(game.created).toLocaleDateString(localeTag(), { month: "short", day: "numeric" });
+    const last = days.at(-1);
+    if (last && last.label === label) last.games.push(game);
+    else days.push({ label, games: [game] });
+  });
+  let index = 0;
+  const row = (game: MatchRecord) => {
+    const detailed = game.source === "client" && game.durationSeconds > 0;
+    const kp = game.teamKills ? Math.round(((game.kills + game.assists) / game.teamKills) * 100) : null;
+    const minutes = game.durationSeconds / 60;
+    const items = [0, 1, 2, 3, 4, 5, 6].map((slot) => game.items?.[slot] ?? 0);
+    const openable = game.gameId > 0;
+    return `
+          <li class="match ${game.win ? "is-win" : "is-loss"}${openable ? " is-openable" : ""}" style="--k:${index++}" ${openable ? `data-match="${game.gameId}" data-match-champion="${championIdOf(game, profile)}" data-match-score="${game.kills},${game.deaths},${game.assists}" tabindex="0" role="button"` : ""} data-tooltip="${esc(t(openable ? "profile.gameOpen" : "profile.gameNoDetails"))}">
+            <span class="match-champion">${portraitOf(championIdOf(game, profile))}</span>
+            <span class="match-spells">${(game.spells ?? []).slice(0, 2).map((id) => spellImage(id, 19)).join("")}</span>
+            <div class="match-result">
+              <b>${esc(t(game.win ? "profile.win" : "profile.loss"))}</b>
+              <span>${esc(t(queueKey(game)))}${detailed ? ` · ${esc(t("profile.minutes", { m: Math.round(minutes) }))}` : ""}${game.source === "opgg" ? ` · <em class="source-tag">OP.GG</em>` : ""}</span>
+            </div>
+            <div class="match-kda"><b>${game.kills} / <em>${game.deaths}</em> / ${game.assists}</b><span>${esc(kda(game.kills, game.deaths, game.assists))} ${esc(t("stats.kda"))}${kp !== null ? ` · ${kp}% ${esc(t("stats.kpShort"))}` : ""}</span></div>
+            <div class="match-cs"><span>${esc(t("profile.cs", { cs: game.cs }))}${detailed && minutes > 0 ? ` · ${(game.cs / minutes).toFixed(1)}/min` : ""}</span><span>${detailed ? `${esc(number(game.damage))} ${esc(t("stats.damageShort"))}` : game.opScoreX10 != null ? esc(`OP ${(game.opScoreX10 / 10).toFixed(1)}`) : ""}</span></div>
+            <div class="match-items">${detailed ? items.map((id) => itemImage(id, 26)).join("") : ""}</div>
+            <time class="match-time" datetime="${new Date(game.created).toISOString()}">${esc(ago(game.created))}</time>
+          </li>`;
+  };
   return `
     <section class="profile-panel recent-panel" data-reveal>
       <header class="panel-head">
-        <h3>${esc(t("profile.recent"))}</h3>
-        <span class="muted">${esc(t("profile.recentSummary", { count: games.length, wins, losses: games.length - wins, kda: kda(totals.k, totals.d, totals.a) }))}
-          · <button class="text-button" data-open-stats>${esc(t("stats.more"))}</button></span>
+        <h3>${esc(t("profile.lastGames", { count: games.length }))}</h3>
+        <button class="text-button" data-open-stats>${esc(t("stats.more"))}</button>
       </header>
       <div class="recent-summary">
-        <div class="donut-wrap" data-tooltip="${esc(t("profile.recentSummary", { count: games.length, wins, losses: games.length - wins, kda: kda(totals.k, totals.d, totals.a) }))}"><div class="hero-ring ${rate >= 50 ? "is-good" : "is-bad"}" style="--p:${(rate / 100).toFixed(2)}"><svg viewBox="0 0 120 120" aria-hidden="true"><circle class="ring-track" cx="60" cy="60" r="52"/><circle class="ring-value" cx="60" cy="60" r="52" pathLength="100"/></svg><div class="hero-ring-text"><b data-count>${rate}%</b></div></div></div>
+        <div class="recent-ring">
+          <div class="donut-wrap"><div class="hero-ring ${rate >= 50 ? "is-good" : "is-bad"}" style="--p:${(rate / 100).toFixed(2)}"><svg viewBox="0 0 120 120" aria-hidden="true"><circle class="ring-track" cx="60" cy="60" r="52"/><circle class="ring-value" cx="60" cy="60" r="52" pathLength="100"/></svg><div class="hero-ring-text"><b data-count>${rate}%</b></div></div></div>
+          <div><b>${esc(t("profile.winLoss", { wins, losses: games.length - wins }))}</b><span>${esc(t("stats.winRate"))}</span></div>
+        </div>
         <div class="top-champions">
           ${top.map(([name, entry]) => `
             <div class="top-champion">
-              ${portrait(entry.id)}
+              ${portraitOf(entry.id)}
               <div><b>${esc(name)}</b>
-                <span>${esc(t("profile.winLoss", { wins: entry.wins, losses: entry.games - entry.wins }))} · ${Math.round((entry.wins / entry.games) * 100)}%</span></div>
+                <span>${Math.round((entry.wins / entry.games) * 100)}% · ${esc(t("profile.winLoss", { wins: entry.wins, losses: entry.games - entry.wins }))} · ${esc(kda(entry.k, entry.d, entry.a))} ${esc(t("stats.kda"))}</span></div>
             </div>`).join("")}
         </div>
+        <div class="recent-figure"><span>${esc(t("stats.kda"))}</span><b>${esc(kda(totals.k, totals.d, totals.a))}</b><em>${average(totals.k)} / <i>${average(totals.d)}</i> / ${average(totals.a)}</em></div>
+        ${participation !== null ? `<div class="recent-figure"><span>${esc(t("stats.kp"))}</span><b>${participation}%</b></div>` : ""}
       </div>
-      <ol class="match-list" data-mode="${mode}">
-        ${games.map((game, index) => {
-          const detailed = game.source === "client" && game.durationSeconds > 0;
-          const kp = game.teamKills ? Math.round(((game.kills + game.assists) / game.teamKills) * 100) : null;
-          return `
-          <li class="match ${game.win ? "is-win" : "is-loss"}${game.gameId > 0 ? " is-openable" : ""}" style="--k:${index}" ${game.gameId > 0 ? `data-match="${game.gameId}" data-match-champion="${championIdOf(game, profile)}" data-match-score="${game.kills},${game.deaths},${game.assists}" tabindex="0" role="button"` : ""} data-tooltip="${esc(t(game.gameId > 0 ? "profile.gameOpen" : "profile.gameNoDetails"))}">
-            <span class="match-champion">${portrait(championIdOf(game, profile))}</span>
-            <div class="match-result">
-              <b>${esc(t(game.win ? "profile.win" : "profile.loss"))}</b>
-              <span>${esc(t(queueKey(game)))}${game.source === "opgg" ? ` · <em class="source-tag">OP.GG</em>` : ""}</span>
-            </div>
-            <div class="match-kda"><b>${game.kills} / <em>${game.deaths}</em> / ${game.assists}</b><span>${esc(kda(game.kills, game.deaths, game.assists))} KDA${kp !== null ? ` · ${kp}% ${esc(t("stats.kpShort"))}` : ""}</span></div>
-            <div class="match-cs"><span>${esc(t("profile.cs", { cs: game.cs }))}</span><span>${detailed ? esc(t("profile.minutes", { m: Math.round(game.durationSeconds / 60) })) : game.opScoreX10 != null ? esc(`OP ${(game.opScoreX10 / 10).toFixed(1)}`) : ""}</span></div>
-            <div class="match-extra">${detailed ? `<span>${esc(new Intl.NumberFormat(localeTag()).format(game.damage))} ${esc(t("stats.damageShort"))}</span><span>${esc(new Intl.NumberFormat(localeTag()).format(game.gold))} ${esc(t("stats.goldShort"))} · ${game.vision} ${esc(t("stats.visionShort"))}</span>` : ""}</div>
-            <time class="match-time" datetime="${new Date(game.created).toISOString()}">${esc(ago(game.created))}</time>
-          </li>`;
-        }).join("")}
-      </ol>
+    </section>
+    ${days.map((day) => {
+      const won = day.games.filter((game) => game.win).length;
+      return `
+    <section class="day-group" data-reveal>
+      <header class="day-head"><h4>${esc(day.label)}</h4><span>${esc(t("profile.winLoss", { wins: won, losses: day.games.length - won }))}</span></header>
+      <ol class="match-list" data-mode="${mode}">${day.games.map(row).join("")}</ol>
     </section>`;
+    }).join("")}`;
 }
 
 // ---------------------------------------------------------------- champions
 
+/** The League client's own orders (alphabetical, champion mastery, seasonal mastery), plus two of ours. */
+const CHAMPION_SORTS = ["mastery", "season", "played", "skins", "name"] as const;
+type ChampionSort = (typeof CHAMPION_SORTS)[number];
+const SORT_LABELS: Record<ChampionSort, MessageKey> = {
+  mastery: "profile.sortMastery",
+  season: "profile.sortSeason",
+  played: "profile.sortPlayed",
+  skins: "profile.sortSkins",
+  name: "profile.sortName",
+};
+
 interface ChampionFilters {
   selectedChampion: number | null;
   championQuery: string;
-  championSort: "name" | "mastery" | "skins";
+  championSort: ChampionSort;
   withSkins: boolean;
+  /** Show the skins the account does not own too, and that champion's full list once loaded. */
+  allSkins: boolean;
+  skinList: SkinInfo[] | null;
 }
 
 const normalize = (value: string): string =>
@@ -736,7 +870,7 @@ const normalize = (value: string): string =>
 function championsHtml(profile: Profile | null, filters: ChampionFilters): string {
   if (!profile) return emptyNotice();
   const selected = profile.champions.find((champion) => champion.id === filters.selectedChampion);
-  if (selected) return championSkins(selected);
+  if (selected) return championSkins(selected, filters.allSkins, filters.skinList);
   const query = normalize(filters.championQuery);
   const list = profile.champions
     .filter((champion) => !filters.withSkins || champion.skins.length > 0)
@@ -744,30 +878,52 @@ function championsHtml(profile: Profile | null, filters: ChampionFilters): strin
       || normalize(champion.name).includes(query)
       || champion.skins.some((skin) => normalize(skin.name).includes(query)))
     .sort((a, b) => {
-      if (filters.championSort === "mastery") return b.masteryPoints - a.masteryPoints || a.name.localeCompare(b.name, lang());
-      if (filters.championSort === "skins") return b.skins.length - a.skins.length || a.name.localeCompare(b.name, lang());
-      return a.name.localeCompare(b.name, lang());
+      const byName = a.name.localeCompare(b.name, lang());
+      const byPoints = b.masteryPoints - a.masteryPoints;
+      if (filters.championSort === "mastery") return byPoints || byName;
+      if (filters.championSort === "season") return (b.seasonMilestone ?? 0) - (a.seasonMilestone ?? 0) || byPoints || byName;
+      if (filters.championSort === "played") return (b.lastPlayed ?? 0) - (a.lastPlayed ?? 0) || byPoints || byName;
+      if (filters.championSort === "skins") return b.skins.length - a.skins.length || byName;
+      return byName;
     });
   const skinTotal = profile.champions.reduce((sum, champion) => sum + champion.skins.length, 0);
+  const compact = new Intl.NumberFormat(localeTag(), { notation: "compact", maximumFractionDigits: 1 });
+  const levels = profile.champions.reduce((sum, champion) => sum + champion.masteryLevel, 0);
+  const points = profile.champions.reduce((sum, champion) => sum + champion.masteryPoints, 0);
   return `
     <div class="champion-toolbar">
       <label class="search">${icon("search", 15)}
         <input data-champion-search type="text" value="${esc(filters.championQuery)}" placeholder="${esc(t("profile.search"))}" autocomplete="off" spellcheck="false" /></label>
       <div class="segmented">
-        ${(["mastery", "skins", "name"] as const).map((sort) => `
-          <button data-champion-sort="${sort}" aria-pressed="${filters.championSort === sort}">${esc(t(sort === "mastery" ? "profile.sortMastery" : sort === "skins" ? "profile.sortSkins" : "profile.sortName"))}</button>`).join("")}
+        ${CHAMPION_SORTS.map((sort) => `
+          <button data-champion-sort="${sort}" aria-pressed="${filters.championSort === sort}">${esc(t(SORT_LABELS[sort]))}</button>`).join("")}
       </div>
       <label class="check-row"><input type="checkbox" data-with-skins ${filters.withSkins ? "checked" : ""}/><span>${esc(t("profile.withSkins"))}</span></label>
-      <span class="muted champion-count">${esc(t("profile.championCount", { count: profile.champions.length }))} · ${esc(t("profile.skinCount", { count: skinTotal }))}</span>
     </div>
+    <dl class="champion-totals">
+      <div><dt>${esc(t("profile.champions"))}</dt><dd>${profile.champions.length}</dd></div>
+      <div><dt>${esc(t("profile.skinsOwned"))}</dt><dd>${skinTotal}</dd></div>
+      <div><dt>${esc(t("profile.masteryTotal"))}</dt><dd>${number(levels)}</dd></div>
+      <div><dt>${esc(t("profile.masteryPoints"))}</dt><dd>${esc(compact.format(points))}</dd></div>
+    </dl>
     <div class="champion-grid">
-      ${list.map((champion) => `
+      ${list.map((champion) => {
+        const meta = filters.championSort === "played" && champion.lastPlayed
+          ? ago(champion.lastPlayed)
+          : filters.championSort === "season" && champion.seasonMilestone
+            ? t("profile.seasonLevel", { level: champion.seasonMilestone })
+            : champion.masteryPoints ? compact.format(champion.masteryPoints) : "";
+        return `
         <button class="champion-tile${champion.skins.length ? " has-skins" : ""}" data-champion="${champion.id}" title="${esc(`${champion.name} — ${champion.title}`)}">
-          <span class="champion-portrait"><img src="${esc(championIcon(champion.id))}" alt="" loading="lazy" draggable="false" />
-            ${champion.masteryLevel ? `<span class="mastery-badge">${champion.masteryLevel}</span>` : ""}</span>
-          <span class="champion-name">${esc(champion.name)}</span>
-          <span class="champion-skins">${champion.skins.length ? `${icon("shirt", 12)}${champion.skins.length}` : ""}</span>
-        </button>`).join("")}
+          <span class="champion-art" style="background-image:url('${esc(championIcon(champion.id))}')"><img src="${esc(gameImage(`v1/champion-loadscreens/${champion.id}/${champion.id}000.jpg`))}" alt="" loading="lazy" draggable="false" /></span>
+          ${champion.skins.length ? `<span class="champion-skins">${icon("shirt", 12)}${champion.skins.length}</span>` : ""}
+          ${champion.highestGrade ? `<span class="champion-grade">${esc(champion.highestGrade)}</span>` : ""}
+          <span class="champion-info">
+            <span class="champion-name">${esc(champion.name)}</span>
+            <span class="champion-meta">${champion.masteryLevel ? `<b>${champion.masteryLevel}</b>` : ""}${meta ? `<em>${esc(meta)}</em>` : ""}</span>
+          </span>
+        </button>`;
+      }).join("")}
     </div>`;
 }
 
@@ -778,33 +934,43 @@ function priceLabel(price: ReturnType<typeof skinPrice>): string {
   return "—";
 }
 
-function championSkins(champion: OwnedChampion): string {
+function championSkins(champion: OwnedChampion, allSkins: boolean, list: SkinInfo[] | null): string {
+  const owned = new Set(champion.skins.map((skin) => skin.id));
+  const missing = allSkins && list ? list.filter((skin) => !owned.has(skin.id)) : [];
+  const card = (skin: { id: number; name: string; tile: string; rarity: string }, chromas: string, unowned: boolean) => {
+    const price = skinPrice(skin);
+    return `
+          <figure class="skin-card rarity-${esc(skin.rarity || "none")}${unowned ? " is-unowned" : ""}">
+            <div class="skin-art">${skin.tile ? `<img src="${esc(gameImage(skin.tile))}" alt="" loading="lazy" draggable="false" />` : ""}${unowned ? `<span class="skin-tag">${esc(t("profile.notOwned"))}</span>` : ""}</div>
+            <figcaption>
+              <b>${esc(skin.name)}</b>
+              <button class="text-button skin-3d" data-model="${skin.id}" data-model-name="${esc(skin.name)}">${esc(t("profile.view3d"))}</button>
+              <span class="skin-meta">
+                <span class="skin-price price-${price.kind}">${esc(priceLabel(price))}</span>
+                ${chromas ? `<span>${esc(chromas)}</span>` : ""}
+              </span>
+            </figcaption>
+          </figure>`;
+  };
+  const cards = [
+    ...champion.skins.map((skin) => card(skin, skin.chromasTotal ? t("profile.chromas", { owned: skin.chromasOwned, total: skin.chromasTotal }) : "", false)),
+    ...missing.map((skin) => card(skin, skin.chromas ? t("profile.chromas", { owned: 0, total: skin.chromas }) : "", true)),
+  ];
+  const total = list ? list.length : null;
   return `
     <div class="champion-detail-head">
       <button class="btn btn-ghost" data-champion-back>${icon("arrow-left", 14)}<span>${esc(t("profile.back"))}</span></button>
+      <button class="btn btn-ghost champion-3d" data-model="${champion.id * 1000}" data-model-name="${esc(champion.name)}" data-tooltip="${esc(t("profile.view3dHint"))}">${icon("external-link", 14)}<span>${esc(t("profile.view3d"))}</span></button>
       <img src="${esc(championIcon(champion.id))}" alt="" draggable="false" />
       <div>
         <h3>${esc(champion.name)}</h3>
         <span class="muted">${esc(champion.title)}${champion.masteryLevel ? ` · ${esc(t("profile.mastery", { level: champion.masteryLevel }))} · ${esc(t("profile.points", { points: number(champion.masteryPoints) }))}` : ""}</span>
       </div>
+      <label class="check-row skins-all"><input type="checkbox" data-all-skins ${allSkins ? "checked" : ""}/><span>${esc(t("profile.showUnowned"))}${allSkins && total !== null ? ` · ${esc(t("profile.skinsOf", { owned: champion.skins.length, total }))}` : ""}</span></label>
     </div>
-    ${champion.skins.length ? `
-      <div class="skin-grid">
-        ${champion.skins.map((skin) => {
-          const price = skinPrice(skin);
-          return `
-          <figure class="skin-card rarity-${esc(skin.rarity || "none")}">
-            <div class="skin-art">${skin.tile ? `<img src="${esc(gameImage(skin.tile))}" alt="" loading="lazy" draggable="false" />` : ""}</div>
-            <figcaption>
-              <b>${esc(skin.name)}</b>
-              <span class="skin-meta">
-                <span class="skin-price price-${price.kind}">${esc(priceLabel(price))}</span>
-                ${skin.chromasTotal ? `<span>${esc(t("profile.chromas", { owned: skin.chromasOwned, total: skin.chromasTotal }))}</span>` : ""}
-              </span>
-            </figcaption>
-          </figure>`;
-        }).join("")}
-      </div>` : `<p class="muted profile-note">${esc(t("profile.noSkins"))}</p>`}`;
+    ${cards.length ? `
+      <div class="skin-grid">${cards.join("")}
+      </div>` : `<p class="muted profile-note">${esc(t(allSkins && !list ? "profile.skinsLoading" : "profile.noSkins"))}</p>`}`;
 }
 
 // ---------------------------------------------------------------- value
