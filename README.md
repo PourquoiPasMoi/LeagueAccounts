@@ -111,6 +111,7 @@ Off by default. Turn it on in Settings › Recorder and every League game is rec
 </table>
 
 - Every game mode gets its proper name (Ranked Solo/Duo, Ranked Flex, Ranked 5s, Normal Draft, Swiftplay, ARAM, ARAM: Mayhem, Arena, Clash, Classic Rift and more). The library has Games and Clips tabs, champion banners on each card, and can filter or group games by mode, newest or oldest first. Hover a card for its delete button, or use Select to tick several recordings and delete them at once. Cards are edged in teal for a win and red for a loss. Clips are grouped into Discord versions and other clips, and any clip can be turned into a Discord version (under 9.5 MB) in one click. Right-click a key moment to set a clip around it (6 s before, 4 s after), adjust it and save. Rename any recording with the pencil next to its title. Under the timeline, sound waves show game sound, microphone and Discord separately (follow the zoom, click to jump, hide with one button), so moments where everyone talks are easy to find. The mouse wheel zooms the timeline, each sound strip can be resized, and a clip in progress can be cancelled. Add Discord webhooks in Settings › Discord (named, as many as you like) and post a clip with a message to one or several channels at once (rename a webhook any time). Each clip remembers where it was posted: the card shows the channels and the clip's page lists every post with its date. After a successful post the app asks whether to delete the clip from your PC.
+- The mouse pointer is recorded, so you can see where you clicked and aimed (switch it off in Settings › Recorder).
 - Champ select is part of the video: recording starts when a match is found and moves from the League client into the game with a short, smooth transition, all in one file. If the match is declined or someone dodges, nothing is kept. Prefer games only? Turn off Record champ select in Settings › Recorder.
 - After the game, the video goes back to the end-of-game screen with the same transition, so the talk after the match is kept. It stops when you leave that screen (Play again, lobby) or after 10 minutes. Turn off Record after the game to skip it.
 - Smaller files: on graphics cards with an AV1 encoder (NVIDIA RTX 40 or newer, AMD RX 7000 or newer, Intel Arc / Core Ultra) choose AV1 in Settings › Recorder for about a third less space at the same picture; other cards keep H.264, which plays everywhere. Variable bitrate gives fights up to twice the bitrate and calm moments less, at the same average size.
@@ -135,6 +136,14 @@ Off by default. Turn it on in Settings › Recorder and every League game is rec
 - Under the video, the game's end-of-game stats as in the League client: Scoreboard, Overview (gold advantage over time, kills and objectives, kill map), Stats, Graphs and Runes, with live values on hover. Click a time on the gold graph, the kill strips or the kill map to watch that moment. They are read from the League client's match history after the game and kept next to the recording. Hide them for a full-size view.
 - Built for low-end PCs: the picture is captured and converted on the graphics card and encoded by its own video encoder (NVIDIA, Intel or AMD) through Windows Media Foundation, with a software fallback. Nothing extra to download.
 - Capture only, the way OBS and Medal work (Windows Graphics Capture of the game window, or the whole screen). The game process is never opened, hooked, read or drawn over. Key moments come from Riot's local live game data.
+
+### Patch notes
+
+A Patch notes page in the sidebar shows every League of Legends patch since 2019 in the app's own look, read from Riot's public patch notes in the app's language. Notes are saved on your PC once read, so old patches open instantly and offline; the newest six download by themselves and the rest only when you ask (about 12 MB in all).
+
+- Search across every saved patch, with typo fixes ("anie" finds Annie) and patch numbers ("26.23").
+- Pick a topic (Champions, Items, Systems and modes). Under Champions, add an ability such as "Zed Q" to see only that ability's changes, newest first, with the patch and date it last changed.
+- A second tab lists every change made to League Companion itself.
 
 ### Overview of all accounts
 

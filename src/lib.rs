@@ -30,6 +30,7 @@ pub mod music;
 pub mod music_wave;
 pub mod models;
 pub mod overview;
+pub mod patchnotes;
 pub mod rank_fetcher;
 pub mod riot_client;
 pub mod self_update;

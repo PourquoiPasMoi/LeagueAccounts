@@ -18,9 +18,11 @@ import "./recordings.css";
 import "./gameinfo.css";
 import "./music.css";
 import "./companion.css";
+import "./patchnotes.css";
 // Final layer of the design: must stay the last stylesheet.
 import "./polish.css";
 import { openRecordings } from "./recordings";
+import { openPatchNotes } from "./patchnotes";
 import { askBackupPassphrase, autoAcceptSection, remotePage, sendRemoteTexts, watchRemoteNote, companionNav, companionPages, guideDue, openGuide, openOverview, sendNotifyTexts, wireCompanionSettings } from "./companion";
 import { initMusic, musicOn, musicSpeed, openMusic, setMusicEnabled } from "./music";
 import type { DecayInfo, DiscordWebhook, ModeRule, RecorderPrefs, RecorderStatus } from "./api";
@@ -1099,6 +1101,7 @@ async function openSettings(): Promise<void> {
             ${toggle("recEnabled", recorder.enabled, t("settings.recOn"), t("settings.recOnHint"))}
             ${toggle("recChampSelect", recorder.champSelect, t("settings.recChampSelect"), t("settings.recChampSelectHint"))}
             ${toggle("recPostGame", recorder.postGame, t("settings.recPostGame"), t("settings.recPostGameHint"))}
+            ${toggle("recCursor", recorder.cursor, t("settings.recCursor"), t("settings.recCursorHint"))}
             ${toggle("recAutoHighlights", recorder.autoHighlights, t("settings.recAutoHighlights"), t("settings.recAutoHighlightsHint"))}
             <div class="rec-folder rec-bookmark">
               <span class="toggle-text"><strong>${esc(t("settings.recBookmarkKey"))}</strong><span>${esc(t("settings.recBookmarkKeyHint"))}</span></span>
@@ -1496,6 +1499,7 @@ async function openSettings(): Promise<void> {
         diskLimitGb: Math.min(100000, Math.max(0, Math.round(Number($<HTMLInputElement>('[name="recLimit"]', root).value) || 0))),
         champSelect: checked("recChampSelect"),
         postGame: checked("recPostGame"),
+        cursor: checked("recCursor"),
         autoHighlights: checked("recAutoHighlights"),
         bookmarkKey: $<HTMLInputElement>('[name="recBookmarkKey"]', root).value,
         bookmarkBefore: Math.min(600, Math.max(1, Math.round(Number($<HTMLInputElement>('[name="recBookmarkBefore"]', root).value) || 60))),
@@ -1991,6 +1995,7 @@ function wire(): void {
       if (action === "game-settings") void openGameSettings();
       if (action === "recordings") void openRecordings();
       if (action === "overview") showOverview();
+      if (action === "patch-notes") void openPatchNotes(($("#version").textContent ?? "").replace(/^v/, ""));
       if (action === "remote") openSettingsAt("remote");
       if (action === "music") void openMusic();
       if (action === "builds") openCurrentBuild();

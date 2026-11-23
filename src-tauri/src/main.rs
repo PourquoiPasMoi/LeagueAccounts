@@ -12,6 +12,7 @@ mod login_control;
 mod live;
 mod music;
 mod notify;
+mod patchnotes;
 mod recorder;
 mod refresh;
 mod remote;
@@ -1691,6 +1692,12 @@ fn main() {
             music::music_now,
             music::music_tray,
             companion::accounts_overview,
+            patchnotes::patch_notes_list,
+            patchnotes::patch_notes,
+            patchnotes::patch_notes_search,
+            patchnotes::patch_notes_download,
+            patchnotes::patch_notes_cancel,
+            patchnotes::open_patch_notes,
             companion::backup_prefs,
             companion::set_backup_prefs,
             companion::set_backup_passphrase,

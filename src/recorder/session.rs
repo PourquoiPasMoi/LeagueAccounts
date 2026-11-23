@@ -33,6 +33,8 @@ pub struct RecordSettings {
     pub hardware: bool,
     /// Desktop Duplication instead of window capture.
     pub screen: bool,
+    /// The mouse pointer is part of the picture.
+    pub cursor: bool,
     pub game_audio: bool,
     /// Discord's sound only (voice chat), as its own track.
     pub discord: bool,
@@ -412,7 +414,7 @@ fn record_inner(request: &RecordRequest, shared: &Shared, path: &Path, stamp: &s
         if stop.load(Ordering::Relaxed) {
             return Outcome::Failed("recorder_stopped");
         }
-        if let Ok(opened) = Capture::open(&gpu, window, settings.screen) {
+        if let Ok(opened) = Capture::open(&gpu, window, settings.screen, settings.cursor) {
             capture = Some(opened);
             break;
         }
@@ -562,9 +564,9 @@ fn record_inner(request: &RecordRequest, shared: &Shared, path: &Path, stamp: &s
                 if let Some(game) = find_game_window() {
                     let first_seen = *game_seen.get_or_insert_with(Instant::now);
                     let opened = if first_seen.elapsed() < WINDOW_CAPTURE_PATIENCE {
-                        Capture::open_strict(&gpu, game, settings.screen)
+                        Capture::open_strict(&gpu, game, settings.screen, settings.cursor)
                     } else {
-                        Capture::open(&gpu, game, settings.screen)
+                        Capture::open(&gpu, game, settings.screen, settings.cursor)
                     };
                     if let Ok(opened) = opened {
                         // The game's own sound from now on, on the same track.
@@ -591,7 +593,7 @@ fn record_inner(request: &RecordRequest, shared: &Shared, path: &Path, stamp: &s
             let mut moved = false;
             if matches!(stage, Stage::Game) && settings.post_game {
                 if let Some(client) = find_client_window() {
-                    if let Ok(opened) = Capture::open(&gpu, client, settings.screen) {
+                    if let Ok(opened) = Capture::open(&gpu, client, settings.screen, settings.cursor) {
                         if encoder.hold().is_ok() {
                             if settings.game_audio {
                                 if let Ok(source) = audio::game_sound(window_process_id(client)) {

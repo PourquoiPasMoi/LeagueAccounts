@@ -63,6 +63,13 @@ const dateText = (date: string): string => {
   return Number.isNaN(parsed.getTime()) ? date : parsed.toLocaleDateString(localeTag(), { day: "numeric", month: "long", year: "numeric" });
 };
 
+/** The app's own changes up to the running version, in the current language (patch notes page). */
+export function appChanges(current: string): { version: string; date: string; items: string[] }[] {
+  const language = lang();
+  const upTo = LOG.filter((entry) => !current || !newer(entry.version, current));
+  return (upTo.length ? upTo : LOG).map((entry) => ({ version: entry.version, date: entry.date, items: entry.items[language] ?? entry.items.en ?? [] }));
+}
+
 export interface ChangelogOptions {
   /** The version running now. */
   current: string;

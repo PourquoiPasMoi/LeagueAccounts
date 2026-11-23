@@ -339,6 +339,92 @@ export interface SkinOwner {
   rarity: string;
 }
 
+/** One patch in the list of League's patch notes. */
+export interface PatchEntry {
+  slug: string;
+  title: string;
+  /** "26.23", or "". */
+  version: string;
+  /** ISO date. */
+  date: string;
+  summary: string;
+  /** Image cache path, or "". */
+  image: string;
+  /** On disk: readable offline and part of the search. */
+  cached: boolean;
+}
+export interface PatchList {
+  entries: PatchEntry[];
+  fetchedAt: number;
+  /** Riot's site could not be reached: the list kept from last time. */
+  offline: boolean;
+}
+export interface PatchSpan {
+  t: string;
+  b?: boolean;
+  i?: boolean;
+  href?: string;
+}
+export type PatchNode =
+  | { k: "h"; icon: string; spans: PatchSpan[] }
+  | { k: "p"; spans: PatchSpan[] }
+  | { k: "q"; spans: PatchSpan[] }
+  | { k: "li"; depth: number; spans: PatchSpan[] }
+  | { k: "img"; src: string; small: boolean }
+  | { k: "hr" };
+export interface PatchBlock {
+  title: string;
+  icon: string;
+  /** "champion" or "item"; missing for the rest. */
+  kind?: string;
+  nodes: PatchNode[];
+}
+export interface PatchSection {
+  title: string;
+  blocks: PatchBlock[];
+}
+export interface PatchNotes {
+  slug: string;
+  title: string;
+  version: string;
+  date: string;
+  summary: string;
+  image: string;
+  url: string;
+  sections: PatchSection[];
+  fetchedAt: number;
+}
+export interface PatchHit {
+  slug: string;
+  version: string;
+  date: string;
+  section: string;
+  sectionIndex: number;
+  blockIndex: number;
+  /** The card, or only the asked parts of it ("zed q") when `focused`. */
+  block: PatchBlock;
+  focused: boolean;
+}
+export interface PatchSearch {
+  hits: PatchHit[];
+  total: number;
+  /** Patches searched (the ones on disk). */
+  patches: number;
+  /** Words searched after spelling fixes. */
+  terms: string[];
+  /** The corrected search, or "". */
+  corrected: string;
+  /** Slugs of the patches named by number in the search. */
+  versions: string[];
+  /** Patches with a match. */
+  patchCount: number;
+}
+export interface PatchProgress {
+  done: number;
+  total: number;
+  running: boolean;
+}
+
 const GAME_DATA = "https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/";
 
 /**
@@ -546,6 +632,14 @@ export const api = {
   placeModelViewer: (x: number, y: number, width: number, height: number) => call<void>("place_model_viewer", { x, y, width, height }),
   closeModelViewer: () => call<void>("close_model_viewer"),
   championSkins: (championId: number) => call<SkinInfo[]>("champion_skins", { championId }),
+  patchNotesList: (locale: string, refresh = false) => call<PatchList>("patch_notes_list", { locale, refresh }),
+  patchNotes: (locale: string, slug: string, refresh = false) => call<PatchNotes>("patch_notes", { locale, slug, refresh }),
+  /** `topic`: "all", "champion", "item" or "other". */
+  patchNotesSearch: (locale: string, query: string, topic: string) => call<PatchSearch>("patch_notes_search", { locale, query, topic }),
+  /** Download the notes missing on disk in the background (`count` newest, 0 = all). */
+  patchNotesDownload: (locale: string, count: number) => call<boolean>("patch_notes_download", { locale, count }),
+  patchNotesCancel: () => call<void>("patch_notes_cancel"),
+  openPatchNotes: (locale: string, slug: string) => call<void>("open_patch_notes", { locale, slug }),
   getSettings: () => call<Settings>("get_settings"),
   updateSettings: (input: SettingsInput) => call<Settings>("update_settings", { input }),
   /** Durable copy of the interface language, for when the webview cache is lost. */
@@ -897,6 +991,8 @@ export interface RecorderPrefs {
   champSelect: boolean;
   /** After the game, keep recording the end-of-game screen until the player leaves it. */
   postGame: boolean;
+  /** The mouse pointer is recorded. */
+  cursor: boolean;
   /** Make a highlight reel clip after every recorded game. */
   autoHighlights: boolean;
   /** Video format: h264 plays everywhere, av1 is about half the size (GPUs with an AV1 encoder). */
@@ -1154,6 +1250,8 @@ export interface RecordingsView {
 }
 
 export const events = {
+  onPatchNotesProgress: (handler: (progress: PatchProgress) => void): Promise<UnlistenFn> =>
+    listen<PatchProgress>("patch-notes-progress", (event) => handler(event.payload)),
   onLoginStep: (handler: (step: LoginStep) => void): Promise<UnlistenFn> =>
     listen<LoginStep>("login-step", (event) => handler(event.payload)),
   onLoginUpdate: (handler: (update: LoginUpdate | null) => void): Promise<UnlistenFn> =>

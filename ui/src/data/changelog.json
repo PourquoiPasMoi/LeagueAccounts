@@ -1,5 +1,59 @@
 [
  {
+  "version": "5.13.0",
+  "date": "2026-11-23",
+  "items": {
+   "en": [
+    "Patch notes page (in the sidebar): every League patch since 2019 in the app's own look. Notes are saved on your PC once read, so old patches open instantly and offline.",
+    "Search across patches, with typo fixes. Pick a topic (Champions, Items, Systems and modes) and add an ability, like “Zed Q”, to see only that ability's changes and when it last changed.",
+    "A second tab lists every change made to League Companion.",
+    "Recorder: the mouse pointer is now in your recordings. Turn it off in Settings › Recorder if you prefer."
+   ],
+   "tr": [
+    "Yama notları sayfası (kenar çubuğunda): 2019'dan beri tüm League yamaları uygulamanın kendi görünümünde. Okunan notlar bilgisayarına kaydedilir; eski yamalar anında ve çevrimdışı açılır.",
+    "Yamalar arasında arama, yazım hatası düzeltmeli. Bir başlık seç (Şampiyonlar, Eşyalar, Sistemler ve modlar) ve “Zed Q” gibi bir yetenek ekle: yalnızca o yeteneğin değişikliklerini ve en son ne zaman değiştiğini görürsün.",
+    "İkinci sekme, League Companion'da yapılan tüm değişiklikleri listeler.",
+    "Kaydedici: fare imleci artık kayıtlarında görünüyor. İstemezsen Ayarlar › Kaydedici'den kapat."
+   ],
+   "de": [
+    "Seite Patchnotizen (in der Seitenleiste): jeder League-Patch seit 2019 im Look der App. Gelesene Notizen werden auf deinem PC gespeichert, alte Patches öffnen sich sofort und offline.",
+    "Suche über alle Patches, mit Tippfehler-Korrektur. Wähle ein Thema (Champions, Gegenstände, Systeme und Modi) und füge eine Fähigkeit hinzu, etwa „Zed Q“, um nur deren Änderungen zu sehen und wann sie zuletzt geändert wurde.",
+    "Ein zweiter Tab listet alle Änderungen an League Companion.",
+    "Rekorder: Der Mauszeiger ist jetzt in deinen Aufnahmen zu sehen. Abschalten unter Einstellungen › Rekorder."
+   ],
+   "es": [
+    "Página de notas del parche (en la barra lateral): todos los parches de League desde 2019 con el aspecto de la aplicación. Las notas leídas se guardan en tu PC, así los parches antiguos se abren al instante y sin conexión.",
+    "Búsqueda en todos los parches, con corrección de erratas. Elige un tema (Campeones, Objetos, Sistemas y modos) y añade una habilidad, como «Zed Q», para ver solo los cambios de esa habilidad y cuándo cambió por última vez.",
+    "Una segunda pestaña lista todos los cambios de League Companion.",
+    "Grabador: el puntero del ratón ya aparece en tus grabaciones. Desactívalo en Ajustes › Grabador si lo prefieres."
+   ],
+   "fr": [
+    "Page Notes de patch (dans la barre latérale) : tous les patchs de League depuis 2019 dans le style de l'application. Les notes lues sont enregistrées sur votre PC : les anciens patchs s'ouvrent aussitôt, même hors ligne.",
+    "Recherche dans tous les patchs, avec correction des fautes de frappe. Choisissez un thème (Champions, Objets, Systèmes et modes) et ajoutez une compétence, comme « Zed Q », pour ne voir que ses changements et la date du dernier.",
+    "Un second onglet liste tous les changements de League Companion.",
+    "Enregistreur : le pointeur de la souris apparaît désormais dans vos enregistrements. Désactivez-le dans Paramètres › Enregistreur si vous préférez."
+   ],
+   "pt": [
+    "Página de notas de atualização (na barra lateral): todos os patches do League desde 2019 com o aspeto da aplicação. As notas lidas ficam guardadas no teu PC, por isso os patches antigos abrem de imediato e sem ligação.",
+    "Pesquisa em todos os patches, com correção de gralhas. Escolhe um tema (Campeões, Itens, Sistemas e modos) e junta uma habilidade, como “Zed Q”, para ver só as alterações dessa habilidade e quando mudou pela última vez.",
+    "Um segundo separador lista todas as alterações do League Companion.",
+    "Gravador: o ponteiro do rato aparece agora nas tuas gravações. Desliga-o em Definições › Gravador se preferires."
+   ],
+   "zh": [
+    "版本更新说明页面（在侧边栏）：2019 年以来的所有英雄联盟版本，采用本应用的界面风格。读过的说明会保存在电脑上，旧版本可立即离线打开。",
+    "跨版本搜索，并自动纠正拼写。选择分类（英雄、装备、系统与模式），再加上技能（例如“Zed Q”），即可只看该技能的改动以及最近一次改动的时间。",
+    "第二个标签页列出 League Companion 的所有更新。",
+    "录制：鼠标指针现在会出现在录像中。可在 设置 › 录制 中关闭。"
+   ],
+   "zhTw": [
+    "版本更新公告頁面（在側邊欄）：2019 年以來的所有英雄聯盟版本，採用本應用程式的介面風格。讀過的公告會儲存在電腦上，舊版本可立即離線開啟。",
+    "跨版本搜尋，並自動修正拼字。選擇分類（英雄、裝備、系統與模式），再加上技能（例如「Zed Q」），即可只看該技能的改動以及最近一次改動的時間。",
+    "第二個分頁列出 League Companion 的所有更新。",
+    "錄製：滑鼠游標現在會出現在錄影中。可在 設定 › 錄製 中關閉。"
+   ]
+  }
+ },
+ {
   "version": "5.12.3",
   "date": "2026-11-23",
   "items": {

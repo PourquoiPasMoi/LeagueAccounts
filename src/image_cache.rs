@@ -73,7 +73,12 @@ pub fn load(path: &str) -> Option<(Vec<u8>, &'static str)> {
     }
     // The running League client has every picture of its patch locally (no
     // bandwidth); CommunityDragon otherwise (it sometimes times out, 522).
-    let extra = EXTRA.iter().find_map(|(prefix, origin)| path.strip_prefix(prefix).map(|rest| format!("{origin}{rest}")));
+    // `x-pn/`: a picture of League's patch notes, from the address the notes' reader kept for it.
+    let extra = if path.starts_with("x-pn/") {
+        Some(crate::patchnotes::image_url(path)?)
+    } else {
+        EXTRA.iter().find_map(|(prefix, origin)| path.strip_prefix(prefix).map(|rest| format!("{origin}{rest}")))
+    };
     let bytes = match extra {
         Some(url) => download(&url)?,
         None => match crate::riot_client::league_client().and_then(|client| client.game_asset(&client_path(&client, path), MAX_BYTES)) {

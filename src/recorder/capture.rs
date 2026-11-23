@@ -2,7 +2,9 @@
 //! game's window, or, as a fallback, DXGI Desktop Duplication of the monitor it
 //! is on (cropped to the window). Frames stay on the GPU as Direct3D 11
 //! textures. Nothing here opens, reads or draws on the game process: Windows
-//! composes the window and hands the picture over.
+//! composes the window and hands the picture over. The mouse pointer is the
+//! Windows pointer: Windows draws it into a window capture, and for a screen
+//! capture it is drawn on our own copy of the picture.
 
 use windows::core::{Interface, Result, HSTRING, PCWSTR};
 use windows::Graphics::Capture::{Direct3D11CaptureFrame, Direct3D11CaptureFramePool, GraphicsCaptureItem, GraphicsCaptureSession};
@@ -12,19 +14,22 @@ use windows::Graphics::SizeInt32;
 use windows::Win32::Foundation::{E_FAIL, HMODULE, HWND, LPARAM, POINT, RECT};
 use windows::Win32::Graphics::Direct3D::{D3D_DRIVER_TYPE_HARDWARE, D3D_DRIVER_TYPE_UNKNOWN};
 use windows::Win32::Graphics::Direct3D11::{
-    D3D11CreateDevice, ID3D11Device, ID3D11DeviceContext, ID3D11Multithread, ID3D11Texture2D, D3D11_CREATE_DEVICE_BGRA_SUPPORT,
-    D3D11_CREATE_DEVICE_VIDEO_SUPPORT, D3D11_SDK_VERSION,
+    D3D11CreateDevice, ID3D11Device, ID3D11DeviceContext, ID3D11Multithread, ID3D11Texture2D, D3D11_BIND_RENDER_TARGET,
+    D3D11_CREATE_DEVICE_BGRA_SUPPORT, D3D11_CREATE_DEVICE_VIDEO_SUPPORT, D3D11_RESOURCE_MISC_GDI_COMPATIBLE, D3D11_SDK_VERSION,
+    D3D11_TEXTURE2D_DESC, D3D11_USAGE_DEFAULT,
 };
+use windows::Win32::Graphics::Dxgi::Common::{DXGI_FORMAT_B8G8R8A8_UNORM, DXGI_SAMPLE_DESC};
 use windows::Win32::Graphics::Dxgi::{
-    CreateDXGIFactory1, IDXGIAdapter, IDXGIDevice, IDXGIFactory1, IDXGIOutput1, IDXGIOutputDuplication, IDXGIResource,
+    CreateDXGIFactory1, IDXGIAdapter, IDXGIDevice, IDXGIFactory1, IDXGIOutput1, IDXGIOutputDuplication, IDXGIResource, IDXGISurface1,
     DXGI_ERROR_ACCESS_LOST, DXGI_ERROR_WAIT_TIMEOUT, DXGI_OUTDUPL_FRAME_INFO,
 };
-use windows::Win32::Graphics::Gdi::{ClientToScreen, GetMonitorInfoW, MonitorFromWindow, MONITORINFO, MONITOR_DEFAULTTONEAREST};
+use windows::Win32::Graphics::Gdi::{ClientToScreen, DeleteObject, GetMonitorInfoW, MonitorFromWindow, MONITORINFO, MONITOR_DEFAULTTONEAREST};
 use windows::Win32::System::WinRT::Direct3D11::{CreateDirect3D11DeviceFromDXGIDevice, IDirect3DDxgiInterfaceAccess};
 use windows::Win32::System::WinRT::Graphics::Capture::IGraphicsCaptureItemInterop;
 pub use windows::Win32::Foundation::HWND as WindowHandle;
 use windows::Win32::UI::WindowsAndMessaging::{
-    EnumWindows, FindWindowW, GetClassNameW, GetClientRect, GetWindowTextW, GetWindowThreadProcessId, IsIconic, IsWindow, IsWindowVisible,
+    DrawIconEx, EnumWindows, FindWindowW, GetClassNameW, GetClientRect, GetCursorInfo, GetIconInfo, GetWindowTextW, GetWindowThreadProcessId,
+    IsIconic, IsWindow, IsWindowVisible, CURSORINFO, CURSOR_SHOWING, DI_NORMAL, HCURSOR, HICON, ICONINFO,
 };
 
 /// The League game window's class (the client uses another one).
@@ -104,6 +109,8 @@ fn adapter_for_window(window: HWND) -> Option<IDXGIAdapter> {
 enum Hold {
     Window(#[allow(dead_code)] Direct3D11CaptureFrame),
     Screen(IDXGIOutputDuplication),
+    /// Our own copy of the screen (with the mouse pointer drawn on it).
+    Copy,
 }
 
 /// A captured picture: the texture is valid until this value is dropped.
@@ -136,7 +143,7 @@ const FORMAT: DirectXPixelFormat = DirectXPixelFormat::B8G8R8A8UIntNormalized;
 const BUFFERS: i32 = 2;
 
 impl WindowCapture {
-    pub fn new(gpu: &Gpu, hwnd: HWND) -> Result<Self> {
+    pub fn new(gpu: &Gpu, hwnd: HWND, cursor: bool) -> Result<Self> {
         let interop = windows::core::factory::<GraphicsCaptureItem, IGraphicsCaptureItemInterop>()?;
         let item: GraphicsCaptureItem = unsafe { interop.CreateForWindow(hwnd)? };
         let size = item.Size()?;
@@ -144,9 +151,10 @@ impl WindowCapture {
         // Free-threaded: frames are picked up from the recording thread, no message loop needed.
         let pool = Direct3D11CaptureFramePool::CreateFreeThreaded(&device, FORMAT, BUFFERS, size)?;
         let session = pool.CreateCaptureSession(&item)?;
-        // Windows 11 lets apps drop the yellow frame and the cursor; Windows 10 refuses (ignored).
+        // Windows 11 lets apps drop the yellow frame; Windows 10 refuses (ignored).
         let _ = session.SetIsBorderRequired(false);
-        let _ = session.SetIsCursorCaptureEnabled(false);
+        // Windows draws the mouse pointer into the picture while it is over the window.
+        let _ = session.SetIsCursorCaptureEnabled(cursor);
         session.StartCapture()?;
         Ok(Self { hwnd, device, pool, session, size })
     }
@@ -190,6 +198,95 @@ impl Drop for WindowCapture {
     }
 }
 
+/// Draws the Windows mouse pointer on a copy of the screen picture: Desktop
+/// Duplication hands the screen over without it. Windows is asked where the
+/// pointer is and which one it is, and draws it itself (`DrawIconEx`).
+struct Pointer {
+    context: ID3D11DeviceContext,
+    copy: Option<ID3D11Texture2D>,
+    size: (u32, u32),
+    /// The pointer's handle and its hot spot (the pixel that points).
+    shape: Option<(isize, POINT)>,
+}
+
+impl Pointer {
+    fn new(device: &ID3D11Device) -> Option<Self> {
+        let context = unsafe { device.GetImmediateContext() }.ok()?;
+        Some(Self { context, copy: None, size: (0, 0), shape: None })
+    }
+
+    fn hot_spot(&mut self, cursor: HCURSOR) -> POINT {
+        let key = cursor.0 as isize;
+        if let Some((known, spot)) = self.shape {
+            if known == key {
+                return spot;
+            }
+        }
+        let mut info = ICONINFO::default();
+        let mut spot = POINT::default();
+        if unsafe { GetIconInfo(HICON(cursor.0), &mut info) }.is_ok() {
+            spot = POINT { x: info.xHotspot as i32, y: info.yHotspot as i32 };
+            // GetIconInfo hands out copies of the bitmaps: they are ours to free.
+            unsafe {
+                if !info.hbmMask.is_invalid() {
+                    let _ = DeleteObject(info.hbmMask.into());
+                }
+                if !info.hbmColor.is_invalid() {
+                    let _ = DeleteObject(info.hbmColor.into());
+                }
+            }
+        }
+        self.shape = Some((key, spot));
+        spot
+    }
+
+    /// A copy of `screen` with the pointer on it; `None` when the screen's
+    /// format cannot be drawn on (HDR): the caller then uses the screen as it is.
+    fn draw(&mut self, device: &ID3D11Device, screen: &ID3D11Texture2D, origin: POINT) -> Option<ID3D11Texture2D> {
+        let mut desc = D3D11_TEXTURE2D_DESC::default();
+        unsafe { screen.GetDesc(&mut desc) };
+        if desc.Format != DXGI_FORMAT_B8G8R8A8_UNORM {
+            return None;
+        }
+        if self.copy.is_none() || self.size != (desc.Width, desc.Height) {
+            let own = D3D11_TEXTURE2D_DESC {
+                Width: desc.Width,
+                Height: desc.Height,
+                MipLevels: 1,
+                ArraySize: 1,
+                Format: DXGI_FORMAT_B8G8R8A8_UNORM,
+                SampleDesc: DXGI_SAMPLE_DESC { Count: 1, Quality: 0 },
+                Usage: D3D11_USAGE_DEFAULT,
+                BindFlags: D3D11_BIND_RENDER_TARGET.0 as u32,
+                CPUAccessFlags: 0,
+                MiscFlags: D3D11_RESOURCE_MISC_GDI_COMPATIBLE.0 as u32,
+            };
+            let mut texture = None;
+            unsafe { device.CreateTexture2D(&own, None, Some(&mut texture)) }.ok()?;
+            self.copy = texture;
+            self.size = (desc.Width, desc.Height);
+        }
+        let copy = self.copy.clone()?;
+        unsafe { self.context.CopyResource(&copy, screen) };
+        let mut info = CURSORINFO { cbSize: std::mem::size_of::<CURSORINFO>() as u32, ..Default::default() };
+        let shown = unsafe { GetCursorInfo(&mut info) }.is_ok() && info.flags.0 & CURSOR_SHOWING.0 != 0 && !info.hCursor.is_invalid();
+        if shown {
+            let spot = self.hot_spot(info.hCursor);
+            if let Ok(surface) = copy.cast::<IDXGISurface1>() {
+                if let Ok(dc) = unsafe { surface.GetDC(false) } {
+                    unsafe {
+                        let x = info.ptScreenPos.x - origin.x - spot.x;
+                        let y = info.ptScreenPos.y - origin.y - spot.y;
+                        let _ = DrawIconEx(dc, x, y, HICON(info.hCursor.0), 0, 0, 0, None, DI_NORMAL);
+                        let _ = surface.ReleaseDC(None);
+                    }
+                }
+            }
+        }
+        Some(copy)
+    }
+}
+
 /// Desktop Duplication of the game's monitor, cropped to the game window.
 /// Works with exclusive fullscreen and shows no capture border.
 pub struct ScreenCapture {
@@ -198,10 +295,12 @@ pub struct ScreenCapture {
     output: IDXGIOutput1,
     duplication: IDXGIOutputDuplication,
     origin: POINT,
+    /// Set when the mouse pointer is recorded.
+    pointer: Option<Pointer>,
 }
 
 impl ScreenCapture {
-    pub fn new(gpu: &Gpu, hwnd: HWND) -> Result<Self> {
+    pub fn new(gpu: &Gpu, hwnd: HWND, cursor: bool) -> Result<Self> {
         let monitor = unsafe { MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST) };
         let adapter = match &gpu.adapter {
             Some(adapter) => adapter.clone(),
@@ -216,7 +315,8 @@ impl ScreenCapture {
             let output: IDXGIOutput1 = output.cast()?;
             let duplication = unsafe { output.DuplicateOutput(&gpu.device)? };
             let origin = POINT { x: desc.DesktopCoordinates.left, y: desc.DesktopCoordinates.top };
-            return Ok(Self { hwnd, device: gpu.device.clone(), output, duplication, origin });
+            let pointer = if cursor { Pointer::new(&gpu.device) } else { None };
+            return Ok(Self { hwnd, device: gpu.device.clone(), output, duplication, origin, pointer });
         }
         Err(fail())
     }
@@ -252,14 +352,24 @@ impl ScreenCapture {
             }
             Err(error) => return Err(error),
         }
-        // LastPresentTime 0: only the mouse moved, the picture is the same.
-        let texture = resource.filter(|_| info.LastPresentTime != 0).and_then(|resource| resource.cast::<ID3D11Texture2D>().ok());
+        // LastPresentTime 0: only the mouse moved, the picture is the same
+        // (a new frame all the same when the pointer is recorded).
+        let moved = self.pointer.is_some() && info.LastMouseUpdateTime != 0;
+        let texture = resource.filter(|_| info.LastPresentTime != 0 || moved).and_then(|resource| resource.cast::<ID3D11Texture2D>().ok());
         let Some(texture) = texture else {
             unsafe {
                 let _ = self.duplication.ReleaseFrame();
             }
             return Ok(None);
         };
+        if let Some(pointer) = &mut self.pointer {
+            if let Some(copy) = pointer.draw(&self.device, &texture, self.origin) {
+                unsafe {
+                    let _ = self.duplication.ReleaseFrame();
+                }
+                return Ok(Some(Frame { _hold: Hold::Copy, texture: copy, region: self.window_region() }));
+            }
+        }
         Ok(Some(Frame { _hold: Hold::Screen(self.duplication.clone()), texture, region: self.window_region() }))
     }
 }
@@ -272,26 +382,27 @@ pub enum Capture {
 
 impl Capture {
     /// Window capture, or screen capture when asked or when window capture fails.
-    pub fn open(gpu: &Gpu, hwnd: HWND, prefer_screen: bool) -> Result<Self> {
+    /// `cursor`: the mouse pointer is part of the picture.
+    pub fn open(gpu: &Gpu, hwnd: HWND, prefer_screen: bool, cursor: bool) -> Result<Self> {
         if !prefer_screen {
-            match WindowCapture::new(gpu, hwnd) {
+            match WindowCapture::new(gpu, hwnd, cursor) {
                 Ok(capture) => return Ok(Self::Window(capture)),
-                Err(_) => return ScreenCapture::new(gpu, hwnd).map(Self::Screen),
+                Err(_) => return ScreenCapture::new(gpu, hwnd, cursor).map(Self::Screen),
             }
         }
-        match ScreenCapture::new(gpu, hwnd) {
+        match ScreenCapture::new(gpu, hwnd, cursor) {
             Ok(capture) => Ok(Self::Screen(capture)),
-            Err(_) => WindowCapture::new(gpu, hwnd).map(Self::Window),
+            Err(_) => WindowCapture::new(gpu, hwnd, cursor).map(Self::Window),
         }
     }
 
     /// Only the asked way, no fallback (the game window can refuse window
     /// capture for a moment while it starts: better to try again soon).
-    pub fn open_strict(gpu: &Gpu, hwnd: HWND, screen: bool) -> Result<Self> {
+    pub fn open_strict(gpu: &Gpu, hwnd: HWND, screen: bool, cursor: bool) -> Result<Self> {
         if screen {
-            ScreenCapture::new(gpu, hwnd).map(Self::Screen)
+            ScreenCapture::new(gpu, hwnd, cursor).map(Self::Screen)
         } else {
-            WindowCapture::new(gpu, hwnd).map(Self::Window)
+            WindowCapture::new(gpu, hwnd, cursor).map(Self::Window)
         }
     }
 

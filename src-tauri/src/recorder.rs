@@ -37,6 +37,8 @@ pub struct RecorderPrefs {
     pub encoder: String,
     /// window (Windows Graphics Capture) or screen (Desktop Duplication).
     pub capture: String,
+    /// The mouse pointer is recorded. On by default.
+    pub cursor: bool,
     pub game_audio: bool,
     pub microphone: bool,
     /// Discord's sound only (voice chat), as its own track. Off by default.
@@ -121,6 +123,7 @@ impl Default for RecorderPrefs {
             mic_device: String::new(),
             disk_limit_gb: 100,
             champ_select: true,
+            cursor: true,
             post_game: true,
             auto_highlights: false,
             codec: "h264".into(),
@@ -364,6 +367,7 @@ fn start_recording(app: &AppHandle, window: leagueaccounts::recorder::capture::W
             bitrate,
             hardware: prefs.encoder != "software",
             screen: prefs.capture == "screen",
+            cursor: prefs.cursor,
             game_audio: prefs.game_audio,
             microphone: prefs.microphone,
             discord: prefs.discord,

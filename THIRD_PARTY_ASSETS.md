@@ -21,6 +21,10 @@ Since v5.0.0 the interface has its own design (CSS-drawn controls; its font is l
 
 Verify the committed bundle with `npm run assets:verify`. Restore missing files with `node scripts/league-assets.mjs --fetch`. Existing valid files are retained. An upstream hash mismatch requires manual review before changing the manifest; the CDN may re-encode PNGs, so a different hash does not necessarily mean different artwork. To update the patch, change the script's source version, inspect the resulting art and motion, and deliberately regenerate the manifest and showcase.
 
+## Patch notes
+
+The Patch notes page reads Riot Games' public patch notes from leagueoflegends.com when the user opens it and keeps a copy in the app's cache folder on that PC. The text and pictures of the notes belong to Riot Games; none of them are bundled with the app or stored in this repository.
+
 ## Interface font
 
 The interface uses **Chillax** by Manushi Parikh, from the Indian Type Foundry's [Fontshare](https://www.fontshare.com/fonts/chillax), free for personal and commercial use under the ITF Free Font License. It is bundled as one variable file, `ui/public/fonts/Chillax-Variable.woff2` (weights 200–700), so the interface makes no font requests at runtime. Chinese text falls back to the CJK fonts below.

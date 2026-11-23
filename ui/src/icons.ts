@@ -40,6 +40,7 @@ import {
   MonitorPlay,
   ArrowUp,
   ArrowDown,
+  Newspaper,
   type IconNode,
 } from "lucide";
 
@@ -85,6 +86,7 @@ const ICONS: Record<string, IconNode> = {
   "monitor-play": MonitorPlay,
   "arrow-up": ArrowUp,
   "arrow-down": ArrowDown,
+  newspaper: Newspaper,
 };
 
 const attrs = (values: Record<string, string | number | undefined>): string =>
