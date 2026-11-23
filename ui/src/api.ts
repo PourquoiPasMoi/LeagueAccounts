@@ -640,6 +640,16 @@ export const api = {
   patchNotesDownload: (locale: string, count: number) => call<boolean>("patch_notes_download", { locale, count }),
   patchNotesCancel: () => call<void>("patch_notes_cancel"),
   openPatchNotes: (locale: string, slug: string) => call<void>("open_patch_notes", { locale, slug }),
+  /** Save a report image (PNG or JPEG bytes) into Pictures\\League Companion; returns the file's path. */
+  saveReportImage: async (bytes: Uint8Array, name: string): Promise<string> => {
+    try {
+      return await invoke<string>("save_report_image", bytes, { headers: { "x-name": encodeURIComponent(name) } });
+    } catch (error) {
+      if (error && typeof error === "object" && "code" in error) throw new ApiError((error as ErrorPayload).code, (error as ErrorPayload).detail);
+      throw new ApiError("unknown", String(error));
+    }
+  },
+  showReportImage: (path: string) => call<void>("show_report_image", { path }),
   getSettings: () => call<Settings>("get_settings"),
   updateSettings: (input: SettingsInput) => call<Settings>("update_settings", { input }),
   /** Durable copy of the interface language, for when the webview cache is lost. */

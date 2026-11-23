@@ -6,6 +6,7 @@ import { appChanges } from "./changelog";
 import { $, esc, fragment, leave, reducedMotion } from "./dom";
 import { icon } from "./icons";
 import { lang, localeTag, t, type Lang } from "./i18n";
+import { openReport } from "./report";
 
 /** Riot's site language for each language of the app (it has no Simplified Chinese). */
 const LOCALES: Record<Lang, string> = { en: "en-us", tr: "tr-tr", de: "de-de", es: "es-es", fr: "fr-fr", pt: "pt-br", zh: "zh-tw", zhTw: "zh-tw" };
@@ -121,9 +122,38 @@ function blockHtml(block: PatchBlock, terms: RegExp | null, id = "", meta = ""):
   return `<article class="pn-card" data-reveal${id ? ` id="${id}"` : ""}>${meta}${head}<div class="pn-card-body">${nodesHtml(block.nodes, terms)}</div></article>`;
 }
 
+/// Words in a section's name (any of the app's languages) and the icon that stands for it.
+const SECTION_ICONS: [RegExp, string][] = [
+  [/aram/, "snowflake"],
+  [/arena|arène|竞技场|競技場/, "trophy"],
+  [/skin|chroma|aspect|kostüm|造型|皮肤|炫彩/, "shirt"],
+  [/bug|hata|fehler|error|erro|修复|修正|錯誤/, "bug"],
+  [/highlight|öne çıkan|höhepunkt|destac|temps forts|亮点|焦點/, "sparkles"],
+  [/voice|chat|ses|sprach|voz|vocal|语音|語音/, "mic"],
+  [/map|harita|karte|mapa|carte|地图|地圖/, "map"],
+  [/music|müzik|musik|música|musique|音乐|音樂/, "music"],
+  [/replay|download|indir|descarg|télécharg|下载|下載/, "download"],
+  [/champion|şampiyon|campe|英雄/, "swords"],
+  [/item|eşya|gegenst|objet|iten|装备|裝備/, "gem"],
+  [/classic|ranked|rift|klasik|klassisch|clásic|classique|clássic|排位|經典|经典/, "gamepad"],
+  [/system|sistem|système|系统|系統/, "layers"],
+];
+
+/** The icon of a section's pill: by what its cards are about, else by its name, else its first letter. */
+function sectionMark(section: PatchNotes["sections"][number]): string {
+  const kinds = section.blocks.map((block) => block.kind ?? "");
+  const most = (kind: string) => kinds.filter((value) => value === kind).length * 2 > kinds.length;
+  const name = section.title.toLowerCase();
+  const byName = SECTION_ICONS.find(([words]) => words.test(name))?.[1];
+  const chosen = byName ?? (most("champion") ? "swords" : most("item") ? "gem" : "");
+  if (chosen) return icon(chosen, 15);
+  const letter = [...section.title.trim()][0]?.toUpperCase() ?? "";
+  return `<span class="pn-chip-letter" aria-hidden="true">${esc(letter)}</span>`;
+}
+
 function notesHtml(notes: PatchNotes): string {
   const named = notes.sections.filter((section) => section.title);
-  const chips = named.length > 1 ? `<nav class="pn-chips">${notes.sections.map((section, index) => (section.title ? `<button type="button" data-pn-section="${index}">${esc(section.title)}</button>` : "")).join("")}</nav>` : "";
+  const chips = named.length > 1 ? `<nav class="pn-chips">${notes.sections.map((section, index) => (section.title ? `<button type="button" class="pn-chip" data-pn-section="${index}" data-tooltip="${esc(section.title)}" aria-label="${esc(section.title)}">${sectionMark(section)}<span class="pn-chip-name">${esc(section.title)}</span></button>` : "")).join("")}</nav>` : "";
   const sections = notes.sections
     .map(
       (section, index) => `
@@ -140,7 +170,10 @@ function notesHtml(notes: PatchNotes): string {
         <p class="pn-hero-date">${esc(dateText(notes.date))}</p>
         <h1>${esc(notes.title)}</h1>
         ${notes.summary ? `<p class="pn-hero-summary">${esc(notes.summary)}</p>` : ""}
-        <button type="button" class="btn btn-ghost btn-small" data-pn="site">${icon("external-link", 12)}<span>${esc(t("pn.openSite"))}</span></button>
+        <div class="pn-hero-actions">
+          <button type="button" class="btn btn-primary btn-small" data-pn="report">${icon("download", 12)}<span>${esc(t("pn.createImage"))}</span></button>
+          <button type="button" class="btn btn-ghost btn-small" data-pn="site">${icon("external-link", 12)}<span>${esc(t("pn.openSite"))}</span></button>
+        </div>
       </div>
     </header>
     ${chips}${sections}`;
@@ -177,6 +210,8 @@ export async function openPatchNotes(appVersion: string): Promise<void> {
   /// Each load/search has a number: a slower, older answer is dropped.
   let turn = 0;
   const known = new Map<string, PatchNotes>();
+  /// The results on screen, for an image of them.
+  let found: { view: PatchSearch; asked: string } | null = null;
 
   const overlay = fragment(`
     <div class="overlay pn-overlay">
@@ -287,7 +322,10 @@ export async function openPatchNotes(appVersion: string): Promise<void> {
 
   // -------------------------------------------------------------- the reader
 
-  /** The chip of the section on screen is the lit one. */
+  /// A clicked pill stays the open one while the page scrolls to its section.
+  let held: { section: string; until: number } | null = null;
+
+  /** The pill of the section on screen is the open one (icon and name); the others are icons. */
   const followChips = () => {
     const chips = [...inner.querySelectorAll<HTMLElement>("[data-pn-section]")];
     if (!chips.length) return;
@@ -296,6 +334,8 @@ export async function openPatchNotes(appVersion: string): Promise<void> {
     for (const section of inner.querySelectorAll<HTMLElement>("[data-pn-anchor]")) {
       if (section.getBoundingClientRect().top <= top && inner.querySelector(`[data-pn-section="${section.dataset.pnAnchor}"]`)) current = section.dataset.pnAnchor;
     }
+    if (held && performance.now() < held.until) current = held.section;
+    else held = null;
     for (const chip of chips) {
       const on = chip.dataset.pnSection === current;
       // The row of pills follows sideways only (scrollIntoView would also move the page and stop a smooth scroll).
@@ -387,7 +427,7 @@ export async function openPatchNotes(appVersion: string): Promise<void> {
     return `
       <header class="pn-results-head" data-reveal>
         ${topicsHtml()}
-        ${view.hits.length ? `<h2>${esc(count)}</h2>` : ""}
+        ${view.hits.length ? `<div class="pn-results-title"><h2>${esc(count)}</h2><button type="button" class="btn btn-ghost btn-small" data-pn="report-search">${icon("download", 12)}<span>${esc(t("pn.createImage"))}</span></button></div>` : ""}
         ${view.corrected ? `<p>${esc(t("pn.corrected", { query: view.corrected }))}</p>` : ""}
         ${last}${tip}
       </header>
@@ -423,7 +463,10 @@ export async function openPatchNotes(appVersion: string): Promise<void> {
     try {
       const asked = query;
       const view = await api.patchNotesSearch(locale, asked, topic);
-      if (mine === turn) await show(searchHtml(view, asked), mine);
+      if (mine === turn) {
+        found = { view, asked };
+        await show(searchHtml(view, asked), mine);
+      }
     } catch (error) {
       if (mine === turn) await show(errorHtml(error), mine);
     }
@@ -547,6 +590,23 @@ export async function openPatchNotes(appVersion: string): Promise<void> {
     if (action === "close") return close();
     if (action === "retry") return void loadList(true);
     if (action === "site") return void api.openPatchNotes(locale, selected).catch(() => undefined);
+    if (action === "report") {
+      const notes = known.get(selected);
+      if (notes) openReport({ title: notes.title, subtitle: [dateText(notes.date), notes.summary].filter(Boolean).join(" · "), sections: notes.sections });
+      return;
+    }
+    if (action === "report-search" && found) {
+      const { view, asked } = found;
+      const named = (topic === "champion" || topic === "item") && view.hits[0];
+      openReport({
+        title: named ? view.hits[0].block.title : t("report.searchTitle", { query: view.corrected || asked }),
+        subtitle: named ? t("pn.lastChanged", { version: view.hits[0].version, date: dateText(view.hits[0].date), count: view.patchCount }) : t(view.total === 1 ? "pn.result" : "pn.results", { count: view.total }),
+        // One card per result, named by its patch.
+        sections: [{ title: "", blocks: view.hits.map((hit) => ({ ...hit.block, title: [hit.block.title || hit.section, hit.version].filter(Boolean).join(" · ") })) }],
+        whole: true,
+      });
+      return;
+    }
     if (action === "cancel") return void api.patchNotesCancel().catch(() => undefined);
     if (action === "download") {
       progress = { done: 0, total: entries.filter((entry) => !entry.cached).length, running: true };
@@ -579,7 +639,13 @@ export async function openPatchNotes(appVersion: string): Promise<void> {
     const chip = target.closest<HTMLElement>("[data-pn-section]");
     if (chip) {
       const section = inner.querySelector<HTMLElement>(`#pn-s-${chip.dataset.pnSection}`);
-      if (section) reader.scrollTo({ top: section.offsetTop - 64, behavior: reducedMotion() ? "auto" : "smooth" });
+      if (section) {
+        held = { section: chip.dataset.pnSection!, until: performance.now() + 900 };
+        followChips();
+        reader.scrollTo({ top: section.offsetTop - 64, behavior: reducedMotion() ? "auto" : "smooth" });
+        // Once the scroll has settled the pills follow the page again.
+        window.setTimeout(followChips, 950);
+      }
     }
   });
 

@@ -1,5 +1,59 @@
 [
  {
+  "version": "5.14.0",
+  "date": "2026-11-23",
+  "items": {
+   "en": [
+    "Patch notes: Create image. Pick the sections and cards you want (champions, items, modes...), watch the picture update live, and save it in the app's look to share.",
+    "The image is high resolution so people can zoom in and read. Choose the columns, the sharpness and the largest file size, up to 9.7 MB. It is saved in Pictures › League Companion.",
+    "Search results can become an image too, for example every change to one champion.",
+    "Patch notes: the section buttons are now icons, and the one you are reading opens to show its name."
+   ],
+   "tr": [
+    "Yama notları: Görsel oluştur. İstediğin bölümleri ve kartları seç (şampiyonlar, eşyalar, modlar...), görselin anında güncellenmesini izle ve uygulamanın görünümünde kaydedip paylaş.",
+    "Görsel yüksek çözünürlüklüdür; yakınlaştırıp okunabilir. Sütun sayısını, keskinliği ve en büyük dosya boyutunu (9,7 MB'a kadar) sen seçersin. Resimler › League Companion klasörüne kaydedilir.",
+    "Arama sonuçları da görsele dönüşebilir; örneğin bir şampiyonun tüm değişiklikleri.",
+    "Yama notları: bölüm düğmeleri artık simge; okuduğun bölümün düğmesi açılıp adını gösterir."
+   ],
+   "de": [
+    "Patchnotizen: Bild erstellen. Wähle die Abschnitte und Karten (Champions, Gegenstände, Modi...), sieh das Bild live entstehen und speichere es im Look der App zum Teilen.",
+    "Das Bild ist hochauflösend, man kann hineinzoomen und lesen. Wähle Spalten, Schärfe und die maximale Dateigröße bis 9,7 MB. Gespeichert wird unter Bilder › League Companion.",
+    "Auch Suchergebnisse können ein Bild werden, etwa alle Änderungen eines Champions.",
+    "Patchnotizen: Die Abschnittsknöpfe sind jetzt Symbole; der aktuelle klappt auf und zeigt seinen Namen."
+   ],
+   "es": [
+    "Notas del parche: Crear imagen. Elige las secciones y tarjetas que quieras (campeones, objetos, modos...), mira cómo la imagen se actualiza al momento y guárdala con el aspecto de la aplicación para compartirla.",
+    "La imagen tiene alta resolución para poder ampliarla y leerla. Elige las columnas, la nitidez y el tamaño máximo del archivo, hasta 9,7 MB. Se guarda en Imágenes › League Companion.",
+    "Los resultados de búsqueda también pueden ser una imagen, por ejemplo todos los cambios de un campeón.",
+    "Notas del parche: los botones de sección ahora son iconos, y el de la sección que lees se abre y muestra su nombre."
+   ],
+   "fr": [
+    "Notes de patch : Créer une image. Choisissez les sections et les cartes (champions, objets, modes...), regardez l'image se mettre à jour en direct et enregistrez-la dans le style de l'application pour la partager.",
+    "L'image est en haute résolution : on peut zoomer et lire. Choisissez les colonnes, la netteté et la taille maximale du fichier, jusqu'à 9,7 Mo. Elle est enregistrée dans Images › League Companion.",
+    "Les résultats de recherche peuvent aussi devenir une image, par exemple tous les changements d'un champion.",
+    "Notes de patch : les boutons de section sont maintenant des icônes, et celui de la section lue s'ouvre pour afficher son nom."
+   ],
+   "pt": [
+    "Notas de atualização: Criar imagem. Escolhe as secções e os cartões (campeões, itens, modos...), vê a imagem atualizar ao vivo e guarda-a com o aspeto da aplicação para partilhar.",
+    "A imagem tem alta resolução, para se poder ampliar e ler. Escolhe as colunas, a nitidez e o tamanho máximo do ficheiro, até 9,7 MB. Fica guardada em Imagens › League Companion.",
+    "Os resultados da pesquisa também podem ser uma imagem, por exemplo todas as alterações de um campeão.",
+    "Notas de atualização: os botões das secções são agora ícones, e o da secção que estás a ler abre-se e mostra o nome."
+   ],
+   "zh": [
+    "版本更新说明：生成图片。选择想要的章节和卡片（英雄、装备、模式等），图片实时更新，并以本应用的风格保存，方便分享。",
+    "图片为高分辨率，放大后依然清晰可读。可选择列数、清晰度和文件大小上限（最大 9.7 MB）。保存在 图片 › League Companion。",
+    "搜索结果也能生成图片，例如某个英雄的全部改动。",
+    "版本更新说明：章节按钮现在是图标，正在阅读的章节会展开并显示名称。"
+   ],
+   "zhTw": [
+    "版本更新公告：製作圖片。選擇想要的章節和卡片（英雄、裝備、模式等），圖片即時更新，並以本應用程式的風格儲存，方便分享。",
+    "圖片為高解析度，放大後依然清晰可讀。可選擇欄數、清晰度和檔案大小上限（最大 9.7 MB）。儲存在 圖片 › League Companion。",
+    "搜尋結果也能製作成圖片，例如某個英雄的所有改動。",
+    "版本更新公告：章節按鈕現在是圖示，正在閱讀的章節會展開並顯示名稱。"
+   ]
+  }
+ },
+ {
   "version": "5.13.0",
   "date": "2026-11-23",
   "items": {

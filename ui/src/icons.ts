@@ -41,6 +41,13 @@ import {
   ArrowUp,
   ArrowDown,
   Newspaper,
+  Sparkles,
+  Mic,
+  Map as MapIcon,
+  Snowflake,
+  Trophy,
+  Bug,
+  Layers,
   type IconNode,
 } from "lucide";
 
@@ -87,6 +94,13 @@ const ICONS: Record<string, IconNode> = {
   "arrow-up": ArrowUp,
   "arrow-down": ArrowDown,
   newspaper: Newspaper,
+  sparkles: Sparkles,
+  mic: Mic,
+  map: MapIcon,
+  snowflake: Snowflake,
+  trophy: Trophy,
+  bug: Bug,
+  layers: Layers,
 };
 
 const attrs = (values: Record<string, string | number | undefined>): string =>

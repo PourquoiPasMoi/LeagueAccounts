@@ -1698,6 +1698,8 @@ fn main() {
             patchnotes::patch_notes_download,
             patchnotes::patch_notes_cancel,
             patchnotes::open_patch_notes,
+            patchnotes::save_report_image,
+            patchnotes::show_report_image,
             companion::backup_prefs,
             companion::set_backup_prefs,
             companion::set_backup_passphrase,
@@ -1750,6 +1752,8 @@ fn main() {
                     Some((bytes, mime)) => tauri::http::Response::builder()
                         .header("Content-Type", mime)
                         .header("Cache-Control", "max-age=604800")
+                        // The report builder draws these pictures on a canvas and saves it.
+                        .header("Access-Control-Allow-Origin", "*")
                         .body(bytes),
                     None => tauri::http::Response::builder().status(404).body(Vec::new()),
                 };
