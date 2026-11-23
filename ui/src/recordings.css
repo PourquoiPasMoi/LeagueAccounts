@@ -718,7 +718,10 @@
   background: var(--glass, rgb(20 20 24 / .92)); border: 1px solid var(--line-2); box-shadow: 0 8px 24px rgb(0 0 0 / .45);
 }
 .rec-preview canvas { display: block; width: 192px; height: 108px; border-radius: var(--r-sm); background: var(--s1); }
-.rec-preview span { font: 600 11.5px/1 var(--font-display); color: var(--text); text-align: center; font-variant-numeric: tabular-nums; }
+.rec-preview-times { display: grid; gap: 3px; padding: 2px 4px 3px; }
+.rec-preview-times p { display: flex; justify-content: space-between; gap: 12px; margin: 0; font: 500 11.5px/1.2 var(--font-text); color: var(--text-3); }
+.rec-preview-times p[hidden] { display: none; }
+.rec-preview-times b { font: 600 11.5px/1.2 var(--font-display); color: var(--text); font-variant-numeric: tabular-nums; }
 
 /* ------------------------------------------------------------- account crests, speed, shortcuts */
 

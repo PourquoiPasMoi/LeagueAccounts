@@ -1,5 +1,43 @@
 [
  {
+  "version": "5.15.0",
+  "date": "2026-11-23",
+  "items": {
+   "en": [
+    "Recordings: hovering the timeline now shows two times under the small picture, the time in the recording and the game's own clock at that moment.",
+    "During champ select and loading it says Before the game, and past the end of the game it says After the game."
+   ],
+   "tr": [
+    "Kayıtlar: zaman çizelgesinin üzerine gelince küçük resmin altında artık iki süre görünür: kayıttaki süre ve o andaki oyun saati.",
+    "Şampiyon seçimi ve yükleme sırasında Oyundan önce, oyun bittikten sonra Oyundan sonra yazar."
+   ],
+   "de": [
+    "Aufnahmen: Beim Überfahren der Zeitleiste stehen unter dem kleinen Bild jetzt zwei Zeiten, die Zeit in der Aufnahme und die Spieluhr in diesem Moment.",
+    "Während Championauswahl und Ladebildschirm steht dort Vor dem Spiel, nach dem Spielende Nach dem Spiel."
+   ],
+   "es": [
+    "Grabaciones: al pasar el ratón por la línea de tiempo, bajo la imagen pequeña aparecen ahora dos tiempos, el de la grabación y el reloj de la partida en ese momento.",
+    "Durante la selección de campeón y la carga pone Antes de la partida, y tras el final de la partida, Después de la partida."
+   ],
+   "fr": [
+    "Enregistrements : au survol de la barre de temps, deux temps s'affichent maintenant sous la petite image, celui de l'enregistrement et l'horloge de la partie à ce moment.",
+    "Pendant la sélection des champions et le chargement, il est écrit Avant la partie, et après la fin de la partie, Après la partie."
+   ],
+   "pt": [
+    "Gravações: ao passar o rato pela linha de tempo, por baixo da imagem pequena aparecem agora dois tempos, o da gravação e o relógio do jogo nesse momento.",
+    "Durante a seleção de campeões e o carregamento diz Antes do jogo, e depois do fim do jogo diz Depois do jogo."
+   ],
+   "zh": [
+    "录像：鼠标悬停在时间轴上时，小图下方现在显示两个时间：录像中的时间和当时的对局时钟。",
+    "英雄选择和加载期间显示“对局开始前”，对局结束后显示“对局结束后”。"
+   ],
+   "zhTw": [
+    "錄影：滑鼠停在時間軸上時，小圖下方現在顯示兩個時間：錄影中的時間和當時的對戰時鐘。",
+    "英雄選擇和載入期間顯示「對戰開始前」，對戰結束後顯示「對戰結束後」。"
+   ]
+  }
+ },
+ {
   "version": "5.14.1",
   "date": "2026-11-23",
   "items": {

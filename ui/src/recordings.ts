@@ -791,7 +791,7 @@ export async function openRecordings(): Promise<void> {
         </div>
         <div class="rec-overview" data-rec-overview hidden><div class="rec-overview-window"></div><div class="rec-overview-head"></div></div>
         <div class="rec-waves" data-rec-waves hidden></div>
-        <div class="rec-preview" hidden><canvas width="192" height="108"></canvas><span></span></div>
+        <div class="rec-preview" hidden><canvas width="192" height="108"></canvas><div class="rec-preview-times"><p><span>${esc(t("rec.hoverRecording"))}</span><b data-rec-hover="time"></b></p><p data-rec-hover="game-row"><span>${esc(t("rec.hoverGame"))}</span><b data-rec-hover="game"></b></p></div></div>
       </div>
       <div class="rec-controls">
         <button class="icon-btn rec-play" data-rec="play" aria-label="${esc(t("rec.play"))}"><span class="rec-play-glyph"></span></button>
@@ -1735,7 +1735,18 @@ export async function openRecordings(): Promise<void> {
     const timeline = box.parentElement!.getBoundingClientRect();
     const half = box.offsetWidth / 2 || 100;
     box.style.left = `${Math.min(timeline.width - half, Math.max(half, clientX - timeline.left))}px`;
-    box.querySelector("span")!.textContent = clock(time);
+    box.querySelector('[data-rec-hover="time"]')!.textContent = clock(time);
+    // The game's own clock at that moment, when the recording knows where the game starts.
+    const meta = selected?.meta;
+    const known = meta?.moments.find((entry) => Number.isFinite(entry.gameTime));
+    const start = meta?.gameStart ?? (known ? known.time - known.gameTime : null);
+    const end = meta?.moments.find((entry) => entry.kind === "gameEnd")?.time;
+    const row = box.querySelector<HTMLElement>('[data-rec-hover="game-row"]')!;
+    row.hidden = start == null;
+    if (start != null) {
+      const game = time - start;
+      box.querySelector('[data-rec-hover="game"]')!.textContent = game < 0 ? t("rec.hoverBefore") : end != null && time > end + 1 ? t("rec.hoverAfter") : clock(game);
+    }
     box.hidden = false;
     if (!previewVideo || previewVideo.dataset.src !== video.currentSrc) {
       previewVideo?.removeAttribute("src");
