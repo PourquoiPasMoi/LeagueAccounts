@@ -273,6 +273,9 @@
 .rec-folder .toggle-text { flex: 1; min-width: 0; }
 .rec-folder .toggle-text span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rec-folder .btn { flex: none; height: 30px; padding: 0 12px; font-size: 11px; }
+.rec-folder-move .toggle-text span { white-space: normal; }
+.rec-move-paths { word-break: break-all; }
+.rec-convert-body p.rec-move-warning { color: var(--loss); }
 .rec-option { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; padding: 8px 0; }
 .rec-option .toggle-text { flex: 1 1 240px; }
 .rec-option .segmented button { font-size: 11px; }

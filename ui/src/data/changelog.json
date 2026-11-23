@@ -1,5 +1,59 @@
 [
  {
+  "version": "5.16.0",
+  "date": "2026-11-23",
+  "items": {
+   "en": [
+    "Recordings: when you change the recordings folder in Settings › Recorder, the app now offers to move everything to the new folder: recordings, clips, their moments, game stats, notes and sound tracks.",
+    "Bring in recordings from another folder: moves the recordings of an older recordings folder into the one in use.",
+    "On the same drive the move is instant. Between drives each file is copied, checked, and only then removed from the old folder.",
+    "The move runs in the background, pauses while a game is being recorded and continues after a restart. Nothing is overwritten."
+   ],
+   "tr": [
+    "Kayıtlar: Ayarlar › Kaydedici'de kayıt klasörünü değiştirdiğinde uygulama artık her şeyi yeni klasöre taşımayı önerir: kayıtlar, klipler, anları, oyun istatistikleri, notları ve ses parçaları.",
+    "Başka bir klasörden kayıtları getir: eski bir kayıt klasöründeki kayıtları kullanılan klasöre taşır.",
+    "Aynı sürücüde taşıma anında biter. Sürücüler arasında her dosya kopyalanır, kontrol edilir ve ancak ondan sonra eski klasörden silinir.",
+    "Taşıma arka planda çalışır, oyun kaydedilirken durur ve yeniden başlatmadan sonra devam eder. Hiçbir şeyin üzerine yazılmaz."
+   ],
+   "de": [
+    "Aufnahmen: Wenn du den Aufnahmeordner unter Einstellungen › Rekorder änderst, bietet die App jetzt an, alles in den neuen Ordner zu verschieben: Aufnahmen, Clips, ihre Momente, Spielstatistiken, Notizen und Tonspuren.",
+    "Aufnahmen aus einem anderen Ordner holen: verschiebt die Aufnahmen eines älteren Aufnahmeordners in den verwendeten.",
+    "Auf demselben Laufwerk geht das sofort. Zwischen Laufwerken wird jede Datei kopiert, geprüft und erst dann aus dem alten Ordner entfernt.",
+    "Das Verschieben läuft im Hintergrund, pausiert während einer Spielaufnahme und geht nach einem Neustart weiter. Nichts wird überschrieben."
+   ],
+   "es": [
+    "Grabaciones: al cambiar la carpeta de grabaciones en Ajustes › Grabadora, la aplicación ofrece ahora mover todo a la nueva carpeta: grabaciones, clips, sus momentos, estadísticas de partida, notas y pistas de sonido.",
+    "Traer grabaciones de otra carpeta: mueve las grabaciones de una carpeta anterior a la que está en uso.",
+    "En la misma unidad el traslado es inmediato. Entre unidades, cada archivo se copia, se comprueba y solo entonces se quita de la carpeta anterior.",
+    "El traslado funciona en segundo plano, se pausa mientras se graba una partida y continúa tras reiniciar. No se sobrescribe nada."
+   ],
+   "fr": [
+    "Enregistrements : quand vous changez le dossier des enregistrements dans Paramètres › Enregistreur, l'application propose maintenant de tout déplacer vers le nouveau dossier : enregistrements, clips, leurs moments, statistiques de partie, notes et pistes audio.",
+    "Importer les enregistrements d'un autre dossier : déplace les enregistrements d'un ancien dossier vers celui utilisé.",
+    "Sur le même disque, le déplacement est immédiat. Entre deux disques, chaque fichier est copié, vérifié, puis seulement retiré de l'ancien dossier.",
+    "Le déplacement tourne en arrière-plan, se met en pause pendant l'enregistrement d'une partie et reprend après un redémarrage. Rien n'est écrasé."
+   ],
+   "pt": [
+    "Gravações: ao mudar a pasta de gravações em Definições › Gravador, a aplicação oferece agora mover tudo para a nova pasta: gravações, clipes, os seus momentos, estatísticas de jogo, notas e faixas de som.",
+    "Trazer gravações de outra pasta: move as gravações de uma pasta antiga para a que está em uso.",
+    "Na mesma unidade a mudança é imediata. Entre unidades, cada ficheiro é copiado, verificado e só depois removido da pasta antiga.",
+    "A mudança corre em segundo plano, pausa enquanto um jogo é gravado e continua depois de reiniciar. Nada é substituído."
+   ],
+   "zh": [
+    "录像：在 设置 › 录像 中更改录像文件夹时，应用现在会询问是否把所有内容移动到新文件夹：录像、剪辑及其时刻、对局数据、笔记和音轨。",
+    "从其他文件夹导入录像：把旧录像文件夹中的录像移动到当前使用的文件夹。",
+    "在同一磁盘上移动瞬间完成。跨磁盘时，每个文件会先复制、校验，然后才从旧文件夹中删除。",
+    "移动在后台进行，录制对局时暂停，重启后继续。不会覆盖任何文件。"
+   ],
+   "zhTw": [
+    "錄影：在 設定 › 錄影 中變更錄影資料夾時，應用程式現在會詢問是否把所有內容移動到新資料夾：錄影、剪輯及其時刻、對戰數據、筆記和音軌。",
+    "從其他資料夾匯入錄影：把舊錄影資料夾中的錄影移動到目前使用的資料夾。",
+    "在同一個磁碟上移動瞬間完成。跨磁碟時，每個檔案會先複製、檢查，然後才從舊資料夾中刪除。",
+    "移動在背景進行，錄製對戰時暫停，重新啟動後繼續。不會覆寫任何檔案。"
+   ]
+  }
+ },
+ {
   "version": "5.15.0",
   "date": "2026-11-23",
   "items": {

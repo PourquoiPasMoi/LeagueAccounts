@@ -737,6 +737,11 @@ export const api = {
   startConvert: (paths: string[] | null = null) => call<ConvertStatus>("start_convert", { paths }),
   stopConvert: () => call<void>("stop_convert"),
   pickRecordingsFolder: (title: string) => call<string | null>("pick_recordings_folder", { title }),
+  /** What moving the recordings of `from` into the folder in use would involve. */
+  surveyRecordingsMove: (from: string) => call<MoveSurvey>("survey_recordings_move", { from }),
+  startRecordingsMove: (from: string) => call<MoveStatus>("start_recordings_move", { from }),
+  stopRecordingsMove: () => call<void>("stop_recordings_move"),
+  recordingsMoveStatus: () => call<MoveStatus>("recordings_move_status"),
   recorderStatus: () => call<RecorderStatus>("recorder_status"),
   microphones: () => call<{ id: string; name: string; console: boolean; communications: boolean }[]>("microphones"),
   /** Loudest level (0..1) the microphone hears in 2 s. */
@@ -1056,6 +1061,39 @@ export interface RecorderPrefsView extends RecorderPrefs {
 }
 
 /** The "Save space" job converting recordings to AV1. */
+/** Moving the recordings, clips and their data from one recordings folder to another. */
+export interface MoveStatus {
+  running: boolean;
+  /** Waiting for the game being recorded to end. */
+  paused: boolean;
+  from: string;
+  to: string;
+  doneFiles: number;
+  totalFiles: number;
+  doneBytes: number;
+  totalBytes: number;
+  current: string;
+  /** Files that could not be moved (still in the old folder). */
+  failed: number;
+  /** Files left behind because another file has their name in the new folder. */
+  kept: number;
+  stopped: boolean;
+  /** The last move is over (the numbers are its result). */
+  finished: boolean;
+}
+
+export interface MoveSurvey {
+  files: number;
+  bytes: number;
+  /** Recordings and clips among the files. */
+  videos: number;
+  from: string;
+  to: string;
+  /** Same drive: nothing is copied. */
+  sameDrive: boolean;
+  freeBytes: number | null;
+}
+
 export interface ConvertStatus {
   running: boolean;
   paused: boolean;
@@ -1295,6 +1333,9 @@ export const events = {
   /** Progress of the AV1 conversion job. */
   onConvertStatus: (handler: (status: ConvertStatus) => void): Promise<UnlistenFn> =>
     listen<ConvertStatus>("convert-status", (event) => handler(event.payload)),
+  /** Progress of moving the recordings to another folder. */
+  onRecordingsMove: (handler: (status: MoveStatus) => void): Promise<UnlistenFn> =>
+    listen<MoveStatus>("recordings-move", (event) => handler(event.payload)),
   /** A recording or clip was saved or deleted. */
   onRecordingsChanged: (handler: () => void): Promise<UnlistenFn> => listen("recordings-changed", () => handler()),
   /** The phone remote's server started or stopped. */

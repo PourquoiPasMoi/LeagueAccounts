@@ -38,6 +38,7 @@ import { wireTooltips } from "./tooltips";
 import { failStartup, revealApp } from "./startup";
 import { availableRelease, checkUpdateNow, installUpdate, launchUpdate, wireUpdates } from "./update";
 import { openChangelog, showChangelogAfterUpdate } from "./changelog";
+import { offerRecordingsMove, watchRecordingsMove } from "./recmove";
 import {
   APEX,
   TIER_ORDER,
@@ -1118,6 +1119,10 @@ async function openSettings(): Promise<void> {
               <span class="toggle-text"><strong>${esc(t("settings.recFolder"))}</strong><span data-rec-folder>${esc(recorder.root)}</span></span>
               <button type="button" class="btn btn-ghost" data-rec-browse>${icon("folder-open", 14)}${esc(t("settings.recBrowse"))}</button>
             </div>
+            <div class="rec-folder rec-folder-move">
+              <span class="toggle-text"><strong>${esc(t("move.bring"))}</strong><span>${esc(t("move.bringHint"))}</span></span>
+              <button type="button" class="btn btn-ghost" data-rec-bring>${esc(t("move.bringButton"))}</button>
+            </div>
             <div class="rec-option">
               <span class="toggle-text"><strong>${esc(t("settings.recQuality"))}</strong><span>${esc(t("settings.recQualityHint"))}</span></span>
               ${segmented("preset", recorder.preset, [["light", t("settings.recLight")], ["balanced", t("settings.recBalanced")], ["high", t("settings.recHigh")], ["custom", t("settings.recCustom")]])}
@@ -1448,6 +1453,11 @@ async function openSettings(): Promise<void> {
             root.dispatchEvent(new Event("change"));
           }).catch((error) => toast("error", t("toast.openFailed"), String(error)));
         }
+        if ((event.target as HTMLElement).closest("[data-rec-bring]")) {
+          void api.pickRecordingsFolder(t("move.bring")).then((folder) => {
+            if (folder) void offerRecordingsMove(folder);
+          }).catch((error) => toast("error", t("toast.openFailed"), String(error)));
+        }
         const preset = (event.target as HTMLElement).closest<HTMLElement>("[data-interval]");
         if (preset) {
           interval.value = preset.dataset.interval ?? "30";
@@ -1518,6 +1528,11 @@ async function openSettings(): Promise<void> {
       };
       const recorderSaved = await guard(() => api.setRecorderPrefs(recorderPrefs), "toast.settingsFailed");
       if (!recorderSaved.ok) return false;
+      // The folder changed: the recordings of the old one can follow.
+      if (recorderSaved.value.root !== recorder.root) {
+        const before = recorder.root;
+        window.setTimeout(() => void offerRecordingsMove(before, true), 350);
+      }
       state.settings = saved.value;
       render();
       const language = $<HTMLSelectElement>('[name="language"]', root).value as Lang;
@@ -2284,6 +2299,7 @@ async function start(): Promise<void> {
   hydrateIcons();
   wireTooltips();
   wireControlMotion();
+  watchRecordingsMove();
   wire();
   const boot = await api.bootstrap();
   state.accounts = boot.accounts;

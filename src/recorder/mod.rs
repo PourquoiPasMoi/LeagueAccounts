@@ -15,6 +15,7 @@ pub mod library;
 pub mod metrics;
 pub mod moments;
 pub mod queues;
+pub mod relocate;
 pub mod session;
 pub mod transition;
 

@@ -644,6 +644,8 @@ fn convert_old_recordings(app: &AppHandle) {
             let _ = app.emit("recordings-changed", ());
         }
     }
+    // A move of the recordings to another folder that the last run did not finish.
+    resume_move(app);
 }
 
 /// The bookmark hotkey was pressed: mark the moment in the game being recorded.
@@ -1085,6 +1087,260 @@ pub async fn set_recorder_prefs(app: AppHandle, prefs: RecorderPrefs) -> Command
         });
     }
     Ok(prefs_view(prefs))
+}
+
+// ------------------------------------------------- move recordings to another folder
+
+/// The "move my recordings" job: everything under the old folder's accounts
+/// goes to the folder in use, one file at a time, paused while a game is
+/// being recorded. See `recorder::relocate`.
+#[derive(Clone, Debug, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MoveStatus {
+    pub running: bool,
+    /// Waiting for the game being recorded to end.
+    pub paused: bool,
+    pub from: String,
+    pub to: String,
+    pub done_files: usize,
+    pub total_files: usize,
+    pub done_bytes: u64,
+    pub total_bytes: u64,
+    /// Name of the file being moved.
+    pub current: String,
+    /// Files that could not be moved (still in the old folder).
+    pub failed: usize,
+    /// Files left in the old folder because another file has their name in the new one.
+    pub kept: usize,
+    /// The last run was stopped by the player.
+    pub stopped: bool,
+    /// The last run is over (the numbers above are its result).
+    pub finished: bool,
+}
+
+static MOVE: Mutex<Option<MoveStatus>> = Mutex::new(None);
+static MOVE_STOP: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Kept on disk while a move is unfinished, so the next start continues it.
+#[derive(Serialize, Deserialize)]
+struct MoveJob {
+    from: String,
+    to: String,
+}
+
+fn move_job_path() -> Option<PathBuf> {
+    app_data_dir().ok().map(|directory| directory.join("recorder-move.json"))
+}
+
+fn move_status() -> MoveStatus {
+    MOVE.lock().ok().and_then(|status| status.clone()).unwrap_or_default()
+}
+
+fn set_move(app: &AppHandle, change: impl FnOnce(&mut MoveStatus)) {
+    let snapshot = {
+        let Ok(mut status) = MOVE.lock() else { return };
+        let status = status.get_or_insert_with(MoveStatus::default);
+        change(status);
+        status.clone()
+    };
+    let _ = app.emit("recordings-move", snapshot);
+}
+
+fn same_folder(a: &std::path::Path, b: &std::path::Path) -> bool {
+    match (std::fs::canonicalize(a), std::fs::canonicalize(b)) {
+        (Ok(a), Ok(b)) => a == b,
+        _ => a == b,
+    }
+}
+
+fn run_move(app: &AppHandle, from: PathBuf, to: PathBuf) {
+    use leagueaccounts::recorder::relocate::{self, Moved};
+    use std::sync::atomic::Ordering;
+    MOVE_STOP.store(false, Ordering::Relaxed);
+    let stopped = || MOVE_STOP.load(Ordering::Relaxed);
+    let items = relocate::items(&from);
+    set_move(app, |status| {
+        *status = MoveStatus {
+            running: true,
+            from: from.display().to_string(),
+            to: to.display().to_string(),
+            total_files: items.len(),
+            total_bytes: items.iter().map(|item| item.size).sum(),
+            ..MoveStatus::default()
+        };
+    });
+    // Waits while a game is being recorded (the disk is the recorder's); false = stopped.
+    let wait = |app: &AppHandle| {
+        let mut paused = false;
+        while recording_now() && !stopped() {
+            if !paused {
+                paused = true;
+                set_move(app, |status| status.paused = true);
+            }
+            thread::sleep(Duration::from_secs(1));
+        }
+        if paused {
+            set_move(app, |status| status.paused = false);
+        }
+        !stopped()
+    };
+    let mut base = 0u64;
+    let mut listed = std::time::Instant::now();
+    let mut moved_any = false;
+    for item in &items {
+        if !wait(app) {
+            break;
+        }
+        let name = item.relative.file_name().map(|name| name.to_string_lossy().into_owned()).unwrap_or_default();
+        set_move(app, |status| status.current = name);
+        let mut within = 0u64;
+        let mut told = std::time::Instant::now();
+        let result = relocate::move_file(item, &to, &mut |bytes| {
+            within += bytes;
+            if told.elapsed() >= Duration::from_millis(300) {
+                told = std::time::Instant::now();
+                set_move(app, |status| status.done_bytes = base + within.min(item.size));
+            }
+            wait(app)
+        });
+        if matches!(result, Ok(Moved::Stopped)) {
+            break;
+        }
+        base += item.size;
+        moved_any |= matches!(result, Ok(Moved::Done));
+        set_move(app, |status| {
+            status.done_bytes = base;
+            status.done_files += 1;
+        });
+        // The library shows what has arrived so far.
+        if listed.elapsed() >= Duration::from_secs(5) {
+            listed = std::time::Instant::now();
+            let _ = app.emit("recordings-changed", ());
+        }
+    }
+    // What is still there: once more for files that were busy, then the result.
+    let (mut failed, mut kept) = (0, 0);
+    if !stopped() {
+        for item in relocate::items(&from) {
+            if !wait(app) {
+                break;
+            }
+            match relocate::move_file(&item, &to, &mut |_| !stopped()) {
+                Ok(Moved::Done) => moved_any = true,
+                Ok(Moved::Kept) => kept += 1,
+                Ok(Moved::Stopped) => break,
+                Err(_) => failed += 1,
+            }
+        }
+    }
+    relocate::remove_empty(&from);
+    let was_stopped = stopped();
+    // Busy files are tried again at the next start; a stop by the player is final.
+    if was_stopped || failed == 0 {
+        if let Some(path) = move_job_path() {
+            let _ = std::fs::remove_file(path);
+        }
+    }
+    if moved_any {
+        logging::record(Event::RecordingSaved, Reason::None);
+    }
+    set_move(app, |status| {
+        status.running = false;
+        status.paused = false;
+        status.current.clear();
+        status.failed = failed;
+        status.kept = kept;
+        status.stopped = was_stopped;
+        status.finished = true;
+    });
+    let _ = app.emit("recordings-changed", ());
+}
+
+fn resume_move(app: &AppHandle) {
+    let Some(path) = move_job_path() else { return };
+    let Some(job) = std::fs::read(&path).ok().and_then(|body| serde_json::from_slice::<MoveJob>(&body).ok()) else { return };
+    let (from, to) = (PathBuf::from(&job.from), prefs().root());
+    // The folder was changed again since, or the old one is gone: nothing to continue.
+    if !same_folder(&PathBuf::from(&job.to), &to) || !from.is_dir() || same_folder(&from, &to) || move_status().running {
+        let _ = std::fs::remove_file(path);
+        return;
+    }
+    run_move(app, from, to);
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MoveSurvey {
+    #[serde(flatten)]
+    survey: leagueaccounts::recorder::relocate::Survey,
+    from: String,
+    to: String,
+    /// Same drive: nothing is copied, the move is instant.
+    same_drive: bool,
+    /// Free space on the new folder's drive (absent when unknown).
+    free_bytes: Option<u64>,
+}
+
+/// What moving the recordings of `from` into the folder in use would involve.
+#[tauri::command]
+pub async fn survey_recordings_move(from: String) -> CommandResult<MoveSurvey> {
+    let to = prefs().root();
+    tauri::async_runtime::spawn_blocking(move || {
+        use leagueaccounts::recorder::relocate;
+        let source = PathBuf::from(from.trim());
+        if !source.is_dir() {
+            return Err(fail("recordings_folder"));
+        }
+        if same_folder(&source, &to) {
+            return Err(fail("recordings_move_same"));
+        }
+        Ok(MoveSurvey {
+            survey: relocate::survey(&source),
+            from: source.display().to_string(),
+            to: to.display().to_string(),
+            same_drive: relocate::same_drive(&source, &to),
+            free_bytes: relocate::free_space(&to),
+        })
+    })
+    .await
+    .map_err(|_| fail("operation_failed"))?
+}
+
+/// Move every recording, clip and their data from `from` into the folder in use (in the background).
+#[tauri::command]
+pub async fn start_recordings_move(app: AppHandle, from: String) -> CommandResult<MoveStatus> {
+    let (source, to) = (PathBuf::from(from.trim()), prefs().root());
+    if move_status().running {
+        return Ok(move_status());
+    }
+    if !source.is_dir() {
+        return Err(fail("recordings_folder"));
+    }
+    if same_folder(&source, &to) {
+        return Err(fail("recordings_move_same"));
+    }
+    std::fs::create_dir_all(&to).map_err(|error| fail_with("recordings_folder", error))?;
+    if let Some(path) = move_job_path() {
+        let job = MoveJob { from: source.display().to_string(), to: to.display().to_string() };
+        let _ = std::fs::write(path, serde_json::to_vec_pretty(&job).unwrap_or_default());
+    }
+    set_move(&app, |status| {
+        *status = MoveStatus { running: true, from: source.display().to_string(), to: to.display().to_string(), ..MoveStatus::default() };
+    });
+    let worker = app.clone();
+    thread::spawn(move || run_move(&worker, source, to));
+    Ok(move_status())
+}
+
+#[tauri::command]
+pub async fn stop_recordings_move() -> CommandResult<()> {
+    MOVE_STOP.store(true, std::sync::atomic::Ordering::Relaxed);
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn recordings_move_status() -> CommandResult<MoveStatus> {
+    Ok(move_status())
 }
 
 #[tauri::command]
