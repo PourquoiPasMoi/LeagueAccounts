@@ -678,6 +678,8 @@ pub fn spawn(app: AppHandle) {
     {
         let app = app.clone();
         thread::spawn(move || {
+            // Before anything is saved: unfinished files of a save that was cut off or froze.
+            library::sweep(&prefs().root());
             // After startup settles; quick when there is nothing to convert.
             thread::sleep(Duration::from_secs(15));
             convert_old_recordings(&app);

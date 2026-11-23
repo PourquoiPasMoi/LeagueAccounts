@@ -142,6 +142,26 @@ fn modified_ms(metadata: &std::fs::Metadata) -> u64 {
     metadata.modified().ok().and_then(|time| time.duration_since(UNIX_EPOCH).ok()).map_or(0, |time| time.as_millis() as u64)
 }
 
+/// Remove the unfinished files (`.part`) that a stopped or frozen save left in
+/// the accounts' folders. Only at start, before anything is being saved.
+/// Returns how many were removed.
+pub fn sweep(root: &Path) -> usize {
+    let mut removed = 0;
+    let Ok(accounts) = std::fs::read_dir(root) else { return removed };
+    for account in accounts.flatten() {
+        for folder in [account.path().join(GAMES), account.path().join(CLIPS), account.path().join(GAMES).join(TRACKS)] {
+            let Ok(files) = std::fs::read_dir(folder) else { continue };
+            for file in files.flatten() {
+                let path = file.path();
+                if path.extension().is_some_and(|extension| extension.eq_ignore_ascii_case("part")) && std::fs::remove_file(&path).is_ok() {
+                    removed += 1;
+                }
+            }
+        }
+    }
+    removed
+}
+
 /// Every recording under the root, newest first.
 pub fn list(root: &Path) -> Vec<Entry> {
     let mut entries = Vec::new();

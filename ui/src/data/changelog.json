@@ -1,5 +1,51 @@
 [
  {
+  "version": "5.14.1",
+  "date": "2026-11-23",
+  "items": {
+   "en": [
+    "Recordings: a clip whose saving freezes (it happened when a game started at the same moment) no longer leaves a broken clip that can't be played. The app gives up on the frozen attempt after 45 seconds and saves the clip again another way.",
+    "Exact and Discord clips of AV1 recordings now have a working fallback when the graphics card encoder fails.",
+    "Unfinished clip files are hidden and removed at the next start."
+   ],
+   "tr": [
+    "Kayıtlar: kaydedilirken donan bir klip (aynı anda bir oyun başladığında oluyordu) artık oynatılamayan bozuk bir klip bırakmıyor. Uygulama donan denemeden 45 saniye sonra vazgeçer ve klibi başka bir yolla yeniden kaydeder.",
+    "AV1 kayıtların Tam ve Discord klipleri, ekran kartı kodlayıcısı başarısız olduğunda artık çalışan bir yedek yola sahip.",
+    "Yarım kalan klip dosyaları gizlenir ve bir sonraki açılışta silinir."
+   ],
+   "de": [
+    "Aufnahmen: Ein Clip, dessen Speichern einfriert (das passierte, wenn im selben Moment ein Spiel startete), hinterlässt keinen defekten, nicht abspielbaren Clip mehr. Die App gibt den eingefrorenen Versuch nach 45 Sekunden auf und speichert den Clip auf anderem Weg erneut.",
+    "Exakte und Discord-Clips von AV1-Aufnahmen haben jetzt einen funktionierenden Ersatzweg, wenn der Encoder der Grafikkarte ausfällt.",
+    "Unfertige Clip-Dateien werden ausgeblendet und beim nächsten Start entfernt."
+   ],
+   "es": [
+    "Grabaciones: un clip cuyo guardado se congela (ocurría cuando empezaba una partida en ese mismo momento) ya no deja un clip roto que no se puede reproducir. La aplicación abandona el intento congelado tras 45 segundos y guarda el clip de nuevo de otra forma.",
+    "Los clips Exactos y de Discord de grabaciones AV1 tienen ahora una alternativa que funciona cuando falla el codificador de la tarjeta gráfica.",
+    "Los archivos de clips sin terminar se ocultan y se eliminan en el siguiente inicio."
+   ],
+   "fr": [
+    "Enregistrements : un clip dont l'enregistrement se fige (cela arrivait quand une partie démarrait au même moment) ne laisse plus de clip cassé impossible à lire. L'application abandonne la tentative figée après 45 secondes et enregistre le clip à nouveau d'une autre façon.",
+    "Les clips Exacts et Discord des enregistrements AV1 ont maintenant une solution de secours qui fonctionne quand l'encodeur de la carte graphique échoue.",
+    "Les fichiers de clips inachevés sont masqués et supprimés au prochain démarrage."
+   ],
+   "pt": [
+    "Gravações: um clipe cuja gravação bloqueia (acontecia quando um jogo começava no mesmo momento) já não deixa um clipe estragado que não pode ser reproduzido. A aplicação desiste da tentativa bloqueada após 45 segundos e guarda o clipe de novo de outra forma.",
+    "Os clipes Exatos e de Discord de gravações AV1 têm agora uma alternativa que funciona quando o codificador da placa gráfica falha.",
+    "Os ficheiros de clipes inacabados ficam ocultos e são removidos no arranque seguinte."
+   ],
+   "zh": [
+    "录像：保存时卡住的剪辑（发生在同一时刻有对局开始时）不会再留下无法播放的损坏剪辑。应用会在 45 秒后放弃卡住的那次尝试，并用另一种方式重新保存剪辑。",
+    "AV1 录像的精确剪辑和 Discord 剪辑，在显卡编码器失败时现在有可用的备用方式。",
+    "未完成的剪辑文件会被隐藏，并在下次启动时删除。"
+   ],
+   "zhTw": [
+    "錄影：儲存時卡住的剪輯（發生在同一時刻有對戰開始時）不會再留下無法播放的損壞剪輯。應用程式會在 45 秒後放棄卡住的那次嘗試，並以另一種方式重新儲存剪輯。",
+    "AV1 錄影的精確剪輯和 Discord 剪輯，在顯示卡編碼器失敗時現在有可用的備用方式。",
+    "未完成的剪輯檔案會被隱藏，並在下次啟動時刪除。"
+   ]
+  }
+ },
+ {
   "version": "5.14.0",
   "date": "2026-11-23",
   "items": {

@@ -7,9 +7,13 @@
 
 use super::capture::Gpu;
 use super::encoder::{rate_parameters, video_output_type, Codec, Rate, AUDIO_CHANNELS, AUDIO_RATE};
+use std::cell::RefCell;
 use std::collections::VecDeque;
 use std::mem::ManuallyDrop;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
+use std::sync::{mpsc, Arc, OnceLock};
+use std::time::{Duration, Instant};
 use windows::core::{Result, GUID, HSTRING};
 use windows::Win32::Foundation::E_FAIL;
 use windows::Win32::Media::MediaFoundation::*;
@@ -89,15 +93,101 @@ const AUDIO_BYTES: u32 = 20_000;
 const SHARE_AUDIO_BYTES: u32 = 12_000;
 const UNITS: f64 = 10_000_000.0;
 
+/// A cut that reads and writes nothing for this long is given up. (A clip
+/// re-encoded on the GPU froze for good when a game started beside it and
+/// left a file without its index: v5.14.0.)
+const STALL: Duration = Duration::from_secs(45);
+
+thread_local! {
+    /// The time of this thread's last sample, watched by `guarded`.
+    static BEAT: RefCell<Option<Arc<AtomicU64>>> = const { RefCell::new(None) };
+}
+
+fn clock_ms() -> u64 {
+    static START: OnceLock<Instant> = OnceLock::new();
+    START.get_or_init(Instant::now).elapsed().as_millis() as u64
+}
+
+/// Called for every sample: the cut on this thread is still moving.
+fn beat() {
+    BEAT.with(|slot| {
+        if let Some(shared) = slot.borrow().as_ref() {
+            shared.store(clock_ms(), Ordering::Relaxed);
+        }
+    });
+}
+
+/// Unfinished files end in `.part`: the library never lists them and
+/// `library::sweep` removes the ones a stopped app left behind.
+fn temporary_for(target: &Path) -> PathBuf {
+    static NUMBER: AtomicU32 = AtomicU32::new(0);
+    let name = target.file_name().map(|name| name.to_string_lossy().into_owned()).unwrap_or_default();
+    target.with_file_name(format!("{name}.{}.part", NUMBER.fetch_add(1, Ordering::Relaxed)))
+}
+
+/// One cut on its own thread, written beside `target` under a temporary name
+/// and renamed only when it is complete, so a half-written file never shows as
+/// a clip. A cut that stops moving is left behind (a thread stuck inside the
+/// encoder cannot be stopped; it keeps its file until the app closes) and
+/// reported as failed, so the caller can try another way.
+fn guarded(source: &Path, target: &Path, parts: &[(f64, f64)], video: Video, audio: &AudioPlan) -> Result<Vec<Part>> {
+    let temporary = temporary_for(target);
+    let shared = Arc::new(AtomicU64::new(clock_ms()));
+    let (send, receive) = mpsc::channel();
+    let worker = {
+        let (source, temporary, parts, audio, shared) = (source.to_path_buf(), temporary.clone(), parts.to_vec(), audio.clone(), shared.clone());
+        move || {
+            BEAT.with(|slot| *slot.borrow_mut() = Some(shared));
+            let result = super::startup().and_then(|()| {
+                let result = transcode(&source, &temporary, &parts, video, &audio);
+                super::shutdown();
+                result
+            });
+            // Nobody waits any more (given up as frozen): the file is not wanted.
+            if send.send(result).is_err() {
+                let _ = std::fs::remove_file(&temporary);
+            }
+        }
+    };
+    std::thread::Builder::new().name("clip".into()).spawn(worker).map_err(|_| fail())?;
+    loop {
+        match receive.recv_timeout(Duration::from_secs(1)) {
+            Ok(Ok(landed)) => {
+                return match std::fs::rename(&temporary, target) {
+                    Ok(()) => Ok(landed),
+                    Err(_) => {
+                        let _ = std::fs::remove_file(&temporary);
+                        Err(fail())
+                    }
+                };
+            }
+            Ok(Err(error)) => {
+                let _ = std::fs::remove_file(&temporary);
+                return Err(error);
+            }
+            Err(mpsc::RecvTimeoutError::Timeout) => {
+                if clock_ms().saturating_sub(shared.load(Ordering::Relaxed)) > STALL.as_millis() as u64 {
+                    crate::logging::record(crate::logging::Event::ClipFailed, crate::logging::Reason::Timeout);
+                    return Err(fail());
+                }
+            }
+            Err(mpsc::RecvTimeoutError::Disconnected) => {
+                let _ = std::fs::remove_file(&temporary);
+                return Err(fail());
+            }
+        }
+    }
+}
+
 /// Cut the `parts` (start, end seconds, in order) of `source` and join them
 /// with plain cuts into `target`. Returns where each part really landed (a
 /// fast cut starts on the keyframe at or before the chosen start).
 pub fn cut(source: &Path, target: &Path, parts: &[(f64, f64)], exact: bool, audio: &AudioPlan) -> Result<Vec<Part>> {
     let result = if exact {
-        transcode(source, target, parts, Video::Encode { hardware: true, shrink: None }, audio)
-            .or_else(|_| transcode(source, target, parts, Video::Encode { hardware: false, shrink: None }, audio))
+        guarded(source, target, parts, Video::Encode { hardware: true, shrink: None }, audio)
+            .or_else(|_| guarded(source, target, parts, Video::Encode { hardware: false, shrink: None }, audio))
     } else {
-        transcode(source, target, parts, Video::Copy, audio)
+        guarded(source, target, parts, Video::Copy, audio)
     };
     if result.is_err() {
         let _ = std::fs::remove_file(target);
@@ -128,8 +218,8 @@ pub fn cut_for_size(source: &Path, target: &Path, parts: &[(f64, f64)], max_byte
     let mut last = Err(fail());
     for _ in 0..3 {
         let shrink = Some(shrink_for(budget));
-        last = transcode(source, target, parts, Video::Encode { hardware: true, shrink }, audio)
-            .or_else(|_| transcode(source, target, parts, Video::Encode { hardware: false, shrink }, audio));
+        last = guarded(source, target, parts, Video::Encode { hardware: true, shrink }, audio)
+            .or_else(|_| guarded(source, target, parts, Video::Encode { hardware: false, shrink }, audio));
         match &last {
             Ok(_) if std::fs::metadata(target).is_ok_and(|metadata| metadata.len() <= max_bytes) => return last,
             Ok(_) => {
@@ -360,6 +450,7 @@ unsafe fn select_all(reader: &IMFSourceReader, tracks: &mut [Track]) -> Result<(
 /// done when it is past the end.
 unsafe fn pump(reader: &IMFSourceReader, tracks: &mut [Track], mut handle: impl FnMut(&mut Track, &IMFSample, i64) -> Result<()>) -> Result<()> {
     while tracks.iter().any(|track| !track.done) {
+        beat();
         let mut index = 0u32;
         let mut flags = 0u32;
         let mut time = 0i64;
@@ -452,7 +543,14 @@ fn transcode(source: &Path, target: &Path, parts: &[(f64, f64)], video: Video, a
     let hardware = matches!(video, Video::Encode { hardware: true, .. });
     let shrink = matches!(video, Video::Encode { shrink: Some(_), .. });
     let audio_bytes = if shrink { SHARE_AUDIO_BYTES } else { AUDIO_BYTES };
-    let gpu = if hardware { Some(Gpu::new()?) } else { None };
+    // Without the hardware encoder the picture is still decoded on the GPU when
+    // there is one: AV1 recordings have no other decoder.
+    let gpu = match Gpu::new() {
+        _ if matches!(video, Video::Copy) => None,
+        Ok(gpu) => Some(gpu),
+        Err(error) if hardware => return Err(error),
+        Err(_) => None,
+    };
     unsafe {
         let manager = match &gpu {
             Some(gpu) => {
@@ -475,7 +573,7 @@ fn transcode(source: &Path, target: &Path, parts: &[(f64, f64)], video: Video, a
             options.SetUINT32(&MF_SOURCE_READER_ENABLE_ADVANCED_VIDEO_PROCESSING, 1)?;
         }
         let reader = MFCreateSourceReaderFromURL(&HSTRING::from(source.as_os_str()), &options)?;
-        let writer = mp4_writer(target, manager.as_ref())?;
+        let writer = mp4_writer(target, manager.as_ref().filter(|_| hardware))?;
         reader.SetStreamSelection(MF_SOURCE_READER_ALL_STREAMS.0 as u32, false)?;
         let (video_stream, audio_streams) = streams(&reader);
         let (video_index, video_native) = video_stream.ok_or_else(fail)?;
