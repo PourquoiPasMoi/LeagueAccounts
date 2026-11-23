@@ -1,5 +1,7 @@
 /* Design tokens and the main screen. Loaded after styles.css / features.css / login.css. */
 
+/* App font: Chillax (Fontshare, variable 200-700, no italic; bundled). Inter and Satoshi kept in ../capture-deps/fonts. */
+@font-face { font-family: Chillax; src: url('/fonts/Chillax-Variable.woff2') format('woff2'); font-weight: 200 700; font-style: normal; font-display: swap; }
 /* CJK fallback faces (subset, bundled with the main app). */
 @font-face { font-family: NotoCJK; src: url('/league/fonts/noto-sans-sc-regular.otf') format('opentype'); font-weight: 400; font-display: swap; }
 @font-face { font-family: NotoCJK; src: url('/league/fonts/noto-sans-sc-medium.otf') format('opentype'); font-weight: 500 600; font-display: swap; }
@@ -54,8 +56,8 @@
   --titlebar: 48px;
   --ease: cubic-bezier(.22, 1, .36, 1);
   --spring: cubic-bezier(.34, 1.45, .5, 1);
-  --font-text: "Segoe UI Variable Text", "Segoe UI Variable", "Segoe UI", system-ui, NotoCJK, sans-serif;
-  --font-display: "Segoe UI Variable Display", "Segoe UI Variable", "Segoe UI", system-ui, NotoCJK, sans-serif;
+  --font-text: Chillax, "Segoe UI Variable Text", "Segoe UI Variable", "Segoe UI", system-ui, NotoCJK, sans-serif;
+  --font-display: Chillax, "Segoe UI Variable Display", "Segoe UI Variable", "Segoe UI", system-ui, NotoCJK, sans-serif;
   --shadow-1: 0 1px 2px rgb(0 0 0 / .3), 0 8px 24px -12px rgb(0 0 0 / .6);
   --shadow-2: 0 2px 6px rgb(0 0 0 / .3), 0 28px 70px -20px rgb(0 0 0 / .8);
   --glass: rgb(34 34 38 / .78);

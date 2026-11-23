@@ -1,5 +1,35 @@
 [
  {
+  "version": "5.12.3",
+  "date": "2026-11-23",
+  "items": {
+   "en": [
+    "New font: the whole app now uses Chillax."
+   ],
+   "tr": [
+    "Yeni yazı tipi: uygulamanın tamamı artık Chillax kullanıyor."
+   ],
+   "de": [
+    "Neue Schrift: Die ganze App nutzt jetzt Chillax."
+   ],
+   "es": [
+    "Nueva fuente: toda la aplicación usa ahora Chillax."
+   ],
+   "fr": [
+    "Nouvelle police : toute l'application utilise désormais Chillax."
+   ],
+   "pt": [
+    "Novo tipo de letra: toda a aplicação usa agora Chillax."
+   ],
+   "zh": [
+    "新字体：整个应用现在使用 Chillax（中文仍使用原有字体）。"
+   ],
+   "zhTw": [
+    "新字型：整個應用程式現在使用 Chillax（中文仍使用原有字型）。"
+   ]
+  }
+ },
+ {
   "version": "5.12.2",
   "date": "2026-11-22",
   "items": {

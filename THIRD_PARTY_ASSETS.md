@@ -17,9 +17,13 @@ The bundle contains:
 - Dialog trim, the close-button mount and icon, and the title divider from `rcp-fe-lol-uikit`. The modal frame follows the live client's `lol-uikit-dialog-frame` construction, inspected in Customize My Identity.
 - Checkbox sprites, dropdown arrows and checks, navigation highlights, action icons, and tooltip caret from `rcp-fe-lol-uikit`; radio sprites from `rcp-fe-lol-parties`; the loading spinner and utility icons from `rcp-fe-lol-static-assets`; window controls from `rcp-fe-lol-navigation`.
 
-Since v5.0.0 the interface has its own design (system fonts, CSS-drawn controls). The client's fonts, frames, control sprites and backgrounds listed above are still in the bundle and the manifest but are no longer used by the stylesheets; rank emblems, crests and the small glyph icons are.
+Since v5.0.0 the interface has its own design (CSS-drawn controls; its font is listed below). The client's fonts, frames, control sprites and backgrounds listed above are still in the bundle and the manifest but are no longer used by the stylesheets; rank emblems, crests and the small glyph icons are.
 
 Verify the committed bundle with `npm run assets:verify`. Restore missing files with `node scripts/league-assets.mjs --fetch`. Existing valid files are retained. An upstream hash mismatch requires manual review before changing the manifest; the CDN may re-encode PNGs, so a different hash does not necessarily mean different artwork. To update the patch, change the script's source version, inspect the resulting art and motion, and deliberately regenerate the manifest and showcase.
+
+## Interface font
+
+The interface uses **Chillax** by Manushi Parikh, from the Indian Type Foundry's [Fontshare](https://www.fontshare.com/fonts/chillax), free for personal and commercial use under the ITF Free Font License. It is bundled as one variable file, `ui/public/fonts/Chillax-Variable.woff2` (weights 200–700), so the interface makes no font requests at runtime. Chinese text falls back to the CJK fonts below.
 
 ## CJK fonts
 
