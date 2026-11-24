@@ -100,23 +100,24 @@ function surveyBody(survey: MoveSurvey, short: boolean): string {
  * Ask whether the recordings in `from` should be moved into the folder in
  * use, and start the move. `quiet`: say nothing when `from` holds no recordings
  * (the folder was just changed and the old one was empty).
+ * Returns whether there was something to move (asked, or a move running).
  */
-export async function offerRecordingsMove(from: string, quiet = false): Promise<void> {
+export async function offerRecordingsMove(from: string, quiet = false): Promise<boolean> {
   let survey: MoveSurvey;
   try {
     const running = await api.recordingsMoveStatus();
     if (running.running) {
       void openMoveProgress(running);
-      return;
+      return true;
     }
     survey = await api.surveyRecordingsMove(from);
   } catch (error) {
     if (!quiet) toast("error", t("move.title"), describe(error));
-    return;
+    return false;
   }
   if (!survey.files) {
     if (!quiet) toast("info", t("move.title"), t("move.nothing"));
-    return;
+    return false;
   }
   const short = !survey.sameDrive && survey.freeBytes != null && survey.freeBytes < survey.bytes;
   const answer = await modal({
@@ -124,10 +125,11 @@ export async function offerRecordingsMove(from: string, quiet = false): Promise<
     body: surveyBody(survey, short),
     actions: [{ label: t("move.leave"), kind: "ghost", value: "leave" }, ...(short ? [] : [{ label: t("move.start"), kind: "primary" as const, value: "move" }])],
   });
-  if (answer !== "move") return;
+  if (answer !== "move") return true;
   try {
     void openMoveProgress(await api.startRecordingsMove(from));
   } catch (error) {
     toast("error", t("move.title"), describe(error));
   }
+  return true;
 }

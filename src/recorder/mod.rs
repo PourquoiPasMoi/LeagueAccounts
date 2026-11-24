@@ -10,6 +10,7 @@ pub mod clip;
 pub mod defrag;
 pub mod encoder;
 pub mod gameinfo;
+pub mod gate;
 pub mod hotkey;
 pub mod library;
 pub mod metrics;

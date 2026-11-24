@@ -39,6 +39,7 @@ import { failStartup, revealApp } from "./startup";
 import { availableRelease, checkUpdateNow, installUpdate, launchUpdate, wireUpdates } from "./update";
 import { openChangelog, showChangelogAfterUpdate } from "./changelog";
 import { offerRecordingsMove, watchRecordingsMove } from "./recmove";
+import { micSummary, openMicrophone, type MicState, type Microphone } from "./micgate";
 import {
   APEX,
   TIER_ORDER,
@@ -940,7 +941,6 @@ const describeError = (error: unknown): string => (error instanceof ApiError ? e
 let settingsTab = "general";
 /** Settings dialog: whether the form differs from how it opened, and re-taking that state. */
 let settingsDirty: () => boolean = () => false;
-let settingsRebase: () => void = () => undefined;
 
 /** The pressed option of a segmented control in Settings › Recorder. */
 const recorderChoice = (root: HTMLElement, group: string): string =>
@@ -962,6 +962,11 @@ async function openSettings(): Promise<void> {
   if (!recorderLoaded.ok) return;
   const recorder = recorderLoaded.value;
   let recorderFolder = recorder.folder;
+  // The folder in use: Change saves it at once, so Save does not ask again.
+  let recorderRoot = recorder.root;
+  // Microphone and its noise gates: saved at once by the microphone window.
+  const mic: MicState = { device: recorder.micDevice, gates: { ...recorder.micGates } };
+  let microphones: Microphone[] = [];
   const heightOptions = [0, 2160, 1440, 1080, 720]
     .map((height) => `<option value="${height}"${height === recorder.height ? " selected" : ""}>${esc(height ? `${height}p` : t("settings.recWindowSize"))}</option>`)
     .join("");
@@ -1097,13 +1102,17 @@ async function openSettings(): Promise<void> {
         ${remotePage(settingsTab)}
         <section class="settings-page" data-settings-page="recorder" ${settingsTab === "recorder" ? "" : "hidden"}>
           <h3 class="settings-page-title">${esc(t("settings.recorder"))}</h3>
-        <div class="rec-settings-grid">
-          <div>
+        <div class="rec-settings">
+          <div class="settings-group">
+            <h4 class="settings-group-title">${esc(t("settings.groupRecording"))}</h4>
             ${toggle("recEnabled", recorder.enabled, t("settings.recOn"), t("settings.recOnHint"))}
             ${toggle("recChampSelect", recorder.champSelect, t("settings.recChampSelect"), t("settings.recChampSelectHint"))}
             ${toggle("recPostGame", recorder.postGame, t("settings.recPostGame"), t("settings.recPostGameHint"))}
             ${toggle("recCursor", recorder.cursor, t("settings.recCursor"), t("settings.recCursorHint"))}
             ${toggle("recAutoHighlights", recorder.autoHighlights, t("settings.recAutoHighlights"), t("settings.recAutoHighlightsHint"))}
+          </div>
+          <div class="settings-group">
+            <h4 class="settings-group-title">${esc(t("settings.groupBookmarks"))}</h4>
             <div class="rec-folder rec-bookmark">
               <span class="toggle-text"><strong>${esc(t("settings.recBookmarkKey"))}</strong><span>${esc(t("settings.recBookmarkKeyHint"))}</span></span>
               <button type="button" class="btn btn-ghost rec-key" data-rec-key>${esc(recorder.bookmarkKey || t("settings.recBookmarkOff"))}</button>
@@ -1115,6 +1124,9 @@ async function openSettings(): Promise<void> {
               <label class="field inline"><span>${esc(t("settings.recBookmarkAfter"))}</span><span class="interval-input"><input name="recBookmarkAfter" type="number" min="0" max="300" step="5" value="${recorder.bookmarkAfter}"/><span>s</span></span></label>
             </div>
             ${toggle("recBookmarkSound", recorder.bookmarkSound, t("settings.recBookmarkSound"), t("settings.recBookmarkSoundHint"))}
+          </div>
+          <div class="settings-group">
+            <h4 class="settings-group-title">${esc(t("settings.groupStorage"))}</h4>
             <div class="rec-folder">
               <span class="toggle-text"><strong>${esc(t("settings.recFolder"))}</strong><span data-rec-folder>${esc(recorder.root)}</span></span>
               <button type="button" class="btn btn-ghost" data-rec-browse>${icon("folder-open", 14)}${esc(t("settings.recBrowse"))}</button>
@@ -1123,6 +1135,22 @@ async function openSettings(): Promise<void> {
               <span class="toggle-text"><strong>${esc(t("move.bring"))}</strong><span>${esc(t("move.bringHint"))}</span></span>
               <button type="button" class="btn btn-ghost" data-rec-bring>${esc(t("move.bringButton"))}</button>
             </div>
+            <label class="field inline"><span class="toggle-text"><strong>${esc(t("settings.recLimit"))}</strong><span>${esc(t("settings.recLimitHint"))}</span></span>
+              <span class="interval-input"><input name="recLimit" type="number" min="0" max="100000" step="10" value="${recorder.diskLimitGb}"/><span>GB</span></span></label>
+          </div>
+          <div class="settings-group">
+            <h4 class="settings-group-title">${esc(t("settings.groupSound"))}</h4>
+            ${toggle("recGameAudio", recorder.gameAudio, t("settings.recGameAudio"), t("settings.recGameAudioHint"))}
+            ${toggle("recMic", recorder.microphone, t("settings.recMic"), t("settings.recMicHint"))}
+            <div class="rec-folder rec-mic-setup" data-settings-ignore>
+              <span class="toggle-text"><strong>${esc(t("mic.rowTitle"))}</strong><span data-mic-summary>${esc(t("mic.loading"))}</span></span>
+              <button type="button" class="btn btn-ghost" data-rec-mic-setup>${esc(t("mic.setup"))}</button>
+            </div>
+            ${toggle("recDiscord", recorder.discord, t("settings.recDiscord"), t("settings.recDiscordHint"))}
+            ${musicOn() ? toggle("recMusic", recorder.music, t("settings.recMusic"), t("settings.recMusicHint")) : ""}
+          </div>
+          <div class="settings-group">
+            <h4 class="settings-group-title">${esc(t("settings.groupVideo"))}</h4>
             <div class="rec-option">
               <span class="toggle-text"><strong>${esc(t("settings.recQuality"))}</strong><span>${esc(t("settings.recQualityHint"))}</span></span>
               ${segmented("preset", recorder.preset, [["light", t("settings.recLight")], ["balanced", t("settings.recBalanced")], ["high", t("settings.recHigh")], ["custom", t("settings.recCustom")]])}
@@ -1132,20 +1160,6 @@ async function openSettings(): Promise<void> {
               <label class="field inline"><span>${esc(t("settings.recFps"))}</span><div class="select-wrap"><select name="recFps">${fpsOptions}</select></div></label>
               <label class="field inline"><span>${esc(t("settings.recBitrate"))}</span><span class="interval-input"><input name="recBitrate" type="number" min="1" max="100" step="1" value="${recorder.bitrate}"/><span>Mbps</span></span></label>
             </div>
-            <label class="field inline"><span class="toggle-text"><strong>${esc(t("settings.recLimit"))}</strong><span>${esc(t("settings.recLimitHint"))}</span></span>
-              <span class="interval-input"><input name="recLimit" type="number" min="0" max="100000" step="10" value="${recorder.diskLimitGb}"/><span>GB</span></span></label>
-          </div>
-          <div>
-            ${toggle("recGameAudio", recorder.gameAudio, t("settings.recGameAudio"), t("settings.recGameAudioHint"))}
-            ${toggle("recMic", recorder.microphone, t("settings.recMic"), t("settings.recMicHint"))}
-            <div class="rec-mic" data-rec-mic>
-              <div class="select-wrap"><select name="recMicDevice" aria-label="${esc(t("settings.recMicDevice"))}"><option value="">${esc(t("settings.recMicDefault"))}</option></select></div>
-              <button type="button" class="btn btn-ghost" data-rec-mic-test>${esc(t("settings.recMicTest"))}</button>
-              <span class="rec-mic-meter"><span></span></span>
-              <span class="rec-mic-result" data-rec-mic-result></span>
-            </div>
-            ${toggle("recDiscord", recorder.discord, t("settings.recDiscord"), t("settings.recDiscordHint"))}
-            ${musicOn() ? toggle("recMusic", recorder.music, t("settings.recMusic"), t("settings.recMusicHint")) : ""}
             <div class="rec-option">
               <span class="toggle-text"><strong>${esc(t("settings.recCodec"))}</strong><span>${esc(t("settings.recCodecHint"))}</span></span>
               ${segmented("codec", av1 ? recorder.codec : "h264", [["h264", t("settings.recH264")], ["av1", t("settings.recAv1")]], av1 ? [] : ["av1"])}
@@ -1252,7 +1266,6 @@ async function openSettings(): Promise<void> {
             field instanceof HTMLInputElement && (field.type === "checkbox" || field.type === "radio") ? `${field.name}=${field.value}:${field.checked}` : `${field.name}=${field.value}`,
           ),
           [...root.querySelectorAll<HTMLElement>("[data-rec-group] [aria-pressed='true']")].map((button) => button.dataset.recOption),
-          recorderFolder,
         ]);
       let baseline = snapshot();
       const saveButton = root.querySelector<HTMLButtonElement>('.modal-foot [data-value="save"]');
@@ -1260,11 +1273,6 @@ async function openSettings(): Promise<void> {
         if (saveButton) saveButton.disabled = snapshot() === baseline;
       };
       settingsDirty = () => snapshot() !== baseline;
-      // The microphone list fills in a moment later: that is not a change.
-      settingsRebase = () => {
-        baseline = snapshot();
-        refresh();
-      };
       for (const name of ["input", "change", "click"]) root.addEventListener(name, () => requestAnimationFrame(refresh));
       refresh();
       // Music: saved cover pictures (cleared at once, not by Save).
@@ -1380,36 +1388,24 @@ async function openSettings(): Promise<void> {
             .catch((error) => toast("error", t("settings.discordAdd"), describeError(error)));
         }
       });
-      // Microphones: Windows' list, the default named; Test listens for 2 s.
-      const micSelect = $<HTMLSelectElement>('[name="recMicDevice"]', root);
+      // Microphone row: the device and its gate in one line; Set up opens the microphone window.
+      const micSummaryText = () => {
+        const summary = root.querySelector("[data-mic-summary]");
+        if (summary) summary.textContent = micSummary(mic, microphones);
+      };
       void api
         .microphones()
         .then((devices) => {
-          const fallback = devices.find((device) => device.communications) ?? devices.find((device) => device.console);
-          micSelect.innerHTML =
-            `<option value="">${esc(fallback ? t("settings.recMicDefaultNamed", { name: fallback.name }) : t("settings.recMicDefault"))}</option>` +
-            devices.map((device) => `<option value="${esc(device.id)}"${device.id === recorder.micDevice ? " selected" : ""}>${esc(device.name)}</option>`).join("");
-          if (!settingsDirty() || micSelect.value === recorder.micDevice) settingsRebase();
+          microphones = devices;
+          micSummaryText();
         })
-        .catch(() => undefined);
+        .catch(() => micSummaryText());
       root.addEventListener("click", (event) => {
-        const test = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-rec-mic-test]");
-        if (!test) return;
-        const result = $("[data-rec-mic-result]", root);
-        const bar = $<HTMLElement>(".rec-mic-meter > span", root);
-        test.disabled = true;
-        bar.style.width = "0";
-        result.textContent = t("settings.recMicListening");
-        api
-          .microphoneLevel(micSelect.value)
-          .then((level) => {
-            const percent = Math.round(Math.min(1, level * 4) * 100);
-            bar.style.width = `${percent}%`;
-            result.textContent = level === 0 ? t("settings.recMicSilent") : level < 0.02 ? t("settings.recMicQuiet") : t("settings.recMicHeard");
-            result.classList.toggle("is-bad", level < 0.02);
-          })
-          .catch(() => (result.textContent = t("settings.recMicSilent")))
-          .finally(() => (test.disabled = false));
+        if (!(event.target as HTMLElement).closest("[data-rec-mic-setup]")) return;
+        void openMicrophone(mic, microphones).then((next) => {
+          Object.assign(mic, next);
+          micSummaryText();
+        });
       });
       const interval = $<HTMLInputElement>('[name="intervalMinutes"]', root);
       const autoRefresh = $<HTMLInputElement>('[name="autoRefresh"]', root);
@@ -1446,12 +1442,19 @@ async function openSettings(): Promise<void> {
           root.querySelector<HTMLElement>("[data-rec-custom]")!.hidden = recorderChoice(root, "preset") !== "custom";
         }
         if ((event.target as HTMLElement).closest("[data-rec-browse]")) {
-          void api.pickRecordingsFolder(t("settings.recFolder")).then((folder) => {
+          void (async () => {
+            const folder = await api.pickRecordingsFolder(t("settings.recFolder"));
             if (!folder) return;
-            recorderFolder = folder;
-            $("[data-rec-folder]", root).textContent = folder;
-            root.dispatchEvent(new Event("change"));
-          }).catch((error) => toast("error", t("toast.openFailed"), String(error)));
+            // Saved at once, then the recordings of the old folder can follow (asked only when it has some).
+            const before = recorderRoot;
+            const saved = await guard(() => api.setRecordingsFolder(folder), "toast.settingsFailed");
+            if (!saved.ok) return;
+            recorderFolder = saved.value.folder;
+            recorderRoot = saved.value.root;
+            $("[data-rec-folder]", root).textContent = saved.value.root;
+            const asked = saved.value.root !== before && (await offerRecordingsMove(before, true));
+            if (!asked) toast("success", t("settings.saved"), saved.value.root);
+          })().catch((error) => toast("error", t("toast.openFailed"), String(error)));
         }
         if ((event.target as HTMLElement).closest("[data-rec-bring]")) {
           void api.pickRecordingsFolder(t("move.bring")).then((folder) => {
@@ -1505,7 +1508,8 @@ async function openSettings(): Promise<void> {
         microphone: checked("recMic"),
         discord: checked("recDiscord"),
         music: root.querySelector('[name="recMusic"]') ? checked("recMusic") : recorder.music,
-        micDevice: $<HTMLSelectElement>('[name="recMicDevice"]', root).value,
+        micDevice: mic.device,
+        micGates: mic.gates,
         diskLimitGb: Math.min(100000, Math.max(0, Math.round(Number($<HTMLInputElement>('[name="recLimit"]', root).value) || 0))),
         champSelect: checked("recChampSelect"),
         postGame: checked("recPostGame"),
@@ -1529,8 +1533,8 @@ async function openSettings(): Promise<void> {
       const recorderSaved = await guard(() => api.setRecorderPrefs(recorderPrefs), "toast.settingsFailed");
       if (!recorderSaved.ok) return false;
       // The folder changed: the recordings of the old one can follow.
-      if (recorderSaved.value.root !== recorder.root) {
-        const before = recorder.root;
+      if (recorderSaved.value.root !== recorderRoot) {
+        const before = recorderRoot;
         window.setTimeout(() => void offerRecordingsMove(before, true), 350);
       }
       state.settings = saved.value;

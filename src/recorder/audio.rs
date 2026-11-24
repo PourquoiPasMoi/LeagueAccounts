@@ -12,6 +12,7 @@
 //! so silence (no packets) still advances the track and stays in sync.
 
 use super::encoder::{AUDIO_CHANNELS, AUDIO_RATE};
+use super::gate::{self, NoiseGate};
 use std::collections::VecDeque;
 use std::mem::ManuallyDrop;
 use std::time::Instant;
@@ -60,6 +61,10 @@ pub struct AudioSource {
     event: HANDLE,
     queue: VecDeque<f32>,
     gain: f32,
+    /// The microphone's noise gate (settings read at every packet: `gate::current_for`).
+    gate: Option<NoiseGate>,
+    /// Windows endpoint id of a microphone (whose gate settings apply); empty for loopback.
+    device: String,
 }
 
 impl AudioSource {
@@ -76,7 +81,7 @@ impl AudioSource {
             client.SetEventHandle(event)?;
             let capture: IAudioCaptureClient = client.GetService()?;
             client.Start()?;
-            Ok(Self { label, client, capture, event, queue: VecDeque::new(), gain })
+            Ok(Self { label, client, capture, event, queue: VecDeque::new(), gain, gate: None, device: String::new() })
         }
     }
 
@@ -98,7 +103,14 @@ impl AudioSource {
                 self.queue.extend(std::iter::repeat_n(0.0, count));
             } else {
                 let samples = unsafe { std::slice::from_raw_parts(data as *const f32, count) };
-                self.queue.extend(samples.iter().copied());
+                match self.gate.as_mut() {
+                    Some(gate) => {
+                        let mut own = samples.to_vec();
+                        gate.process(&mut own, gate::current_for(&self.device));
+                        self.queue.extend(own);
+                    }
+                    None => self.queue.extend(samples.iter().copied()),
+                }
             }
             unsafe {
                 let _ = self.capture.ReleaseBuffer(frames);
@@ -112,6 +124,11 @@ impl AudioSource {
 }
 
 impl AudioSource {
+    /// The microphone's Windows endpoint id (the default device resolved); empty for loopback.
+    pub fn device(&self) -> &str {
+        &self.device
+    }
+
     /// Everything captured since the last call (interleaved stereo floats).
     pub fn drain(&mut self) -> Vec<f32> {
         self.pump();
@@ -290,9 +307,16 @@ pub fn capture_devices() -> Vec<CaptureDevice> {
     devices
 }
 
-/// The microphone with this id; otherwise Windows' default communication
-/// device (the headset people talk into on Discord), then the default device.
+/// The microphone with this id, through the noise gate (when it is on).
 pub fn microphone(id: &str) -> Result<AudioSource> {
+    let mut source = microphone_raw(id)?;
+    source.gate = Some(NoiseGate::new());
+    Ok(source)
+}
+
+/// The microphone with this id, untouched; otherwise Windows' default communication
+/// device (the headset people talk into on Discord), then the default device.
+pub fn microphone_raw(id: &str) -> Result<AudioSource> {
     unsafe {
         let enumerator: IMMDeviceEnumerator = CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL)?;
         let chosen = if id.is_empty() { None } else { enumerator.GetDevice(&windows::core::HSTRING::from(id)).ok() };
@@ -300,13 +324,15 @@ pub fn microphone(id: &str) -> Result<AudioSource> {
             Some(device) => device,
             None => enumerator.GetDefaultAudioEndpoint(eCapture, eCommunications).or_else(|_| enumerator.GetDefaultAudioEndpoint(eCapture, eConsole))?,
         };
-        AudioSource::open("mic", device.Activate(CLSCTX_ALL, None)?, false, 1.0)
+        let mut source = AudioSource::open("mic", device.Activate(CLSCTX_ALL, None)?, false, 1.0)?;
+        source.device = device_id(&device);
+        Ok(source)
     }
 }
 
 /// Loudest sample (0..1) a microphone hears in `seconds` (diagnostics).
 pub fn probe_level(id: &str, seconds: f64) -> Option<f32> {
-    let mut source = microphone(id).ok()?;
+    let mut source = microphone_raw(id).ok()?;
     let started = Instant::now();
     let mut peak = 0f32;
     while started.elapsed().as_secs_f64() < seconds {
@@ -315,6 +341,65 @@ pub fn probe_level(id: &str, seconds: f64) -> Option<f32> {
         peak = source.queue.drain(..).fold(peak, |peak, value| peak.max(value.abs()));
     }
     Some(peak)
+}
+
+/// The PC's default speakers or headphones, to hear the microphone through
+/// the gate while tuning it (the user's own sound only, never recorded).
+pub struct Speaker {
+    client: IAudioClient,
+    render: windows::Win32::Media::Audio::IAudioRenderClient,
+    frames: u32,
+}
+
+impl Speaker {
+    pub fn open() -> Result<Self> {
+        unsafe {
+            let enumerator: IMMDeviceEnumerator = CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL)?;
+            let device = enumerator.GetDefaultAudioEndpoint(eRender, eConsole)?;
+            let client: IAudioClient = device.Activate(CLSCTX_ALL, None)?;
+            let format = format();
+            // 100 ms buffer: little delay, no gaps at a 10 ms feed.
+            client.Initialize(
+                AUDCLNT_SHAREMODE_SHARED,
+                AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM | AUDCLNT_STREAMFLAGS_SRC_DEFAULT_QUALITY,
+                1_000_000,
+                0,
+                &format,
+                None,
+            )?;
+            let frames = client.GetBufferSize()?;
+            let render = client.GetService()?;
+            client.Start()?;
+            Ok(Self { client, render, frames })
+        }
+    }
+
+    /// Play interleaved stereo samples; what does not fit in the buffer is dropped
+    /// (keeps the delay short).
+    pub fn play(&mut self, samples: &[f32]) {
+        let channels = AUDIO_CHANNELS as usize;
+        let Ok(padding) = (unsafe { self.client.GetCurrentPadding() }) else { return };
+        // Keep at most ~60 ms queued.
+        let limit = (AUDIO_RATE as usize * 60 / 1000).min(self.frames as usize);
+        let room = limit.saturating_sub(padding as usize);
+        let count = room.min(samples.len() / channels);
+        if count == 0 {
+            return;
+        }
+        unsafe {
+            let Ok(buffer) = self.render.GetBuffer(count as u32) else { return };
+            std::ptr::copy_nonoverlapping(samples.as_ptr(), buffer as *mut f32, count * channels);
+            let _ = self.render.ReleaseBuffer(count as u32, 0);
+        }
+    }
+}
+
+impl Drop for Speaker {
+    fn drop(&mut self) {
+        unsafe {
+            let _ = self.client.Stop();
+        }
+    }
 }
 
 /// Audio is written this far behind real time, so packets have arrived.

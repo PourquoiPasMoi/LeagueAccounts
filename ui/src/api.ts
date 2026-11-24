@@ -737,6 +737,15 @@ export const api = {
   startConvert: (paths: string[] | null = null) => call<ConvertStatus>("start_convert", { paths }),
   stopConvert: () => call<void>("stop_convert"),
   pickRecordingsFolder: (title: string) => call<string | null>("pick_recordings_folder", { title }),
+  setMicGate: (device: string, gate: GateSettings) => call<GateSettings>("set_mic_gate", { device, gate }),
+  /** The microphone recorded (empty = Windows' default communication device), saved at once. */
+  setMicDevice: (device: string) => call<void>("set_mic_device", { device }),
+  /** Listen to a microphone through the gate (`events.onMicGateLevel`); stops without a ping for 6 s. */
+  startMicMonitor: (id: string, listen: boolean) => call<void>("start_mic_monitor", { id, listen }),
+  micMonitorPing: (listen: boolean) => call<void>("mic_monitor_ping", { listen }),
+  stopMicMonitor: () => call<void>("stop_mic_monitor"),
+  /** Saves only the recordings folder, at once. */
+  setRecordingsFolder: (folder: string) => call<RecorderPrefsView>("set_recordings_folder", { folder }),
   /** What moving the recordings of `from` into the folder in use would involve. */
   surveyRecordingsMove: (from: string) => call<MoveSurvey>("survey_recordings_move", { from }),
   startRecordingsMove: (from: string) => call<MoveStatus>("start_recordings_move", { from }),
@@ -1023,6 +1032,24 @@ export interface RecorderPrefs {
   bookmarkAfter: number;
   /** The Windows sound when a bookmark is taken. */
   bookmarkSound: boolean;
+  /** Noise gate of each microphone by Windows endpoint id (saved at once by the microphone window). */
+  micGates: Record<string, GateSettings>;
+}
+
+export interface GateSettings {
+  enabled: boolean;
+  /** Opens above this level, dB (-80..0). */
+  thresholdDb: number;
+  holdMs: number;
+  releaseMs: number;
+}
+
+/** The tuning window's microphone, 20 times a second: loudest input/output in dB (-100 = silence). */
+export interface GateLevel {
+  input: number;
+  output: number;
+  open: boolean;
+  failed: boolean;
 }
 
 /** Recording rule of one mode group (see `queues::GROUPS`). */
@@ -1334,6 +1361,8 @@ export const events = {
   onConvertStatus: (handler: (status: ConvertStatus) => void): Promise<UnlistenFn> =>
     listen<ConvertStatus>("convert-status", (event) => handler(event.payload)),
   /** Progress of moving the recordings to another folder. */
+  onMicGateLevel: (handler: (level: GateLevel) => void): Promise<UnlistenFn> =>
+    listen<GateLevel>("mic-gate-level", (event) => handler(event.payload)),
   onRecordingsMove: (handler: (status: MoveStatus) => void): Promise<UnlistenFn> =>
     listen<MoveStatus>("recordings-move", (event) => handler(event.payload)),
   /** A recording or clip was saved or deleted. */

@@ -1,5 +1,67 @@
 [
  {
+  "version": "5.17.0",
+  "date": "2026-11-24",
+  "items": {
+   "en": [
+    "Microphone noise gate: mutes your microphone between words, so keyboard and mouse clicks are not recorded. Adjust it live while you talk and type: a level meter with a line you drag, how long it stays open, how smoothly it fades, Measure my typing, and Listen to myself.",
+    "Each microphone keeps its own noise gate. Settings › Recorder › Microphone and noise gate › Set up opens one window to pick the microphone and tune its gate.",
+    "Settings › Recorder is split into sections (Recording, Bookmarks, Storage, Sound, Video).",
+    "Fixed: Change folder and Choose folder in Settings did nothing. Changing the recordings folder now saves it at once and offers to move your recordings right away.",
+    "Fixed: nothing was recorded during the first minutes after the PC started."
+   ],
+   "tr": [
+    "Mikrofon gürültü kapısı: kelimeler arasında mikrofonunu susturur, klavye ve fare tıklamaları kaydedilmez. Konuşup yazarken canlı ayarla: sürüklediğin bir çizgiyle seviye göstergesi, ne kadar açık kalacağı, ne kadar yumuşak kapanacağı, Yazma sesimi ölç ve Kendimi dinle.",
+    "Her mikrofon kendi gürültü kapısını saklar. Ayarlar › Kaydedici › Mikrofon ve gürültü kapısı › Ayarla, mikrofonu seçip kapısını ayarlayacağın tek bir pencere açar.",
+    "Ayarlar › Kaydedici bölümlere ayrıldı (Kayıt, Yer imleri, Depolama, Ses, Video).",
+    "Düzeltildi: Ayarlar'daki Değiştir ve Klasör seç düğmeleri hiçbir şey yapmıyordu. Kayıt klasörünü değiştirmek artık hemen kaydeder ve kayıtlarını hemen taşımayı önerir.",
+    "Düzeltildi: bilgisayar açıldıktan sonraki ilk dakikalarda hiçbir şey kaydedilmiyordu."
+   ],
+   "de": [
+    "Noise Gate fürs Mikrofon: schaltet dein Mikrofon zwischen Worten stumm, damit Tastatur- und Mausklicks nicht aufgenommen werden. Live einstellen, während du sprichst und tippst: Pegelanzeige mit einer Linie zum Ziehen, wie lange es offen bleibt, wie sanft es ausblendet, Mein Tippen messen und Mich selbst hören.",
+    "Jedes Mikrofon behält sein eigenes Noise Gate. Einstellungen › Rekorder › Mikrofon und Noise Gate › Einrichten öffnet ein Fenster, um das Mikrofon zu wählen und sein Gate einzustellen.",
+    "Einstellungen › Rekorder ist in Abschnitte aufgeteilt (Aufnahme, Lesezeichen, Speicher, Ton, Video).",
+    "Behoben: Ändern und Ordner wählen in den Einstellungen taten nichts. Ein neuer Aufnahmeordner wird jetzt sofort gespeichert und das Verschieben deiner Aufnahmen gleich angeboten.",
+    "Behoben: In den ersten Minuten nach dem Start des PCs wurde nichts aufgenommen."
+   ],
+   "es": [
+    "Puerta de ruido del micrófono: silencia tu micrófono entre palabras para que no se graben los clics del teclado y del ratón. Ajústala en directo mientras hablas y escribes: medidor de nivel con una línea que arrastras, cuánto tiempo sigue abierta, con qué suavidad se apaga, Medir mi tecleo y Escucharme.",
+    "Cada micrófono guarda su propia puerta de ruido. Ajustes › Grabadora › Micrófono y puerta de ruido › Configurar abre una ventana para elegir el micrófono y ajustar su puerta.",
+    "Ajustes › Grabadora está dividido en secciones (Grabación, Marcadores, Almacenamiento, Sonido, Vídeo).",
+    "Corregido: Cambiar y Elegir carpeta en Ajustes no hacían nada. Cambiar la carpeta de grabaciones ahora la guarda al instante y ofrece mover tus grabaciones enseguida.",
+    "Corregido: no se grababa nada durante los primeros minutos después de encender el PC."
+   ],
+   "fr": [
+    "Noise gate du micro : coupe ton micro entre les mots, les clics du clavier et de la souris ne sont pas enregistrés. Règle-le en direct pendant que tu parles et tapes : vumètre avec une ligne à glisser, durée d'ouverture, douceur du fondu, Mesurer ma frappe et M'écouter.",
+    "Chaque micro garde son propre noise gate. Paramètres › Enregistreur › Micro et noise gate › Configurer ouvre une fenêtre pour choisir le micro et régler son gate.",
+    "Paramètres › Enregistreur est découpé en sections (Enregistrement, Signets, Stockage, Son, Vidéo).",
+    "Corrigé : Modifier et Choisir un dossier dans les Paramètres ne faisaient rien. Changer le dossier des enregistrements l'enregistre maintenant tout de suite et propose aussitôt de déplacer tes enregistrements.",
+    "Corrigé : rien n'était enregistré pendant les premières minutes après le démarrage du PC."
+   ],
+   "pt": [
+    "Noise gate do microfone: silencia o teu microfone entre palavras, os cliques do teclado e do rato não são gravados. Ajusta-o ao vivo enquanto falas e escreves: medidor de nível com uma linha que arrastas, quanto tempo fica aberto, quão suave desvanece, Medir a minha escrita e Ouvir-me.",
+    "Cada microfone guarda o seu próprio noise gate. Definições › Gravador › Microfone e noise gate › Configurar abre uma janela para escolher o microfone e ajustar o seu gate.",
+    "Definições › Gravador está dividido em secções (Gravação, Marcadores, Armazenamento, Som, Vídeo).",
+    "Corrigido: Alterar e Escolher pasta nas Definições não faziam nada. Mudar a pasta das gravações agora guarda-a logo e oferece mover as tuas gravações de imediato.",
+    "Corrigido: nada era gravado nos primeiros minutos depois de ligar o PC."
+   ],
+   "zh": [
+    "麦克风噪声门：在说话间隙静音麦克风，不录下键盘和鼠标声。边说边打字实时调整：带可拖动线条的电平表、保持打开时间、淡出平滑度、测量我的打字声和监听自己。",
+    "每个麦克风保存各自的噪声门。设置 › 录制 › 麦克风和噪声门 › 设置 打开一个窗口，选择麦克风并调整它的噪声门。",
+    "设置 › 录制 分成了几个部分（录制、书签、存储、声音、视频）。",
+    "修复：设置中的“更改”和“选择文件夹”没有反应。现在更改录像文件夹会立即保存，并马上提示移动你的录像。",
+    "修复：电脑开机后的头几分钟什么都不录。"
+   ],
+   "zhTw": [
+    "麥克風噪音閘：在說話間隙讓麥克風靜音，不錄下鍵盤和滑鼠聲。邊說邊打字即時調整：附可拖曳線條的音量表、保持打開時間、淡出平滑度、測量我的打字聲和監聽自己。",
+    "每支麥克風保存各自的噪音閘。設定 › 錄製 › 麥克風和噪音閘 › 設定 會開啟一個視窗，選擇麥克風並調整它的噪音閘。",
+    "設定 › 錄製 分成了幾個區塊（錄製、書籤、儲存空間、聲音、影片）。",
+    "修正：設定中的「更改」和「選擇資料夾」沒有反應。現在更改錄影資料夾會立即儲存，並馬上提示移動你的錄影。",
+    "修正：電腦開機後的頭幾分鐘什麼都不錄。"
+   ]
+  }
+ },
+ {
   "version": "5.16.0",
   "date": "2026-11-23",
   "items": {

@@ -8,6 +8,7 @@ use crate::views::{fail, fail_with, CommandResult};
 use leagueaccounts::logging::{self, Event, Reason};
 use leagueaccounts::recorder::capture::{find_client_window, find_game_window};
 use leagueaccounts::recorder::encoder::{Codec, Rate};
+use leagueaccounts::recorder::gate::{self, GateSettings, NoiseGate};
 use leagueaccounts::recorder::library::{self, Entry, UNKNOWN};
 use leagueaccounts::recorder::session::{self, Outcome, RecordRequest, RecordSettings, Recording};
 use leagueaccounts::riot_client;
@@ -15,6 +16,7 @@ use leagueaccounts::utils::app_data_dir;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::io::{Read, Seek, SeekFrom};
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -70,6 +72,11 @@ pub struct RecorderPrefs {
     pub bookmark_after: u32,
     /// The Windows sound when a bookmark is taken.
     pub bookmark_sound: bool,
+    /// Noise gate of each microphone, by Windows endpoint id (none = off).
+    pub mic_gates: BTreeMap<String, GateSettings>,
+    /// v5.17.0 kept one gate for all microphones: read once, moved to `mic_gates`.
+    #[serde(skip_serializing)]
+    pub mic_gate: Option<GateSettings>,
 }
 
 /// What to do with the games of one mode group (`queues::GROUPS`).
@@ -133,6 +140,8 @@ impl Default for RecorderPrefs {
             bookmark_before: 60,
             bookmark_after: 10,
             bookmark_sound: true,
+            mic_gates: BTreeMap::new(),
+            mic_gate: None,
         }
     }
 }
@@ -206,6 +215,17 @@ impl RecorderPrefs {
         }
         self.bookmark_before = self.bookmark_before.clamp(1, 600);
         self.bookmark_after = self.bookmark_after.min(300);
+        if let Some(old) = self.mic_gate.take() {
+            if !self.mic_device.is_empty() {
+                self.mic_gates.entry(self.mic_device.clone()).or_insert(old);
+            }
+        }
+        self.mic_gates = std::mem::take(&mut self.mic_gates)
+            .into_iter()
+            .filter(|(device, _)| !device.is_empty() && device.len() < 300)
+            .take(64)
+            .map(|(device, gate)| (device, gate.sanitized()))
+            .collect();
         self
     }
 }
@@ -220,11 +240,14 @@ fn prefs() -> RecorderPrefs {
     let mut cached = PREFS.lock().unwrap_or_else(|error| error.into_inner());
     cached
         .get_or_insert_with(|| {
-            prefs_path()
+            let prefs = prefs_path()
                 .and_then(|path| std::fs::read(path).ok())
                 .and_then(|bytes| serde_json::from_slice::<RecorderPrefs>(&bytes).ok())
                 .unwrap_or_default()
-                .sanitized()
+                .sanitized();
+            // The microphones' gates follow the saved settings (also read by the recording thread).
+            gate::set_all(&prefs.mic_gates);
+            prefs
         })
         .clone()
 }
@@ -705,7 +728,10 @@ fn watch(app: &AppHandle) {
         let mut retry: (isize, u32) = (0, 0);
         let mut limit_checked = std::time::Instant::now();
         // Keeping times: soon after start, then every 10 minutes.
-        let mut tidied = std::time::Instant::now() - Duration::from_secs(9 * 60);
+        // checked_sub: an Instant cannot go before Windows started (it panicked
+        // every round in the first 9 minutes after boot, so nothing was recorded).
+        let now = std::time::Instant::now();
+        let mut tidied = now.checked_sub(Duration::from_secs(9 * 60)).unwrap_or(now);
         loop {
             let prefs = prefs();
             let active = ACTIVE.lock().ok().and_then(|mut active| {
@@ -1069,12 +1095,36 @@ pub async fn set_recorder_prefs(app: AppHandle, prefs: RecorderPrefs) -> Command
     if prefs.enabled {
         std::fs::create_dir_all(prefs.root()).map_err(|error| fail_with("recordings_folder", error))?;
     }
+    save_prefs(&app, prefs)
+}
+
+/// Change only the recordings folder, at once (Settings asks right after
+/// whether the recordings of the old folder should follow).
+#[tauri::command]
+pub async fn set_recordings_folder(app: AppHandle, folder: String) -> CommandResult<RecorderPrefsView> {
+    let folder = folder.trim().to_owned();
+    if folder.is_empty() || !PathBuf::from(&folder).is_dir() {
+        return Err(fail("recordings_folder"));
+    }
+    let mut prefs = prefs();
+    prefs.folder = folder;
+    save_prefs(&app, prefs.sanitized())
+}
+
+/// Write recorder.json and use the new settings at once.
+fn store_prefs(prefs: &RecorderPrefs) -> CommandResult<()> {
     let path = prefs_path().ok_or_else(|| fail("file_write"))?;
-    let body = serde_json::to_vec_pretty(&prefs).map_err(|_| fail("file_write"))?;
+    let body = serde_json::to_vec_pretty(prefs).map_err(|_| fail("file_write"))?;
     std::fs::write(path, body).map_err(|error| fail_with("file_write", error))?;
     if let Ok(mut cached) = PREFS.lock() {
         *cached = Some(prefs.clone());
     }
+    gate::set_all(&prefs.mic_gates);
+    Ok(())
+}
+
+fn save_prefs(app: &AppHandle, prefs: RecorderPrefs) -> CommandResult<RecorderPrefsView> {
+    store_prefs(&prefs)?;
     let _ = app.emit("recorder-status", status());
     {
         let app = app.clone();
@@ -1344,17 +1394,16 @@ pub async fn recordings_move_status() -> CommandResult<MoveStatus> {
 }
 
 #[tauri::command]
-pub async fn pick_recordings_folder(title: String) -> CommandResult<Option<String>> {
+pub async fn pick_recordings_folder(window: tauri::WebviewWindow, title: String) -> CommandResult<Option<String>> {
     let start = prefs().root();
-    tauri::async_runtime::spawn_blocking(move || {
-        let mut dialog = rfd::FileDialog::new().set_title(title);
+    crate::views::file_dialog(window, move |dialog| {
+        let mut dialog = dialog.set_title(title);
         if start.is_dir() {
             dialog = dialog.set_directory(start);
         }
         dialog.pick_folder().map(|path| path.display().to_string())
     })
     .await
-    .map_err(|_| fail("dialog_failed"))
 }
 
 /// The PC's microphones with Windows' default roles.
@@ -1382,6 +1431,113 @@ pub async fn microphone_level(id: String) -> CommandResult<f32> {
     .await
     .map_err(|_| fail("operation_failed"))?
     .ok_or_else(|| fail("microphone_failed"))
+}
+
+// ---------------------------------------------------------------- microphone noise gate
+
+/// Save one microphone's noise gate at once (tuned live; a recording in
+/// progress follows the change too). `device` = Windows endpoint id.
+#[tauri::command]
+pub async fn set_mic_gate(device: String, gate: GateSettings) -> CommandResult<GateSettings> {
+    if device.is_empty() {
+        return Err(fail("microphone_failed"));
+    }
+    let gate = gate.sanitized();
+    let mut prefs = prefs();
+    prefs.mic_gates.insert(device, gate);
+    store_prefs(&prefs.sanitized())?;
+    Ok(gate)
+}
+
+/// The microphone recorded (empty = Windows' default communication device), saved at once.
+#[tauri::command]
+pub async fn set_mic_device(device: String) -> CommandResult<()> {
+    let mut prefs = prefs();
+    prefs.mic_device = device.trim().to_owned();
+    store_prefs(&prefs.sanitized())
+}
+
+/// The tuning window's microphone: one at a time (a new start ends the old
+/// one), stops by itself when the window stops pinging (closed, app hidden).
+static MONITOR_RUN: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+static MONITOR_PING: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+static MONITOR_LISTEN: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct GateLevel {
+    /// Loudest input and output in the last 50 ms, dB (-100 = silence).
+    input: f32,
+    output: f32,
+    open: bool,
+    /// The microphone could not be opened.
+    failed: bool,
+}
+
+/// Listen to the microphone through the gate and send its level 20 times a
+/// second (`mic-gate-level`); `listen` plays it on the speakers too.
+#[tauri::command]
+pub async fn start_mic_monitor(app: AppHandle, id: String, listen: bool) -> CommandResult<()> {
+    use std::sync::atomic::Ordering;
+    let run = MONITOR_RUN.fetch_add(1, Ordering::SeqCst) + 1;
+    MONITOR_PING.store(now_ms(), Ordering::SeqCst);
+    MONITOR_LISTEN.store(listen, Ordering::SeqCst);
+    thread::spawn(move || {
+        let _ = leagueaccounts::recorder::startup();
+        mic_monitor(&app, &id, run);
+        leagueaccounts::recorder::shutdown();
+    });
+    Ok(())
+}
+
+fn mic_monitor(app: &AppHandle, id: &str, run: u64) {
+    use leagueaccounts::recorder::audio::{self, Speaker};
+    use std::sync::atomic::Ordering;
+    let Ok(mut mic) = audio::microphone_raw(id) else {
+        let _ = app.emit("mic-gate-level", GateLevel { input: -100.0, output: -100.0, open: false, failed: true });
+        return;
+    };
+    let mut noise_gate = NoiseGate::new();
+    let mut speaker: Option<Speaker> = None;
+    let (mut input, mut output, mut open) = (0f32, 0f32, false);
+    let mut sent = std::time::Instant::now();
+    while MONITOR_RUN.load(Ordering::SeqCst) == run && now_ms().saturating_sub(MONITOR_PING.load(Ordering::SeqCst)) < 6000 {
+        thread::sleep(Duration::from_millis(10));
+        let mut samples = mic.drain();
+        let block = noise_gate.process(&mut samples, gate::current_for(mic.device()));
+        input = input.max(block.input_peak);
+        output = output.max(block.output_peak);
+        open |= block.open;
+        if MONITOR_LISTEN.load(Ordering::SeqCst) {
+            if speaker.is_none() {
+                speaker = Speaker::open().ok();
+            }
+            if let Some(speaker) = speaker.as_mut() {
+                speaker.play(&samples);
+            }
+        } else {
+            speaker = None;
+        }
+        if sent.elapsed() >= Duration::from_millis(50) {
+            sent = std::time::Instant::now();
+            let _ = app.emit("mic-gate-level", GateLevel { input: gate::db(input), output: gate::db(output), open, failed: false });
+            (input, output, open) = (0.0, 0.0, false);
+        }
+    }
+}
+
+#[tauri::command]
+pub async fn mic_monitor_ping(listen: bool) -> CommandResult<()> {
+    use std::sync::atomic::Ordering;
+    MONITOR_PING.store(now_ms(), Ordering::SeqCst);
+    MONITOR_LISTEN.store(listen, Ordering::SeqCst);
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn stop_mic_monitor() -> CommandResult<()> {
+    MONITOR_RUN.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    Ok(())
 }
 
 #[tauri::command]

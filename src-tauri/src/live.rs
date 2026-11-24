@@ -29,7 +29,7 @@ fn has_game() -> bool {
 pub fn spawn(app: AppHandle) {
     thread::spawn(move || {
         let mut in_game = false;
-        let mut fetched = Instant::now() - Duration::from_secs(60);
+        let mut fetched = Instant::now().checked_sub(Duration::from_secs(60)).unwrap_or_else(Instant::now);
         loop {
             if !crate::champselect::enabled() {
                 // Turned off in Settings: no polling at all.
@@ -48,7 +48,7 @@ pub fn spawn(app: AppHandle) {
                 .unwrap_or_default();
             let now_in_game = matches!(phase.as_str(), "GameStart" | "InProgress" | "Reconnect");
             if now_in_game && !in_game {
-                fetched = Instant::now() - Duration::from_secs(60);
+                fetched = Instant::now().checked_sub(Duration::from_secs(60)).unwrap_or_else(Instant::now);
                 // Other apps' item sets must not hide this app's (Blitz may write late).
                 crate::champselect::clean_item_sets();
             }

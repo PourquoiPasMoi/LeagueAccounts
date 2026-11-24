@@ -24,6 +24,24 @@ pub fn fail_with(code: &'static str, detail: impl std::fmt::Display) -> AppError
 
 pub type CommandResult<T> = Result<T, AppError>;
 
+/// A Windows file dialog, shown on a NEW thread owned by `window`. The shared
+/// worker threads can be left in multithreaded COM (Media Foundation: the
+/// microphone list, formats...), where rfd cannot start its dialog and returns
+/// "nothing picked" at once without showing anything. The owner window keeps
+/// the dialog in front of the app.
+pub async fn file_dialog<T: Send + 'static>(
+    window: tauri::WebviewWindow,
+    show: impl FnOnce(rfd::FileDialog) -> T + Send + 'static,
+) -> CommandResult<T> {
+    tauri::async_runtime::spawn_blocking(move || {
+        std::thread::spawn(move || show(rfd::FileDialog::new().set_parent(&window)))
+            .join()
+            .map_err(|_| fail("dialog_failed"))
+    })
+    .await
+    .map_err(|_| fail("dialog_failed"))?
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Key {

@@ -1116,16 +1116,15 @@ fn cancel_login(state: AppState<'_>) {
 }
 
 #[tauri::command]
-async fn export_data(state: AppState<'_>, title: String) -> CommandResult<Option<String>> {
-    let Some(path) = tauri::async_runtime::spawn_blocking(move || {
-        rfd::FileDialog::new()
+async fn export_data(window: tauri::WebviewWindow, state: AppState<'_>, title: String) -> CommandResult<Option<String>> {
+    let Some(path) = views::file_dialog(window, move |dialog| {
+        dialog
             .set_title(title)
             .set_file_name("credentials.json")
             .add_filter("JSON", &["json"])
             .save_file()
     })
-    .await
-    .map_err(|_| fail("dialog_failed"))?
+    .await?
     else {
         return Ok(None);
     };
@@ -1144,15 +1143,14 @@ async fn export_data(state: AppState<'_>, title: String) -> CommandResult<Option
 }
 
 #[tauri::command]
-async fn import_data(state: AppState<'_>, title: String) -> CommandResult<Option<BatchResult>> {
-    let Some(path) = tauri::async_runtime::spawn_blocking(move || {
-        rfd::FileDialog::new()
+async fn import_data(window: tauri::WebviewWindow, state: AppState<'_>, title: String) -> CommandResult<Option<BatchResult>> {
+    let Some(path) = views::file_dialog(window, move |dialog| {
+        dialog
             .set_title(title)
             .add_filter("League Companion", &["json", leagueaccounts::backup::EXTENSION])
             .pick_file()
     })
-    .await
-    .map_err(|_| fail("dialog_failed"))?
+    .await?
     else {
         return Ok(None);
     };
@@ -1657,6 +1655,12 @@ fn main() {
             recorder::stop_convert,
             recorder::set_recorder_prefs,
             recorder::pick_recordings_folder,
+            recorder::set_recordings_folder,
+            recorder::set_mic_gate,
+            recorder::set_mic_device,
+            recorder::start_mic_monitor,
+            recorder::mic_monitor_ping,
+            recorder::stop_mic_monitor,
             recorder::recorder_status,
             recorder::recordings,
             recorder::delete_recording,

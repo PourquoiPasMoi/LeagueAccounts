@@ -89,10 +89,8 @@ pub async fn set_backup_passphrase(passphrase: String) -> CommandResult<BackupVi
 }
 
 #[tauri::command]
-pub async fn pick_backup_folder(title: String) -> CommandResult<Option<String>> {
-    tauri::async_runtime::spawn_blocking(move || rfd::FileDialog::new().set_title(title).pick_folder().map(|path| path.display().to_string()))
-        .await
-        .map_err(|_| fail("dialog_failed"))
+pub async fn pick_backup_folder(window: tauri::WebviewWindow, title: String) -> CommandResult<Option<String>> {
+    crate::views::file_dialog(window, move |dialog| dialog.set_title(title).pick_folder().map(|path| path.display().to_string())).await
 }
 
 /// Write a backup now; returns the file.
