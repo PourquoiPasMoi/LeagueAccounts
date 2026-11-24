@@ -523,7 +523,8 @@ export async function paintReport(options: ReportOptions, scale: number, canvas 
   glow.addColorStop(0, `rgba(${look.accentRgb}, 0.2)`);
   glow.addColorStop(1, `rgba(${look.accentRgb}, 0)`);
   ctx.fillStyle = glow;
-  ctx.fillRect(0, 0, width, Math.min(height, 900));
+  // The whole picture: the light fades out on its own (a cut at 900 px drew a hard line on tall pictures).
+  ctx.fillRect(0, 0, width, height);
   paint(new Painter(ctx, look, images, options, true), items);
   return { canvas, width, height, scale: real, asked: scale };
 }

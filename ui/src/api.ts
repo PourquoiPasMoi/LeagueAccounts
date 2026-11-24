@@ -377,6 +377,8 @@ export interface PatchBlock {
   icon: string;
   /** "champion" or "item"; missing for the rest. */
   kind?: string;
+  /** Game mode of the change: "aram", "mayhem", "arena", "other"; missing = Summoner's Rift and the rest. */
+  mode?: string;
   nodes: PatchNode[];
 }
 export interface PatchSection {
@@ -418,6 +420,10 @@ export interface PatchSearch {
   versions: string[];
   /** Patches with a match. */
   patchCount: number;
+  /** The topic used (a question naming a champion searches "champion"). */
+  topic: string;
+  /** A question ("…?") as the words searched ("zed r"); "" for a normal search. */
+  question: string;
 }
 export interface PatchProgress {
   done: number;
@@ -635,7 +641,8 @@ export const api = {
   patchNotesList: (locale: string, refresh = false) => call<PatchList>("patch_notes_list", { locale, refresh }),
   patchNotes: (locale: string, slug: string, refresh = false) => call<PatchNotes>("patch_notes", { locale, slug, refresh }),
   /** `topic`: "all", "champion", "item" or "other". */
-  patchNotesSearch: (locale: string, query: string, topic: string) => call<PatchSearch>("patch_notes_search", { locale, query, topic }),
+  /** `modes`: "rift", "aram", "mayhem", "arena", "other"; empty = all. A query ending with "?" is read as a question. */
+  patchNotesSearch: (locale: string, query: string, topic: string, modes: string[]) => call<PatchSearch>("patch_notes_search", { locale, query, topic, modes }),
   /** Download the notes missing on disk in the background (`count` newest, 0 = all). */
   patchNotesDownload: (locale: string, count: number) => call<boolean>("patch_notes_download", { locale, count }),
   patchNotesCancel: () => call<void>("patch_notes_cancel"),

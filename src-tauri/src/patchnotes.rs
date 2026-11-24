@@ -21,8 +21,8 @@ pub async fn patch_notes(locale: String, slug: String, refresh: bool) -> Command
 }
 
 #[tauri::command]
-pub async fn patch_notes_search(locale: String, query: String, topic: String) -> CommandResult<SearchView> {
-    blocking(move || patchnotes::search(&locale, &query, &topic).map_err(fail)).await
+pub async fn patch_notes_search(locale: String, query: String, topic: String, modes: Vec<String>) -> CommandResult<SearchView> {
+    blocking(move || patchnotes::search(&locale, &query, &topic, &modes).map_err(fail)).await
 }
 
 static DOWNLOADING: AtomicBool = AtomicBool::new(false);

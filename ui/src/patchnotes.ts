@@ -20,6 +20,19 @@ type Tab = "league" | "app";
 type Topic = "all" | "champion" | "item" | "other";
 const TOPICS: Topic[] = ["all", "champion", "item", "other"];
 const TOPIC_KEY = "pnTopic";
+/** Game modes of the search (several can be picked; none = all). */
+type Mode = "rift" | "aram" | "mayhem" | "arena" | "other";
+const MODES: Mode[] = ["rift", "aram", "mayhem", "arena", "other"];
+const MODES_KEY = "pnModes";
+
+function savedModes(): Mode[] {
+  try {
+    const saved = JSON.parse(localStorage.getItem(MODES_KEY) ?? "[]") as unknown;
+    return Array.isArray(saved) ? MODES.filter((mode) => saved.includes(mode)) : [];
+  } catch {
+    return [];
+  }
+}
 
 function savedTopic(): Topic {
   try {
@@ -206,6 +219,7 @@ export async function openPatchNotes(appVersion: string): Promise<void> {
   let selected = "";
   let query = "";
   let topic: Topic = savedTopic();
+  let modes: Mode[] = savedModes();
   let progress: PatchProgress | null = null;
   /// Each load/search has a number: a slower, older answer is dropped.
   let turn = 0;
@@ -399,13 +413,18 @@ export async function openPatchNotes(appVersion: string): Promise<void> {
   // -------------------------------------------------------------- search
 
   const hitHtml = (hit: PatchHit, terms: RegExp | null): string => {
-    const meta = `<button type="button" class="pn-hit-meta" data-pn-open="${esc(hit.slug)}" data-pn-at="${hit.sectionIndex}-${hit.blockIndex}"><b>${esc(hit.version || hit.slug)}</b><span>${esc(dateText(hit.date))}</span>${hit.section ? `<em>${esc(hit.section)}</em>` : ""}</button>`;
+    const mode = hit.block.mode ? `<i class="pn-mode-tag">${esc(t(`pn.mode.${hit.block.mode as Mode}`))}</i>` : "";
+    const meta = `<button type="button" class="pn-hit-meta" data-pn-open="${esc(hit.slug)}" data-pn-at="${hit.sectionIndex}-${hit.blockIndex}"><b>${esc(hit.version || hit.slug)}</b><span>${esc(dateText(hit.date))}</span>${mode}${hit.section ? `<em>${esc(hit.section)}</em>` : ""}</button>`;
     return blockHtml(hit.block, terms, "", meta);
   };
 
   const topicsHtml = (): string => `
     <div class="pn-topics" role="group" aria-label="${esc(t("pn.topics"))}">
       ${TOPICS.map((name) => `<button type="button" data-pn-topic="${name}" aria-pressed="${name === topic}">${esc(t(`pn.topic.${name}`))}</button>`).join("")}
+    </div>
+    <div class="pn-topics pn-modes" role="group" aria-label="${esc(t("pn.modes"))}">
+      <button type="button" data-pn-mode="all" aria-pressed="${!modes.length}">${esc(t("pn.mode.all"))}</button>
+      ${MODES.map((name) => `<button type="button" data-pn-mode="${name}" aria-pressed="${modes.includes(name)}">${esc(t(`pn.mode.${name}`))}</button>`).join("")}
     </div>`;
 
   const searchHtml = (view: PatchSearch, asked: string): string => {
@@ -415,8 +434,9 @@ export async function openPatchNotes(appVersion: string): Promise<void> {
       .filter((entry): entry is PatchEntry => Boolean(entry))
       .map((entry) => `<button type="button" class="pn-jump" data-pn-open="${esc(entry.slug)}" data-reveal><b>${esc(t("pn.openPatch", { version: entry.version }))}</b><span>${esc(dateText(entry.date))}</span><p>${esc(entry.summary)}</p></button>`)
       .join("");
-    const named = topic === "champion" || topic === "item";
-    const tip = topic === "champion" ? `<p class="pn-tip">${esc(t("pn.abilityTip"))}</p>` : "";
+    const named = view.topic === "champion" || view.topic === "item";
+    const asking = view.question ? `<p class="pn-question">${esc(t("pn.question", { query: view.question }))}</p>` : "";
+    const tip = asking || `<p class="pn-tip">${esc(t(view.topic === "champion" ? "pn.abilityTip" : "pn.questionTip"))}</p>`;
     if (!view.hits.length && !versions) {
       return `<header class="pn-results-head" data-reveal>${topicsHtml()}${tip}</header>${message(t("pn.noResults", { query: asked }), t(topic === "all" ? "pn.noResultsHint" : "pn.noResultsTopic", { have: view.patches, total: entries.length }))}`;
     }
@@ -462,7 +482,7 @@ export async function openPatchNotes(appVersion: string): Promise<void> {
     if (!query) return selected ? openPatch(selected) : undefined;
     try {
       const asked = query;
-      const view = await api.patchNotesSearch(locale, asked, topic);
+      const view = await api.patchNotesSearch(locale, asked, topic, modes);
       if (mine === turn) {
         found = { view, asked };
         await show(searchHtml(view, asked), mine);
@@ -597,7 +617,7 @@ export async function openPatchNotes(appVersion: string): Promise<void> {
     }
     if (action === "report-search" && found) {
       const { view, asked } = found;
-      const named = (topic === "champion" || topic === "item") && view.hits[0];
+      const named = (view.topic === "champion" || view.topic === "item") && view.hits[0];
       openReport({
         title: named ? view.hits[0].block.title : t("report.searchTitle", { query: view.corrected || asked }),
         subtitle: named ? t("pn.lastChanged", { version: view.hits[0].version, date: dateText(view.hits[0].date), count: view.patchCount }) : t(view.total === 1 ? "pn.result" : "pn.results", { count: view.total }),
@@ -612,6 +632,20 @@ export async function openPatchNotes(appVersion: string): Promise<void> {
       progress = { done: 0, total: entries.filter((entry) => !entry.cached).length, running: true };
       renderCoverage();
       return void api.patchNotesDownload(locale, 0).catch(() => false);
+    }
+    const modeButton = target.closest<HTMLElement>("[data-pn-mode]");
+    if (modeButton) {
+      const picked = modeButton.dataset.pnMode as Mode | "all";
+      if (picked === "all") modes = [];
+      else modes = modes.includes(picked) ? modes.filter((mode) => mode !== picked) : MODES.filter((mode) => mode === picked || modes.includes(mode));
+      // Every mode picked is the same as none.
+      if (modes.length === MODES.length) modes = [];
+      try {
+        localStorage.setItem(MODES_KEY, JSON.stringify(modes));
+      } catch {
+        // Not kept: the next search starts on all modes.
+      }
+      return void runSearch();
     }
     const topicButton = target.closest<HTMLElement>("[data-pn-topic]");
     if (topicButton) {

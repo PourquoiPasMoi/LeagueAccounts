@@ -354,6 +354,9 @@ pub struct Block {
     /// "champion" or "item" when the card's portrait says so, else "" (systems, modes, skins...).
     #[serde(skip_serializing_if = "String::is_empty")]
     pub kind: String,
+    /// The game mode the change is for: "aram", "mayhem", "arena", "other"; "" = Summoner's Rift and the rest.
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub mode: String,
     pub nodes: Vec<Node>,
 }
 
@@ -718,7 +721,259 @@ fn parse(body: &str) -> Vec<Section> {
     walker.finish()
 }
 
+// ---------------------------------------------------------------- game modes and their champions
+
+/// The game mode a section or card title names ("ARAM: Mayhem", "Arena Balance Changes", "ARURF"...).
+fn mode_of(title: &str) -> &'static str {
+    let lower = title.to_lowercase();
+    let has = |words: &[&str]| words.iter().any(|word| lower.contains(word));
+    if has(&["mayhem", "海克斯大乱斗", "海克斯大亂鬥"]) {
+        return "mayhem";
+    }
+    if has(&["aram", "大乱斗", "大亂鬥"]) && !has(&["urf"]) {
+        // "ARAM: <name>" is a variant of ARAM (Mayhem, in every language), "ARAM Clash" is ARAM.
+        return if lower.contains(':') || lower.contains('：') { "mayhem" } else { "aram" };
+    }
+    if has(&["arena", "斗魂竞技场", "鬥魂競技場", "arène"]) {
+        return "arena";
+    }
+    if has(&["urf", "one for all", "nexus blitz", "spellbook", "brawl", "swarm", "doom bot", "无限火力", "無限火力", "克隆", "极限闪击", "極限閃擊", "终极魔典", "終極魔典"]) {
+        return "other";
+    }
+    ""
+}
+
+/// A champion's name as a key: letters and digits only, lowercase ("Bel'Veth" → "belveth").
+fn name_key(name: &str) -> String {
+    name.chars().filter(|character| character.is_alphanumeric()).flat_map(char::to_lowercase).collect()
+}
+
+/// English champion names and ids (the app's own list).
+static CHAMPION_IDS: LazyLock<HashMap<String, i64>> = LazyLock::new(|| {
+    let list: HashMap<String, i64> = serde_json::from_str(include_str!("../ui/src/data/champion-ids.json")).unwrap_or_default();
+    let mut keys = HashMap::new();
+    for (name, id) in list {
+        // "Nunu & Willump" is often just "Nunu".
+        if let Some((first, _)) = name.split_once(" & ") {
+            keys.insert(name_key(first), id);
+        }
+        keys.insert(name_key(&name), id);
+    }
+    keys
+});
+
+/// What the notes on disk showed about a champion: its portrait and its abilities' icons (P Q W E R).
+#[derive(Clone, Default)]
+struct Known {
+    portrait: String,
+    abilities: [String; 5],
+}
+
+static KNOWN: LazyLock<Mutex<HashMap<String, Known>>> = LazyLock::new(|| Mutex::new(HashMap::new()));
+
+/// The ability a heading is about ("Q - Tumble" → 1, "Passive - Night Hunter" → 0).
+fn ability_slot(text: &str) -> Option<usize> {
+    let text = text.trim();
+    let (first, rest) = text.split_once(" - ").or_else(|| text.split_once(" – ")).or_else(|| text.split_once(" — "))?;
+    if rest.trim().is_empty() || first.chars().count() > 12 {
+        return None;
+    }
+    match first.trim() {
+        "Q" | "q" => Some(1),
+        "W" | "w" => Some(2),
+        "E" | "e" => Some(3),
+        "R" | "r" => Some(4),
+        // "Passive", "Passiv", "Pasiva", "被动"…: a word, not a key.
+        other if other.chars().count() > 1 && !other.chars().any(|character| character.is_ascii_digit()) => Some(0),
+        _ => None,
+    }
+}
+
+/// Remember the portraits and ability icons of this patch's champion cards.
+fn learn(sections: &[Section]) {
+    let Ok(mut known) = KNOWN.lock() else { return };
+    for block in sections.iter().flat_map(|section| &section.blocks).filter(|block| block.kind == "champion" && !block.title.is_empty()) {
+        let entry = known.entry(name_key(&block.title)).or_default();
+        if entry.portrait.is_empty() && !block.icon.is_empty() {
+            entry.portrait = block.icon.clone();
+        }
+        for node in &block.nodes {
+            if let Node::H { icon, spans } = node {
+                if let Some(slot) = ability_slot(&text_of(spans)).filter(|_| !icon.is_empty()) {
+                    if entry.abilities[slot].is_empty() {
+                        entry.abilities[slot] = icon.clone();
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Ability icons of a champion from the game's own data: the copy on disk, else the
+/// running League client (free, local). Never downloaded from the internet here.
+fn client_abilities(id: i64) -> [String; 5] {
+    static SEEN: LazyLock<Mutex<HashMap<i64, [String; 5]>>> = LazyLock::new(|| Mutex::new(HashMap::new()));
+    if let Some(found) = SEEN.lock().ok().and_then(|seen| seen.get(&id).cloned()) {
+        return found;
+    }
+    let file = crate::utils::app_data_dir().ok().map(|directory| directory.join("cache").join("gamedata").join(format!("champion-{id}.json")));
+    let data = file.as_ref().and_then(|file| serde_json::from_slice::<serde_json::Value>(&std::fs::read(file).ok()?).ok()).or_else(|| {
+        let value = crate::riot_client::league_client()?.get_json(&format!("/lol-game-data/assets/v1/champions/{id}.json"))?;
+        if let Some(file) = &file {
+            if let Some(directory) = file.parent() {
+                let _ = std::fs::create_dir_all(directory);
+            }
+            let _ = std::fs::write(file, value.to_string());
+        }
+        Some(value)
+    });
+    let path = |value: &serde_json::Value| value.as_str().unwrap_or_default().trim().strip_prefix("/lol-game-data/assets/").unwrap_or_default().to_lowercase();
+    let mut icons: [String; 5] = Default::default();
+    if let Some(data) = &data {
+        icons[0] = path(&data["passive"]["abilityIconPath"]);
+        for spell in data["spells"].as_array().into_iter().flatten() {
+            let slot = match spell["spellKey"].as_str().unwrap_or_default() {
+                "q" => 1,
+                "w" => 2,
+                "e" => 3,
+                "r" => 4,
+                _ => continue,
+            };
+            icons[slot] = path(&spell["abilityIconPath"]);
+        }
+        // Only kept when there was data: a client started later is asked again.
+        if let Ok(mut seen) = SEEN.lock() {
+            seen.insert(id, icons.clone());
+        }
+    }
+    icons
+}
+
+/// An ability's icon: from the notes on disk, else the game's own data.
+fn ability_icon(key: &str, slot: usize) -> String {
+    let learned = KNOWN.lock().ok().and_then(|known| known.get(key).map(|entry| entry.abilities[slot].clone())).unwrap_or_default();
+    if !learned.is_empty() {
+        return learned;
+    }
+    CHAMPION_IDS.get(key).map(|id| client_abilities(*id)[slot].clone()).unwrap_or_default()
+}
+
+/// A champion named alone on a bold line in a mode's changes ("**Bel'Veth**"): its key.
+fn champion_line(spans: &[Span]) -> Option<String> {
+    if spans.is_empty() || !spans.iter().all(|span| span.b || span.t.trim().is_empty()) {
+        return None;
+    }
+    let text = text_of(spans);
+    let text = text.trim().trim_end_matches(':').trim();
+    if text.is_empty() || text.chars().count() > 30 {
+        return None;
+    }
+    // "Kayn (Rhaast)": the champion is the name before the brackets.
+    let key = name_key(text.split(['(', '（']).next().unwrap_or(text));
+    let known = CHAMPION_IDS.contains_key(&key) || KNOWN.lock().is_ok_and(|known| known.get(&key).is_some_and(|entry| !entry.portrait.is_empty()));
+    known.then_some(key)
+}
+
+/// Mode tags on every card, and the champions of a mode's changes (written as
+/// one long card with bold names) as cards of their own with the champion's
+/// portrait and the abilities' icons, like the main champion changes.
+fn split_modes(sections: &mut [Section]) {
+    for section in sections.iter_mut() {
+        let section_mode = mode_of(&section.title);
+        let mut out: Vec<Block> = Vec::new();
+        for mut block in std::mem::take(&mut section.blocks) {
+            let mode = match mode_of(&block.title) {
+                "" => section_mode,
+                own => own,
+            };
+            block.mode = mode.to_owned();
+            if !block.kind.is_empty() || mode.is_empty() {
+                out.push(block);
+                continue;
+            }
+            let nodes = std::mem::take(&mut block.nodes);
+            out.push(block);
+            // The card being filled; Some(champion key) while it is a champion's.
+            let mut champion: Option<String> = None;
+            let mut shift = 0u8;
+            for node in nodes {
+                match &node {
+                    Node::P { spans } if champion_line(spans).is_some() => {
+                        let key = champion_line(spans).unwrap_or_default();
+                        let current = out.last_mut().expect("a card");
+                        // "Champions" above the first name labelled the list: the cards say it now.
+                        if champion.is_none() && matches!(current.nodes.last(), Some(Node::H { icon, .. }) if icon.is_empty()) {
+                            current.nodes.pop();
+                        }
+                        if current.title.is_empty() && current.icon.is_empty() && current.nodes.is_empty() {
+                            out.pop();
+                        }
+                        let portrait = KNOWN.lock().ok().and_then(|known| known.get(&key).map(|entry| entry.portrait.clone())).filter(|portrait| !portrait.is_empty());
+                        let icon = portrait.or_else(|| CHAMPION_IDS.get(&key).map(|id| format!("v1/champion-icons/{id}.png"))).unwrap_or_default();
+                        out.push(Block { title: text_of(spans).trim().trim_end_matches(':').trim().to_owned(), icon, kind: "champion".into(), mode: mode.to_owned(), nodes: Vec::new() });
+                        champion = Some(key);
+                        shift = 0;
+                    }
+                    // An ability's heading stays in the champion's card (its icon added when missing).
+                    Node::H { icon, spans } if champion.is_some() && ability_slot(&text_of(spans)).is_some() => {
+                        let key = champion.as_deref().unwrap_or_default();
+                        let slot = ability_slot(&text_of(spans)).unwrap_or_default();
+                        let icon = if icon.is_empty() { ability_icon(key, slot) } else { icon.clone() };
+                        out.last_mut().expect("a card").nodes.push(Node::H { icon, spans: spans.clone() });
+                        shift = 0;
+                    }
+                    // A new heading ("Augments") ends the champions' cards.
+                    Node::H { .. } if champion.is_some() => {
+                        champion = None;
+                        out.push(Block { mode: mode.to_owned(), nodes: vec![node], ..Default::default() });
+                    }
+                    _ => {
+                        let current = out.last_mut().expect("a card");
+                        let Some(key) = champion.as_ref() else {
+                            current.nodes.push(node);
+                            continue;
+                        };
+                        // "Q - Tumble" on its own line or list item: the ability's heading with its icon.
+                        let (spans, depth) = match &node {
+                            Node::P { spans } => (spans, None),
+                            Node::Li { spans, depth } => (spans, Some(*depth)),
+                            _ => {
+                                current.nodes.push(node);
+                                continue;
+                            }
+                        };
+                        if depth.is_some_and(|depth| depth > 0) {
+                            if let (Node::Li { spans, depth }, true) = (&node, shift > 0) {
+                                current.nodes.push(Node::Li { depth: depth.saturating_sub(shift), spans: spans.clone() });
+                                continue;
+                            }
+                            current.nodes.push(node);
+                            continue;
+                        }
+                        let slot = ability_slot(&text_of(spans));
+                        let Some(slot) = slot else {
+                            shift = 0;
+                            current.nodes.push(node);
+                            continue;
+                        };
+                        let icon = ability_icon(key, slot);
+                        let heading = spans.iter().map(|span| Span { b: false, ..span.clone() }).collect();
+                        current.nodes.push(Node::H { icon, spans: heading });
+                        // The ability's changes were nested under it: one level up now.
+                        shift = u8::from(depth.is_some());
+                    }
+                }
+            }
+        }
+        out.retain(|block| !block.title.is_empty() || !block.nodes.is_empty());
+        section.blocks = out;
+    }
+}
+
 fn build(slug: &str, raw: &Raw) -> Notes {
+    let mut sections = parse(&raw.body);
+    learn(&sections);
+    split_modes(&mut sections);
     Notes {
         slug: slug.to_owned(),
         version: version_of(&raw.title, slug),
@@ -727,7 +982,7 @@ fn build(slug: &str, raw: &Raw) -> Notes {
         summary: raw.summary.clone(),
         image: image_key(&raw.banner, 1280).unwrap_or_default(),
         url: format!("{SITE}{}/", raw.path),
-        sections: parse(&raw.body),
+        sections,
         fetched_at: raw.fetched_at,
     }
 }
@@ -979,6 +1234,10 @@ pub struct SearchView {
     pub versions: Vec<String>,
     /// How many patches have a match.
     pub patch_count: usize,
+    /// The topic used (a question naming a champion searches "champion").
+    pub topic: String,
+    /// A question ("…?") as the words searched ("zed r"); "" for a normal search.
+    pub question: String,
 }
 
 fn distance(left: &str, right: &str, limit: usize) -> usize {
@@ -1004,6 +1263,104 @@ fn same_version(left: &str, right: &str) -> bool {
     !left.is_empty() && parts(left) == parts(right)
 }
 
+/// Words a question is made of that are not what it asks about, in every language
+/// of the app (after `normalize`: lowercase, no accents). Single letters other than
+/// Q W E R P are dropped too.
+const QUESTION_WORDS: &[&str] = &[
+    // English
+    "when", "was", "were", "is", "are", "did", "does", "do", "has", "have", "had", "the", "an", "last", "lately", "recently", "time", "times", "ever",
+    "changed", "change", "changes", "changing", "updated", "update", "updates", "nerf", "nerfed", "nerfs", "buff", "buffed", "buffs", "adjusted",
+    "adjustment", "adjustments", "reworked", "rework", "get", "got", "gotten", "what", "which", "how", "many", "much", "often", "in", "on", "to", "of",
+    "for", "patch", "patches", "his", "her", "its", "their", "with", "and", "or", "me", "show", "tell", "list", "all", "every", "history", "ability",
+    "abilities",
+    // Türkçe
+    "ne", "zaman", "degisti", "degistirildi", "degisiklik", "degisiklikleri", "guncellendi", "kac", "kez", "defa", "kere", "son", "en", "guclendirildi",
+    "zayiflatildi", "nerflendi", "bufflandi", "mi", "mu", "oldu", "hangi", "yama", "yamada", "yamalarda", "yetenegi", "yetenek", "nin", "nun", "un",
+    "ve", "ile", "icin",
+    // Deutsch
+    "wann", "wurde", "wurden", "wird", "hat", "haben", "der", "die", "das", "den", "dem", "des", "zuletzt", "letzte", "letzten", "letztes", "mal",
+    "geandert", "verandert", "angepasst", "generft", "gebufft", "wie", "oft", "welchem", "welcher", "welches", "seine", "ihre", "sein", "ihr",
+    "fahigkeit", "und", "im", "am",
+    // Español
+    "cuando", "fue", "fueron", "se", "ha", "han", "el", "la", "los", "las", "de", "del", "su", "sus", "ultima", "ultimo", "vez", "veces", "cuantas",
+    "cuanto", "cambio", "cambiaron", "cambiado", "cambiada", "modificado", "modificada", "modifico", "nerfeado", "nerfeada", "buffeado", "que",
+    "parche", "parches", "habilidad", "por",
+    // Français
+    "quand", "est", "ete", "le", "les", "du", "des", "sa", "ses", "derniere", "dernier", "fois", "combien", "change", "changee", "modifie",
+    "modifiee", "nerfe", "nerfee", "up", "quel", "quelle", "ce", "qu", "competence", "dans", "pour", "il", "elle",
+    // Português
+    "quando", "foi", "foram", "os", "as", "do", "da", "dos", "das", "seu", "sua", "vezes", "quantas", "mudou", "mudado", "alterado", "alterada",
+    "alterou", "nerfado", "nerfada", "buffado", "em", "no", "na", "qual", "habilidade",
+];
+
+/// "ultimate" and "passive" in the app's languages: R and P.
+const ULTIMATE_WORDS: &[&str] = &["ultimate", "ult", "ulti", "ultimative", "ultimativen", "definitiva", "ultime", "nihai"];
+const PASSIVE_WORDS: &[&str] = &["passive", "passiv", "passif", "pasiva", "passiva", "pasif"];
+
+/// Chinese has no spaces: question phrases are cut out before the words are read
+/// (longest first), "大招" is R and "被动" is P.
+const CJK_PHRASES: &[(&str, &str)] = &[
+    ("终极技能", " r "), ("終極技能", " r "), ("什么时候", " "), ("什麼時候", " "), ("哪个版本", " "), ("哪個版本", " "), ("多少次", " "), ("几次", " "),
+    ("幾次", " "), ("改动", " "), ("改動", " "), ("修改", " "), ("调整", " "), ("調整", " "), ("削弱", " "), ("加强", " "), ("加強", " "), ("更改", " "),
+    ("变化", " "), ("變化", " "), ("最近", " "), ("上次", " "), ("何时", " "), ("何時", " "), ("大招", " r "), ("大絕", " r "), ("被动", " p "),
+    ("被動", " p "), ("技能", " "), ("改了", " "), ("改过", " "), ("改過", " "), ("什么", " "), ("什麼", " "), ("时候", " "), ("時候", " "), ("版本", " "),
+    ("的", " "), ("了", " "), ("吗", " "), ("嗎", " "), ("被", " "), ("是", " "), ("在", " "), ("次", " "), ("改", " "),
+];
+
+fn is_cjk(character: char) -> bool {
+    matches!(character as u32, 0x3040..=0x30FF | 0x3400..=0x4DBF | 0x4E00..=0x9FFF | 0xF900..=0xFAFF | 0xAC00..=0xD7AF)
+}
+
+/// A search ending with "?" is a question: its question words are dropped, "ultimate"
+/// is R and "passive" is P (in every language of the app), and a champion named in it
+/// gives that champion's history. Returns the search to run and its topic.
+fn question(query: &str) -> Option<(String, &'static str)> {
+    if !query.trim_end().ends_with(['?', '？']) {
+        return None;
+    }
+    let mut text = query.to_lowercase();
+    for (phrase, with) in CJK_PHRASES {
+        text = text.replace(phrase, with);
+    }
+    // "劫r" → "劫 r": Chinese next to latin letters is two words.
+    let mut spaced = String::with_capacity(text.len() + 8);
+    let mut previous: Option<char> = None;
+    for character in text.chars() {
+        if previous.is_some_and(|before| before.is_alphanumeric() && character.is_alphanumeric() && is_cjk(before) != is_cjk(character)) {
+            spaced.push(' ');
+        }
+        spaced.push(character);
+        previous = Some(character);
+    }
+    let known = |key: &str| CHAMPION_IDS.contains_key(key) || KNOWN.lock().is_ok_and(|known| known.get(key).is_some_and(|entry| !entry.portrait.is_empty()));
+    let mut kept: Vec<String> = Vec::new();
+    for word in normalize(&spaced).split_whitespace() {
+        // "Zeds Ult" (German, English without the apostrophe): the champion's name.
+        let word = match word.strip_suffix('s') {
+            Some(stem) if !known(&name_key(word)) && known(&name_key(stem)) => stem,
+            _ => word,
+        };
+        let word = if ULTIMATE_WORDS.contains(&word) {
+            "r"
+        } else if PASSIVE_WORDS.contains(&word) {
+            "p"
+        } else {
+            word
+        };
+        let ability = matches!(word, "q" | "w" | "e" | "r" | "p");
+        if !ability && (QUESTION_WORDS.contains(&word) || (word.chars().count() == 1 && word.is_ascii())) {
+            continue;
+        }
+        kept.push(word.to_owned());
+    }
+    if kept.is_empty() {
+        return None;
+    }
+    // A champion's name in it (one word or two: "lee sin"; or a name in the notes' own language): its history.
+    let champion = (0..kept.len()).any(|at| known(&name_key(&kept[at])) || kept.get(at + 1).is_some_and(|next| known(&name_key(&format!("{}{next}", kept[at])))));
+    Some((kept.join(" "), if champion { "champion" } else { "all" }))
+}
+
 /// Search every patch on disk. All words must be in a block (its name counts
 /// most, then its headings, then its text); a word nobody wrote is replaced
 /// by the closest one that exists; "26.23" narrows to that patch.
@@ -1013,11 +1370,22 @@ fn same_version(left: &str, right: &str) -> bool {
 /// keeps the rest (systems, modes, skins); anything else searches everything.
 /// A lone Q, W, E, R or P is an ability: "zed q" gives Zed's cards cut down to
 /// the Q part. Other words found in a part's heading cut the card the same way.
-pub fn search(locale: &str, query: &str, topic: &str) -> Result<SearchView, &'static str> {
+pub fn search(locale: &str, query: &str, topic: &str, modes: &[String]) -> Result<SearchView, &'static str> {
     static VERSION: LazyLock<regex::Regex> = LazyLock::new(|| regex::Regex::new(r"\b(\d{1,4}\.\d{1,2})\b").expect("regex"));
     let locale = valid_locale(locale)?;
     let all = load_all(locale);
-    let mut view = SearchView { patches: all.len(), ..Default::default() };
+    let mut view = SearchView { patches: all.len(), topic: topic.to_owned(), ..Default::default() };
+    let asked = question(query);
+    let (query, topic) = match &asked {
+        Some((words, question_topic)) => {
+            view.question = words.clone();
+            // The topic picked by hand wins, unless it is "all".
+            let topic = if topic == "all" { *question_topic } else { topic };
+            view.topic = topic.to_owned();
+            (words.as_str(), topic)
+        }
+        None => (query, topic),
+    };
     let query: String = query.chars().take(120).collect();
     let wanted: Vec<String> = VERSION.captures_iter(&query).map(|found| found[1].to_owned()).collect();
     let rest = VERSION.replace_all(&query, " ");
@@ -1069,7 +1437,8 @@ pub fn search(locale: &str, query: &str, topic: &str) -> Result<SearchView, &'st
     let ability = |term: &str| matches!(term, "q" | "w" | "e" | "r" | "p");
     let in_heading = |group: &Group, term: &str| -> bool {
         if ability(term) {
-            group.head.starts_with(&format!(" {term} ")) || (term == "p" && group.head.starts_with(" passive "))
+            group.head.starts_with(&format!(" {term} "))
+                || (term == "p" && (PASSIVE_WORDS.iter().any(|word| group.head.starts_with(&format!(" {word} "))) || group.head.starts_with(" 被动") || group.head.starts_with(" 被動")))
         } else if term.is_ascii() {
             group.head.contains(&format!(" {term}"))
         } else {
@@ -1085,7 +1454,9 @@ pub fn search(locale: &str, query: &str, topic: &str) -> Result<SearchView, &'st
                 "other" => kind.is_empty(),
                 _ => true,
             };
-            if !wanted {
+            // Game modes: none picked = all; "rift" = cards of no mode.
+            let mode = indexed.notes.sections[block.section].blocks[block.block].mode.as_str();
+            if !wanted || (!modes.is_empty() && !modes.iter().any(|picked| picked == if mode.is_empty() { "rift" } else { mode })) {
                 continue;
             }
             let mut score = 0.0;

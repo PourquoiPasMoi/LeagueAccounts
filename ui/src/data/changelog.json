@@ -1,5 +1,59 @@
 [
  {
+  "version": "5.18.0",
+  "date": "2026-11-24",
+  "items": {
+   "en": [
+    "Patch notes search: filter by game mode (Summoner's Rift, ARAM, ARAM: Mayhem, Arena, other modes), several at once. Results show the mode they are for.",
+    "Ask a question by ending your search with ?, like “when was Zed R changed?”: you get that champion's ability changes, newest first. Works in every language of the app.",
+    "Champion changes in ARAM, ARAM: Mayhem, Arena and other modes now have their own card with the champion's picture and the abilities' icons, and show up in that champion's history.",
+    "Create image: the blue light at the top no longer stops in a hard line on tall pictures."
+   ],
+   "tr": [
+    "Yama notlarında arama: oyun moduna göre filtrele (Sihirdar Vadisi, ARAM, ARAM: Kargaşa, Arena, diğer modlar), aynı anda birkaçını seç. Sonuçlar hangi mod için olduğunu gösterir.",
+    "Aramanı ? ile bitirerek soru sor, örneğin “Zed R ne zaman değişti?”: o şampiyonun yetenek değişikliklerini en yeniden başlayarak görürsün. Uygulamanın tüm dillerinde çalışır.",
+    "ARAM, ARAM: Kargaşa, Arena ve diğer modlardaki şampiyon değişikliklerinin artık şampiyonun resmi ve yetenek simgeleriyle kendi kartı var ve şampiyonun geçmişinde görünür.",
+    "Görsel oluştur: üstteki mavi ışık uzun görsellerde artık sert bir çizgiyle bitmiyor."
+   ],
+   "de": [
+    "Patchnotes-Suche: nach Spielmodus filtern (Kluft der Beschwörer, ARAM, ARAM: Chaos, Arena, andere Modi), auch mehrere zugleich. Ergebnisse zeigen ihren Modus.",
+    "Stell eine Frage, indem du die Suche mit ? beendest, z. B. „Wann wurde Zed R geändert?“: du bekommst die Änderungen dieser Fähigkeit, neueste zuerst. Funktioniert in jeder Sprache der App.",
+    "Championänderungen in ARAM, ARAM: Chaos, Arena und anderen Modi haben jetzt eine eigene Karte mit dem Bild des Champions und den Fähigkeitssymbolen und erscheinen in seinem Verlauf.",
+    "Bild erstellen: Das blaue Licht oben endet bei hohen Bildern nicht mehr mit einer harten Linie."
+   ],
+   "es": [
+    "Búsqueda en las notas del parche: filtra por modo de juego (La Grieta del Invocador, ARAM, ARAM: Caos, Arena, otros modos), varios a la vez. Los resultados muestran su modo.",
+    "Haz una pregunta terminando la búsqueda con ?, por ejemplo “¿cuándo cambió la R de Zed?”: verás los cambios de esa habilidad, los más recientes primero. Funciona en todos los idiomas de la app.",
+    "Los cambios de campeones en ARAM, ARAM: Caos, Arena y otros modos tienen ahora su propia tarjeta con la imagen del campeón y los iconos de sus habilidades, y aparecen en su historial.",
+    "Crear imagen: la luz azul de arriba ya no termina en una línea marcada en las imágenes altas."
+   ],
+   "fr": [
+    "Recherche dans les notes de patch : filtre par mode de jeu (Faille de l'invocateur, ARAM, ARAM : Chaos, Arène, autres modes), plusieurs à la fois. Les résultats indiquent leur mode.",
+    "Pose une question en terminant ta recherche par ?, par exemple « quand le R de Zed a changé ? » : tu obtiens les changements de cette compétence, du plus récent au plus ancien. Fonctionne dans toutes les langues de l'app.",
+    "Les changements de champions en ARAM, ARAM : Chaos, Arène et autres modes ont maintenant leur propre carte avec l'image du champion et les icônes de ses compétences, et apparaissent dans son historique.",
+    "Créer une image : la lumière bleue en haut ne s'arrête plus net sur les grandes images."
+   ],
+   "pt": [
+    "Pesquisa nas notas da atualização: filtra por modo de jogo (Summoner's Rift, ARAM, ARAM: Caos, Arena, outros modos), vários ao mesmo tempo. Os resultados mostram o seu modo.",
+    "Faz uma pergunta terminando a pesquisa com ?, por exemplo “quando mudou o R do Zed?”: vês as alterações dessa habilidade, as mais recentes primeiro. Funciona em todas as línguas da app.",
+    "As alterações de campeões no ARAM, ARAM: Caos, Arena e outros modos têm agora o seu próprio cartão com a imagem do campeão e os ícones das habilidades, e aparecem no histórico do campeão.",
+    "Criar imagem: a luz azul no topo já não acaba numa linha marcada nas imagens altas."
+   ],
+   "zh": [
+    "版本说明搜索：可按游戏模式筛选（召唤师峡谷、极地大乱斗、海克斯大乱斗、斗魂竞技场、其他模式），可同时选择多个。结果会显示所属模式。",
+    "在搜索末尾加上 ? 即可提问，例如 “劫的大招什么时候改的？”：会按从新到旧显示该技能的改动。支持应用的所有语言。",
+    "极地大乱斗、海克斯大乱斗、斗魂竞技场和其他模式中的英雄改动现在有自己的卡片，带英雄头像和技能图标，并会出现在该英雄的历史中。",
+    "生成图片：较高的图片顶部的蓝光不再以生硬的线条截断。"
+   ],
+   "zhTw": [
+    "版本更新搜尋：可依遊戲模式篩選（召喚峽谷、隨機單中、海克斯大亂鬥、鬥魂競技場、其他模式），可同時選擇多個。結果會顯示所屬模式。",
+    "在搜尋結尾加上 ? 即可提問，例如 “劫的大招什麼時候改的？”：會從新到舊顯示該技能的改動。支援應用程式的所有語言。",
+    "隨機單中、海克斯大亂鬥、鬥魂競技場和其他模式中的英雄改動現在有自己的卡片，附英雄頭像和技能圖示，並會出現在該英雄的歷史中。",
+    "產生圖片：較高圖片頂部的藍光不再以生硬的線條截斷。"
+   ]
+  }
+ },
+ {
   "version": "5.17.1",
   "date": "2026-11-24",
   "items": {

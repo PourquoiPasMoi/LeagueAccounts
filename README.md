@@ -145,6 +145,8 @@ A Patch notes page in the sidebar shows every League of Legends patch since 2019
 
 - Search across every saved patch, with typo fixes ("anie" finds Annie) and patch numbers ("26.23").
 - Pick a topic (Champions, Items, Systems and modes). Under Champions, add an ability such as "Zed Q" to see only that ability's changes, newest first, with the patch and date it last changed.
+- Filter by game mode (Summoner's Rift, ARAM, ARAM: Mayhem, Arena, other modes), several at once, so a search for Bard can skip his ARAM: Mayhem changes. Champion changes in modes get their own card with the champion's picture and ability icons.
+- End a search with ? to ask a question, like "when was Zed R changed?" ("ultimate" and "passive" work too, in every language of the app): you get that champion's ability changes, newest first.
 - A second tab lists every change made to League Companion itself.
 - Create image: pick the sections and single cards you want (champions, items, modes...), watch the picture redraw live, and save it in the app's look. It is high resolution so people can zoom in and read; you choose the columns, the sharpness and the largest file size (up to 9.7 MB, so it fits Discord). PNG when it fits, otherwise the best JPEG that does. Search results can become an image too, for example every change to one champion. Images go to `Pictures\League Companion`.
 
