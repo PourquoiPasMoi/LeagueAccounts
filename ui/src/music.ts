@@ -1163,6 +1163,13 @@ export async function initMusic(): Promise<void> {
     if (action === "toggle") toggle();
     if (action === "next") next();
     if (action === "previous") previous();
+    // The tray player's volume slider and mute button.
+    if (action === "mute") toggleMute();
+    if (action.startsWith("volume:")) {
+      setVolume(Number(action.slice(7)));
+      paintControls();
+    }
+    if (action === "mute" || action.startsWith("volume:")) reportNow();
   });
   // Saved progress every 10 s while playing (cheap, survives a crash).
   window.setInterval(() => playing && saveState(), 10_000);

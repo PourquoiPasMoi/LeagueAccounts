@@ -261,7 +261,7 @@ static NOW: Mutex<Option<NowPlaying>> = Mutex::new(None);
 /// taking the focus; that same click must not open it again).
 static TRAY_CLOSED: AtomicU64 = AtomicU64::new(0);
 pub const TRAY_PLAYER: &str = "tray-player";
-const TRAY_SIZE: (f64, f64) = (340.0, 212.0);
+const TRAY_SIZE: (f64, f64) = (340.0, 244.0);
 
 fn now_ms() -> u64 {
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |time| time.as_millis() as u64)
@@ -297,7 +297,11 @@ pub fn music_now() -> Option<NowPlaying> {
 #[tauri::command]
 pub fn music_tray(app: AppHandle, action: String) {
     match action.as_str() {
-        "toggle" | "next" | "previous" => {
+        "toggle" | "next" | "previous" | "mute" => {
+            let _ = app.emit_to("main", "music-control", action);
+        }
+        // "volume:0".."volume:100" from the tray player's slider.
+        volume if volume.strip_prefix("volume:").and_then(|value| value.parse::<u8>().ok()).is_some_and(|value| value <= 100) => {
             let _ = app.emit_to("main", "music-control", action);
         }
         "open" => {

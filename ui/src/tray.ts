@@ -41,6 +41,32 @@ function label(button: HTMLElement, name: string, text: string, size: number): v
   button.title = text;
 }
 
+const volumeBar = $<HTMLInputElement>(".tp-volume-bar");
+volumeBar.setAttribute("aria-label", t("music.volume"));
+let dragging = false;
+const showVolume = (value: number) => {
+  volumeBar.value = String(value);
+  volumeBar.style.setProperty("--fill", `${value}%`);
+};
+volumeBar.addEventListener("pointerdown", () => (dragging = true));
+window.addEventListener("pointerup", () => (dragging = false));
+volumeBar.addEventListener("input", () => {
+  showVolume(Number(volumeBar.value));
+  void api.musicTray(`volume:${Number(volumeBar.value)}`);
+});
+// Wheel over the player: volume in steps of 5.
+document.addEventListener(
+  "wheel",
+  (event) => {
+    if (!now) return;
+    event.preventDefault();
+    const value = Math.min(100, Math.max(0, Number(volumeBar.value) + (event.deltaY < 0 ? 5 : -5)));
+    showVolume(value);
+    void api.musicTray(`volume:${value}`);
+  },
+  { passive: false },
+);
+
 function paint(): void {
   if (!now) {
     void api.musicTray("close");
@@ -57,6 +83,9 @@ function paint(): void {
   $(".tp-text strong").title = now.title;
   $(".tp-text span").textContent = now.artist;
   label($('[data-tray="toggle"]'), now.playing ? "pause" : "play", now.playing ? t("music.pause") : t("music.play"), 20);
+  label($('[data-tray="mute"]'), now.volume === 0 ? "volume-x" : "volume", now.volume === 0 ? t("music.unmute") : t("music.mute"), 15);
+  // Not while the slider is being dragged (the player answers each step).
+  if (!dragging) showVolume(now.volume);
   document.body.classList.toggle("is-playing", now.playing);
 }
 
@@ -86,7 +115,7 @@ label($('[data-tray="quit"]'), "x", t("music.quitApp"), 14);
 
 document.addEventListener("click", (event) => {
   const action = (event.target as HTMLElement).closest<HTMLElement>("[data-tray]")?.dataset.tray;
-  if (action) void api.musicTray(action as "toggle" | "next" | "previous" | "open" | "quit");
+  if (action) void api.musicTray(action as "toggle" | "next" | "previous" | "mute" | "open" | "quit");
 });
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape") void api.musicTray("close");

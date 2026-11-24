@@ -1,5 +1,35 @@
 [
  {
+  "version": "5.17.1",
+  "date": "2026-11-24",
+  "items": {
+   "en": [
+    "Tray player (right-click the tray icon while music plays): volume slider and mute button. The mouse wheel over the player changes the volume too."
+   ],
+   "tr": [
+    "Tepsi oynatıcısı (müzik çalarken tepsi simgesine sağ tıkla): ses kaydırıcısı ve sessiz düğmesi. Oynatıcının üzerinde fare tekerleği de sesi değiştirir."
+   ],
+   "de": [
+    "Tray-Player (Rechtsklick aufs Tray-Symbol, während Musik läuft): Lautstärkeregler und Stummschalter. Das Mausrad über dem Player ändert die Lautstärke ebenfalls."
+   ],
+   "es": [
+    "Reproductor de la bandeja (clic derecho en el icono mientras suena música): control de volumen y botón de silencio. La rueda del ratón sobre el reproductor también cambia el volumen."
+   ],
+   "fr": [
+    "Lecteur de la barre des tâches (clic droit sur l'icône pendant la musique) : réglage du volume et bouton muet. La molette de la souris sur le lecteur change aussi le volume."
+   ],
+   "pt": [
+    "Leitor da bandeja (clique direito no ícone enquanto toca música): controlo de volume e botão de silêncio. A roda do rato sobre o leitor também muda o volume."
+   ],
+   "zh": [
+    "托盘播放器（播放音乐时右键点击托盘图标）：音量滑块和静音按钮。在播放器上滚动鼠标滚轮也可调节音量。"
+   ],
+   "zhTw": [
+    "系統匣播放器（播放音樂時右鍵點擊系統匣圖示）：音量滑桿和靜音按鈕。在播放器上滾動滑鼠滾輪也能調整音量。"
+   ]
+  }
+ },
+ {
   "version": "5.17.0",
   "date": "2026-11-24",
   "items": {

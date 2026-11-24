@@ -182,7 +182,7 @@ Off by default. Turn it on in Settings › Music and a Music page appears in the
 - Now playing panel with the song's large cover, a sound wave that moves with the music, seek, shuffle, repeat and volume. A small player in the sidebar keeps playing while you use the rest of the app.
 - Light on your PC: the sound comes from YouTube's own player, kept tiny and hidden so YouTube sends its smallest video with it. When the window is closed to the tray it stops drawing, so only the music keeps playing.
 - Download speed limit (on by default, 256 kbit/s): songs load slowly and evenly instead of in one burst, so a slow connection does not lose packets in game when a song starts, and less data is used. Change it in Settings › Music.
-- Right-click the tray icon while a song is loaded for a small player with the cover, controls and the moving wave. It only exists while it is open.
+- Right-click the tray icon while a song is loaded for a small player with the cover, controls, volume (slider, mute, or the mouse wheel) and the moving wave. It only exists while it is open.
 
 ### Experimental: champ select and live game assistant
 
