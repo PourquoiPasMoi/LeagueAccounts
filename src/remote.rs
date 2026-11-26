@@ -829,8 +829,8 @@ pub fn spawn(status: impl Fn(bool) + Send + 'static) {
             }
             let client = riot_client::league_client();
             let phase = client.as_ref().and_then(|client| client.get_json("/lol-gameflow/v1/gameflow-phase")).and_then(|phase| phase.as_str().map(str::to_owned)).unwrap_or_default();
-            // On for as long as the setting is on (the owner's choice: a server that
-            // came and went left the phone guessing). It closes with the switch and with the app.
+            // On for as long as the setting is on (a server that came and went left
+            // the phone guessing). It closes with the switch and with the app.
             let live = true;
             let open = OPEN_UNTIL.load(Ordering::Relaxed) > now_ms();
             if !live && !open {
